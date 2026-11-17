@@ -50,7 +50,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public discovery, auth and health
-                        .requestMatchers("/", "/index.html", "/static/**", "/*.css", "/*.js", "/*.ico", "/favicon.ico").permitAll()
+                        .requestMatchers("/", "/health", "/index.html", "/static/**", "/*.css", "/*.js", "/*.ico", "/favicon.ico").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/cities/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/localities/**").permitAll()

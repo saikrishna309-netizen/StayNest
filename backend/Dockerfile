@@ -27,10 +27,11 @@ USER spring:spring
 # Copy packaged jar from build stage
 COPY --from=build /app/target/*.jar app.jar
 
-EXPOSE 8080
-
+# Render binds to port 10000 by default for Web Services
+EXPOSE 10000
+ENV PORT=10000
 ENV SPRING_PROFILES_ACTIVE=prod
 ENV JAVA_OPTS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:TieredStopAtLevel=1 -Xss512k"
 
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.address=0.0.0.0 -Dserver.port=${PORT:-8080} -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Dserver.address=0.0.0.0 -Dserver.port=${PORT:-10000} -jar app.jar"]
 
