@@ -92,6 +92,14 @@ public class OwnerTenantFinanceController {
         return new ResponseEntity<>(tenantFinanceService.recordStay(user.getId(), id, request), HttpStatus.CREATED);
     }
 
+    @GetMapping("/tenants/{id}/stays")
+    @Operation(summary = "Get stay records for tenant")
+    public ResponseEntity<java.util.List<TenantStay>> getTenantStays(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(tenantFinanceService.getTenantStays(user.getId(), id));
+    }
+
     // --- Rent Invoices & Collections ---
 
     @PostMapping("/rent-invoices")

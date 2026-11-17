@@ -412,12 +412,13 @@
                 <th class="px-6 py-3">Tenant Name</th>
                 <th class="px-6 py-3">Contact</th>
                 <th class="px-6 py-3">ID Proof</th>
+                <th class="px-6 py-3">Allocated Stay / Bed</th>
                 <th class="px-6 py-3">Status</th>
                 <th class="px-6 py-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody id="owner-tenants-tbody" class="divide-y divide-slate-100">
-              <tr><td colspan="5" class="p-8 text-center text-slate-400">Loading tenants...</td></tr>
+              <tr><td colspan="6" class="p-8 text-center text-slate-400">Loading tenants...</td></tr>
             </tbody>
           </table>
         </div>
@@ -836,6 +837,191 @@
           Don't have an account? Register here
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: ONBOARD TENANT & ALLOCATE BED                                      -->
+  <!-- ========================================================================= -->
+  <div id="modal-onboard-tenant" class="fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-xl w-full shadow-2xl p-6 relative my-8">
+      <button onclick="closeOnboardTenantModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="mb-5 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center text-lg shadow-md shadow-brand-500/30">
+          <i class="fa-solid fa-user-plus"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-extrabold text-slate-900">Onboard Tenant & Allocate Bed</h3>
+          <p class="text-xs text-slate-500">Record tenant profile and immediately allocate an available PG bed</p>
+        </div>
+      </div>
+
+      <form id="form-onboard-tenant" onsubmit="handleOnboardTenantSubmit(event)" class="space-y-4 text-xs">
+        <!-- Tenant Personal Info -->
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+          <span class="block text-[11px] font-extrabold text-slate-500 uppercase tracking-wider">1. Tenant Profile</span>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Full Name *</label>
+              <input type="text" id="ob-fullName" required placeholder="e.g. Rahul Sharma" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Mobile Phone *</label>
+              <input type="tel" id="ob-phone" required placeholder="e.g. 9876543210" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Email Address</label>
+              <input type="email" id="ob-email" placeholder="rahul@example.com" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">Emergency Contact</label>
+              <input type="tel" id="ob-emergency" placeholder="Parent / Guardian phone" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">ID Proof Type</label>
+              <select id="ob-idProofType" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+                <option value="AADHAAR">Aadhaar Card</option>
+                <option value="PAN">PAN Card</option>
+                <option value="PASSPORT">Passport</option>
+                <option value="DRIVING_LICENSE">Driving License</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">ID Proof Number</label>
+              <input type="text" id="ob-idProofNumber" placeholder="XXXX-XXXX-XXXX" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Bed Allocation Toggle & Details -->
+        <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-[11px] font-extrabold text-brand-900 uppercase tracking-wider">2. Room & Bed Allocation</span>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-xs font-bold text-brand-700">
+              <input type="checkbox" id="ob-assign-bed-toggle" checked onchange="toggleBedAllocationSection()" class="rounded text-brand-600 focus:ring-brand-500 w-4 h-4">
+              <span>Allocate Bed Now</span>
+            </label>
+          </div>
+
+          <div id="ob-bed-section" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 mb-1">Select Property *</label>
+                <select id="ob-property" onchange="onOnboardPropertyChange()" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="">Select Property</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Select Room *</label>
+                <select id="ob-room" onchange="onOnboardRoomChange()" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="">Select Property First</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Select Available Bed *</label>
+                <select id="ob-bed" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="">Select Room First</option>
+                </select>
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Check-in Date *</label>
+                <input type="date" id="ob-checkin" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1">Monthly Rent (₹) *</label>
+                <input type="number" id="ob-rent" placeholder="8000" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+              </div>
+              <div class="sm:col-span-2">
+                <label class="block font-bold text-slate-700 mb-1">Security Deposit (₹)</label>
+                <input type="number" id="ob-deposit" placeholder="8000" class="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="ob-error" class="hidden p-2 text-rose-600 bg-rose-50 border border-rose-200 rounded-lg font-bold"></div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+          <button type="button" onclick="closeOnboardTenantModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition">
+            Cancel
+          </button>
+          <button type="submit" id="ob-submit-btn" class="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-sm shadow-brand-500/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-check"></i> Onboard & Allocate
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: ASSIGN BED TO EXISTING TENANT                                      -->
+  <!-- ========================================================================= -->
+  <div id="modal-assign-bed" class="fixed inset-0 z-50 hidden bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl p-6 relative my-8">
+      <button onclick="closeAssignBedModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="mb-5 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center text-lg shadow-md shadow-brand-500/30">
+          <i class="fa-solid fa-bed"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-extrabold text-slate-900">Assign Bed to Tenant</h3>
+          <p id="as-tenant-name-display" class="text-xs text-brand-600 font-bold">Tenant Name</p>
+        </div>
+      </div>
+
+      <form id="form-assign-bed" onsubmit="handleAssignBedSubmit(event)" class="space-y-4 text-xs">
+        <input type="hidden" id="as-tenant-id">
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="sm:col-span-2">
+            <label class="block font-bold text-slate-700 mb-1">Select Property *</label>
+            <select id="as-property" onchange="onAssignPropertyChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="">Select Property</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Select Room *</label>
+            <select id="as-room" onchange="onAssignRoomChange()" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="">Select Property First</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Select Available Bed *</label>
+            <select id="as-bed" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+              <option value="">Select Room First</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Check-in Date *</label>
+            <input type="date" id="as-checkin" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Monthly Rent (₹) *</label>
+            <input type="number" id="as-rent" required placeholder="8000" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+          <div class="sm:col-span-2">
+            <label class="block font-bold text-slate-700 mb-1">Security Deposit (₹)</label>
+            <input type="number" id="as-deposit" placeholder="8000" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-semibold outline-none focus:ring-2 focus:ring-brand-500">
+          </div>
+        </div>
+
+        <div id="as-error" class="hidden p-2 text-rose-600 bg-rose-50 border border-rose-200 rounded-lg font-bold"></div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+          <button type="button" onclick="closeAssignBedModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2 bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-sm shadow-brand-500/30 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-bed"></i> Confirm Bed Assignment
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -1328,8 +1514,9 @@
         return;
       }
 
-      const checkInDate = prompt('Enter Check-in Date (YYYY-MM-DD):', '2026-12-01');
-      if (!checkInDate) return;
+      const inputDate = document.getElementById('customer-checkin-date')?.value;
+      const today = new Date().toISOString().split('T')[0];
+      const checkInDate = inputDate || today;
 
       try {
         const res = await fetch(`${API_BASE}/bookings/holds`, {
@@ -1781,61 +1968,396 @@
         const tenants = data.content || [];
 
         if (tenants.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="5" class="p-8 text-center text-slate-400">No tenants onboarded yet.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" class="p-8 text-center text-slate-400">No tenants onboarded yet. Click "Onboard Tenant" above to add your first tenant.</td></tr>';
           return;
         }
 
-        tbody.innerHTML = tenants.map(t => `
-          <tr class="hover:bg-slate-50 transition">
-            <td class="px-6 py-4 font-bold text-slate-900">${t.fullName}</td>
-            <td class="px-6 py-4">${t.phone}<br><span class="text-slate-400">${t.email || ''}</span></td>
-            <td class="px-6 py-4 font-mono text-[11px]">${t.idProofType}: ${t.idProofNumber || '--'}</td>
-            <td class="px-6 py-4"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">ACTIVE</span></td>
-            <td class="px-6 py-4 text-right">
-              <button onclick="recordStayPrompt('${t.id}')" class="px-2.5 py-1 text-[11px] font-bold bg-slate-100 hover:bg-brand-50 text-brand-700 rounded transition">
-                Assign Bed
-              </button>
-            </td>
-          </tr>
-        `).join('');
+        // Fetch stays for each tenant
+        const tenantRows = await Promise.all(tenants.map(async t => {
+          let stayInfo = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">No Bed Assigned</span>';
+          try {
+            const stayRes = await fetch(`${API_BASE}/owner/tenants/${t.id}/stays`, {
+              headers: { 'Authorization': `Bearer ${AppState.token}` }
+            });
+            if (stayRes.ok) {
+              const stays = await stayRes.json();
+              if (stays && stays.length > 0) {
+                const activeStay = stays.find(s => s.status === 'ACTIVE') || stays[0];
+                const rent = (activeStay.monthlyRentPaise / 100).toLocaleString('en-IN');
+                stayInfo = `
+                  <div class="font-bold text-slate-800 text-[11px]">
+                    <span class="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                      <i class="fa-solid fa-bed text-emerald-600"></i> Active Stay
+                    </span>
+                    <div class="text-[10px] text-slate-500 mt-0.5">₹${rent}/mo (From ${activeStay.checkIn})</div>
+                  </div>`;
+              }
+            }
+          } catch (_) {}
+
+          return `
+            <tr class="hover:bg-slate-50 transition">
+              <td class="px-6 py-4 font-bold text-slate-900">${t.fullName}</td>
+              <td class="px-6 py-4">${t.phone}<br><span class="text-slate-400">${t.email || ''}</span></td>
+              <td class="px-6 py-4 font-mono text-[11px]">${t.idProofType}: ${t.idProofNumber || '--'}</td>
+              <td class="px-6 py-4">${stayInfo}</td>
+              <td class="px-6 py-4"><span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700">ACTIVE</span></td>
+              <td class="px-6 py-4 text-right">
+                <button onclick="openAssignBedModal('${t.id}', '${t.fullName.replace(/'/g, "\\'")}')" class="px-2.5 py-1 text-[11px] font-bold bg-brand-50 hover:bg-brand-600 text-brand-700 hover:text-white rounded-lg transition">
+                  <i class="fa-solid fa-bed mr-1"></i> Assign Bed
+                </button>
+              </td>
+            </tr>
+          `;
+        }));
+
+        tbody.innerHTML = tenantRows.join('');
 
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-rose-500">${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="p-6 text-center text-rose-500">${err.message}</td></tr>`;
       }
     }
 
+    // Modal: Onboard Tenant & Allocate Bed
+    let currentOnboardInventory = [];
+
     async function openOnboardTenantModal() {
-      const name = prompt('Enter Tenant Full Name:');
-      if (!name) return;
-      const phone = prompt('Enter Tenant Mobile Phone:');
-      if (!phone) return;
-      const aadhaar = prompt('Enter Aadhaar / Gov ID:');
+      document.getElementById('form-onboard-tenant').reset();
+      document.getElementById('ob-error').classList.add('hidden');
+      document.getElementById('ob-checkin').value = new Date().toISOString().split('T')[0];
+      document.getElementById('modal-onboard-tenant').classList.remove('hidden');
+
+      const propSelect = document.getElementById('ob-property');
+      propSelect.innerHTML = '<option value="">Loading your properties...</option>';
 
       try {
-        const res = await fetch(`${API_BASE}/owner/tenants`, {
+        if (!AppState.ownerProperties || AppState.ownerProperties.length === 0) {
+          const res = await fetch(`${API_BASE}/owner/properties`, {
+            headers: { 'Authorization': `Bearer ${AppState.token}` }
+          });
+          const data = await res.json();
+          AppState.ownerProperties = data.content || [];
+        }
+
+        propSelect.innerHTML = '<option value="">Select Property</option>';
+        AppState.ownerProperties.forEach(p => {
+          propSelect.innerHTML += `<option value="${p.id}">${p.name} (${p.localityName || p.cityName})</option>`;
+        });
+
+        if (AppState.ownerProperties.length > 0) {
+          propSelect.value = AppState.ownerProperties[0].id;
+          await onOnboardPropertyChange();
+        }
+      } catch (err) {
+        propSelect.innerHTML = '<option value="">Failed to load properties</option>';
+      }
+    }
+
+    function closeOnboardTenantModal() {
+      document.getElementById('modal-onboard-tenant').classList.add('hidden');
+    }
+
+    function toggleBedAllocationSection() {
+      const isChecked = document.getElementById('ob-assign-bed-toggle').checked;
+      const section = document.getElementById('ob-bed-section');
+      if (isChecked) {
+        section.classList.remove('hidden');
+        document.getElementById('ob-property').required = true;
+        document.getElementById('ob-room').required = true;
+        document.getElementById('ob-bed').required = true;
+        document.getElementById('ob-checkin').required = true;
+        document.getElementById('ob-rent').required = true;
+      } else {
+        section.classList.add('hidden');
+        document.getElementById('ob-property').required = false;
+        document.getElementById('ob-room').required = false;
+        document.getElementById('ob-bed').required = false;
+        document.getElementById('ob-checkin').required = false;
+        document.getElementById('ob-rent').required = false;
+      }
+    }
+
+    async function onOnboardPropertyChange() {
+      const propId = document.getElementById('ob-property').value;
+      const roomSelect = document.getElementById('ob-room');
+      const bedSelect = document.getElementById('ob-bed');
+
+      roomSelect.innerHTML = '<option value="">Loading rooms...</option>';
+      bedSelect.innerHTML = '<option value="">Select Room First</option>';
+
+      if (!propId) {
+        roomSelect.innerHTML = '<option value="">Select Property First</option>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/properties/${propId}`);
+        const property = await res.json();
+        currentOnboardInventory = property.rooms || [];
+
+        roomSelect.innerHTML = '<option value="">Select Room</option>';
+        currentOnboardInventory.forEach(r => {
+          roomSelect.innerHTML += `<option value="${r.id}">Room ${r.roomNumber} (Floor ${r.floorNumber} - ${r.sharingType})</option>`;
+        });
+
+        if (currentOnboardInventory.length > 0) {
+          roomSelect.value = currentOnboardInventory[0].id;
+          onOnboardRoomChange();
+        }
+      } catch (err) {
+        roomSelect.innerHTML = '<option value="">Failed to load rooms</option>';
+      }
+    }
+
+    function onOnboardRoomChange() {
+      const roomId = document.getElementById('ob-room').value;
+      const bedSelect = document.getElementById('ob-bed');
+      const rentInput = document.getElementById('ob-rent');
+      const depositInput = document.getElementById('ob-deposit');
+
+      bedSelect.innerHTML = '<option value="">Select Available Bed</option>';
+      const room = currentOnboardInventory.find(r => r.id === roomId);
+      if (!room) return;
+
+      rentInput.value = (room.rentMonthlyPaise || 0) / 100;
+      depositInput.value = (room.depositPaise || room.rentMonthlyPaise || 0) / 100;
+
+      const beds = room.beds || [];
+      const availableBeds = beds.filter(b => b.status === 'AVAILABLE' || b.status == null);
+
+      if (availableBeds.length === 0) {
+        bedSelect.innerHTML = '<option value="">No available beds in this room</option>';
+      } else {
+        availableBeds.forEach(b => {
+          bedSelect.innerHTML += `<option value="${b.id}">${b.bedLabel} (Available)</option>`;
+        });
+      }
+    }
+
+    async function handleOnboardTenantSubmit(e) {
+      e.preventDefault();
+      const errBox = document.getElementById('ob-error');
+      errBox.classList.add('hidden');
+
+      const fullName = document.getElementById('ob-fullName').value.trim();
+      const phone = document.getElementById('ob-phone').value.trim();
+      const email = document.getElementById('ob-email').value.trim();
+      const emergencyContact = document.getElementById('ob-emergency').value.trim();
+      const idProofType = document.getElementById('ob-idProofType').value;
+      const idProofNumber = document.getElementById('ob-idProofNumber').value.trim();
+      const assignBed = document.getElementById('ob-assign-bed-toggle').checked;
+
+      try {
+        // Step 1: Create Tenant Profile
+        const tenantRes = await fetch(`${API_BASE}/owner/tenants`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${AppState.token}`
           },
           body: JSON.stringify({
-            fullName: name,
+            fullName,
             phone,
-            idProofType: 'AADHAAR',
-            idProofNumber: aadhaar || '1234-5678-9012'
+            email: email || null,
+            emergencyContact: emergencyContact || null,
+            idProofType,
+            idProofNumber: idProofNumber || 'NOT_PROVIDED'
           })
         });
-        if (res.ok) {
-          showToast('Tenant onboarded successfully!');
-          loadOwnerTenants();
+
+        const tenantData = await tenantRes.json();
+        if (!tenantRes.ok) throw new Error(tenantData.message || 'Failed to create tenant profile');
+
+        // Step 2: Assign Bed if toggled
+        if (assignBed) {
+          const propertyId = document.getElementById('ob-property').value;
+          const roomId = document.getElementById('ob-room').value;
+          const bedId = document.getElementById('ob-bed').value;
+          const checkIn = document.getElementById('ob-checkin').value;
+          const rentPaise = Math.round(parseFloat(document.getElementById('ob-rent').value || '0') * 100);
+          const depositPaise = Math.round(parseFloat(document.getElementById('ob-deposit').value || '0') * 100);
+
+          if (!bedId) throw new Error('Please select an available bed to allocate');
+
+          const stayRes = await fetch(`${API_BASE}/owner/tenants/${tenantData.id}/stays`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${AppState.token}`
+            },
+            body: JSON.stringify({
+              propertyId,
+              roomId,
+              bedId,
+              checkIn,
+              monthlyRentPaise: rentPaise,
+              securityDepositPaise: depositPaise
+            })
+          });
+
+          const stayData = await stayRes.json();
+          if (!stayRes.ok) throw new Error(stayData.message || 'Tenant created, but bed assignment failed');
         }
-      } catch (e) {
-        showToast('Failed to onboard tenant', 'error');
+
+        showToast(`Tenant ${fullName} onboarded successfully!`);
+        closeOnboardTenantModal();
+        loadOwnerTenants();
+        loadOwnerOverview();
+        loadOwnerProperties();
+
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.classList.remove('hidden');
       }
     }
 
-    async function recordStayPrompt(tenantId) {
-      alert('To assign a bed, please use the room explorer or execute a booking hold for this tenant!');
+    // Modal: Assign Bed to Existing Tenant
+    let currentAssignInventory = [];
+
+    async function openAssignBedModal(tenantId, tenantName) {
+      document.getElementById('form-assign-bed').reset();
+      document.getElementById('as-error').classList.add('hidden');
+      document.getElementById('as-tenant-id').value = tenantId;
+      document.getElementById('as-tenant-name-display').innerText = `Allocating bed for: ${tenantName}`;
+      document.getElementById('as-checkin').value = new Date().toISOString().split('T')[0];
+      document.getElementById('modal-assign-bed').classList.remove('hidden');
+
+      const propSelect = document.getElementById('as-property');
+      propSelect.innerHTML = '<option value="">Loading your properties...</option>';
+
+      try {
+        if (!AppState.ownerProperties || AppState.ownerProperties.length === 0) {
+          const res = await fetch(`${API_BASE}/owner/properties`, {
+            headers: { 'Authorization': `Bearer ${AppState.token}` }
+          });
+          const data = await res.json();
+          AppState.ownerProperties = data.content || [];
+        }
+
+        propSelect.innerHTML = '<option value="">Select Property</option>';
+        AppState.ownerProperties.forEach(p => {
+          propSelect.innerHTML += `<option value="${p.id}">${p.name} (${p.localityName || p.cityName})</option>`;
+        });
+
+        if (AppState.ownerProperties.length > 0) {
+          propSelect.value = AppState.ownerProperties[0].id;
+          await onAssignPropertyChange();
+        }
+      } catch (err) {
+        propSelect.innerHTML = '<option value="">Failed to load properties</option>';
+      }
+    }
+
+    function closeAssignBedModal() {
+      document.getElementById('modal-assign-bed').classList.add('hidden');
+    }
+
+    async function onAssignPropertyChange() {
+      const propId = document.getElementById('as-property').value;
+      const roomSelect = document.getElementById('as-room');
+      const bedSelect = document.getElementById('as-bed');
+
+      roomSelect.innerHTML = '<option value="">Loading rooms...</option>';
+      bedSelect.innerHTML = '<option value="">Select Room First</option>';
+
+      if (!propId) {
+        roomSelect.innerHTML = '<option value="">Select Property First</option>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/properties/${propId}`);
+        const property = await res.json();
+        currentAssignInventory = property.rooms || [];
+
+        roomSelect.innerHTML = '<option value="">Select Room</option>';
+        currentAssignInventory.forEach(r => {
+          roomSelect.innerHTML += `<option value="${r.id}">Room ${r.roomNumber} (Floor ${r.floorNumber} - ${r.sharingType})</option>`;
+        });
+
+        if (currentAssignInventory.length > 0) {
+          roomSelect.value = currentAssignInventory[0].id;
+          onAssignRoomChange();
+        }
+      } catch (err) {
+        roomSelect.innerHTML = '<option value="">Failed to load rooms</option>';
+      }
+    }
+
+    function onAssignRoomChange() {
+      const roomId = document.getElementById('as-room').value;
+      const bedSelect = document.getElementById('as-bed');
+      const rentInput = document.getElementById('as-rent');
+      const depositInput = document.getElementById('as-deposit');
+
+      bedSelect.innerHTML = '<option value="">Select Available Bed</option>';
+      const room = currentAssignInventory.find(r => r.id === roomId);
+      if (!room) return;
+
+      rentInput.value = (room.rentMonthlyPaise || 0) / 100;
+      depositInput.value = (room.depositPaise || room.rentMonthlyPaise || 0) / 100;
+
+      const beds = room.beds || [];
+      const availableBeds = beds.filter(b => b.status === 'AVAILABLE' || b.status == null);
+
+      if (availableBeds.length === 0) {
+        bedSelect.innerHTML = '<option value="">No available beds in this room</option>';
+      } else {
+        availableBeds.forEach(b => {
+          bedSelect.innerHTML += `<option value="${b.id}">${b.bedLabel} (Available)</option>`;
+        });
+      }
+    }
+
+    async function handleAssignBedSubmit(e) {
+      e.preventDefault();
+      const errBox = document.getElementById('as-error');
+      errBox.classList.add('hidden');
+
+      const tenantId = document.getElementById('as-tenant-id').value;
+      const propertyId = document.getElementById('as-property').value;
+      const roomId = document.getElementById('as-room').value;
+      const bedId = document.getElementById('as-bed').value;
+      const checkIn = document.getElementById('as-checkin').value;
+      const rentPaise = Math.round(parseFloat(document.getElementById('as-rent').value || '0') * 100);
+      const depositPaise = Math.round(parseFloat(document.getElementById('as-deposit').value || '0') * 100);
+
+      if (!bedId) {
+        errBox.innerText = 'Please select an available bed';
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/owner/tenants/${tenantId}/stays`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${AppState.token}`
+          },
+          body: JSON.stringify({
+            propertyId,
+            roomId,
+            bedId,
+            checkIn,
+            monthlyRentPaise: rentPaise,
+            securityDepositPaise: depositPaise
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Failed to assign bed');
+
+        showToast('Bed allocated successfully to tenant!');
+        closeAssignBedModal();
+        loadOwnerTenants();
+        loadOwnerOverview();
+        loadOwnerProperties();
+
+      } catch (err) {
+        errBox.innerText = err.message;
+        errBox.classList.remove('hidden');
+      }
     }
 
     // Owner Rent Invoices

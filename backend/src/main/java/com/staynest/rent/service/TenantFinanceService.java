@@ -157,6 +157,13 @@ public class TenantFinanceService {
         return tenantStayRepository.save(stay);
     }
 
+    @Transactional(readOnly = true)
+    public List<TenantStay> getTenantStays(UUID ownerId, UUID tenantId) {
+        Tenant tenant = tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+        return tenantStayRepository.findByTenantId(tenant.getId());
+    }
+
     // --- Rent Invoices & Collections ---
 
     @Transactional
