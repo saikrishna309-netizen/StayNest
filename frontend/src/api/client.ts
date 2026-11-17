@@ -3,9 +3,13 @@
 // ============================================================================
 
 export const API_BASE = import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' && window.location.origin.includes(':8080')
+  (typeof window !== 'undefined' && (window.location.origin.includes(':8080') || window.location.origin.includes(':3000') || window.location.origin.includes(':5173'))
     ? '/api/v1'
     : 'http://localhost:8080/api/v1');
+
+if (typeof window !== 'undefined' && !import.meta.env.VITE_API_URL && window.location.hostname.includes('vercel.app')) {
+  console.warn('[StayNest] VITE_API_URL is missing in Vercel! Please set VITE_API_URL in Vercel Settings -> Environment Variables to your Render backend URL (e.g. https://staynest-backend.onrender.com/api/v1).');
+}
 
 export interface ApiRequestOptions extends RequestInit {
   params?: Record<string, any>;
