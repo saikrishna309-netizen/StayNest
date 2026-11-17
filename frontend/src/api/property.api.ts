@@ -2,6 +2,7 @@ import { apiClient } from './client';
 import { City, Locality, PageResponse, PropertyDetail, PropertySummary, Room } from '../types';
 
 export interface PropertySearchParams {
+  [key: string]: any;
   cityId?: string;
   localityId?: string;
   genderPolicy?: string;
@@ -66,3 +67,4 @@ export const propertyApi = {
   createBed: (roomId: string, bedLabel: string) => 
     apiClient<unknown>(`/owner/rooms/${roomId}/beds`, { method: 'POST', body: JSON.stringify({ bedLabel }) }),
 };
+

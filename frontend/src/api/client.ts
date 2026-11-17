@@ -8,7 +8,7 @@ export const API_BASE = import.meta.env.VITE_API_URL ||
     : 'http://localhost:8080/api/v1');
 
 export interface ApiRequestOptions extends RequestInit {
-  params?: Record<string, string | number | boolean | undefined | null>;
+  params?: Record<string, any>;
 }
 
 export async function apiClient<T>(endpoint: string, options: ApiRequestOptions = {}): Promise<T> {
@@ -61,3 +61,4 @@ export async function apiClient<T>(endpoint: string, options: ApiRequestOptions 
 
   return data as T;
 }
+

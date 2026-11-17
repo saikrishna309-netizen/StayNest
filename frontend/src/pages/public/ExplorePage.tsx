@@ -255,3 +255,4 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
     </div>
   );
 };
+

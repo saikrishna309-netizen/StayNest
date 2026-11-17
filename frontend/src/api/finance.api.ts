@@ -63,3 +63,4 @@ export const financeApi = {
   getSubscriptionPlans: () => 
     apiClient<SubscriptionPlan[]>('/subscription-plans'),
 };
+

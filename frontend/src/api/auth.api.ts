@@ -28,3 +28,4 @@ export const authApi = {
   getCurrentUser: () => 
     apiClient<User>('/users/me'),
 };
+

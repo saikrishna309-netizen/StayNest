@@ -36,3 +36,4 @@ export const tenantApi = {
   getTenantStays: (tenantId: string) => 
     apiClient<TenantStay[]>(`/owner/tenants/${tenantId}/stays`),
 };
+

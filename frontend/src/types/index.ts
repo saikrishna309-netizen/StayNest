@@ -191,3 +191,4 @@ export interface SubscriptionPlan {
   maxBeds: number;
   features: string[];
 }
+

@@ -222,3 +222,4 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
     </div>
   );
 };
+
