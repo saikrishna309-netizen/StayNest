@@ -28,7 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, openAut
           </div>
         </div>
 
-        {/* Navigation Tabs */}
+        {/* Navigation Tabs (Customer & Tenant Facing) */}
         <nav className="hidden md:flex items-center space-x-1">
           <button
             onClick={() => setActiveTab('explore')}
@@ -46,14 +46,10 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, openAut
           >
             <i className="fa-solid fa-bed"></i> Tenant Dashboard
           </button>
-          <button
-            onClick={() => setActiveTab('owner')}
-            className={`px-3.5 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
-              activeTab === 'owner' ? 'text-brand-600 bg-brand-50' : 'text-slate-600 hover:text-brand-600 hover:bg-slate-100'
-            }`}
-          >
-            <i className="fa-solid fa-building-user"></i> Owner Portal (PMS)
-          </button>
+          <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-bold ml-2">
+            <i className="fa-solid fa-mobile-screen-button text-brand-600"></i>
+            <span>PG Owners: Use Mobile App</span>
+          </div>
         </nav>
 
         {/* User Auth Actions */}

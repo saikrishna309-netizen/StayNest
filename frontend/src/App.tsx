@@ -11,17 +11,10 @@ import { useAuth } from './context/AuthContext';
 export const App: React.FC = () => {
   const { user, isOwner } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'explore' | 'tenant' | 'owner' | 'admin'>('explore');
+  const [activeTab, setActiveTab] = useState<'explore' | 'tenant'>('explore');
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
-
-  // Auto-route to Owner PMS if owner is logged in
-  useEffect(() => {
-    if (isOwner) {
-      setActiveTab('owner');
-    }
-  }, [isOwner]);
 
   const handleOpenAuth = (mode: 'login' | 'register') => {
     setAuthMode(mode);
@@ -29,8 +22,8 @@ export const App: React.FC = () => {
   };
 
   const handleAuthSuccessRole = (role: string) => {
-    if (role === 'ROLE_OWNER') {
-      setActiveTab('owner');
+    if (role === 'ROLE_CUSTOMER') {
+      setActiveTab('tenant');
     } else {
       setActiveTab('explore');
     }
@@ -40,8 +33,8 @@ export const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
       {/* Top Navbar */}
       <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeTab={activeTab as any}
+        setActiveTab={setActiveTab as any}
         openAuthModal={handleOpenAuth}
       />
 
@@ -51,15 +44,13 @@ export const App: React.FC = () => {
           <ExplorePage onSelectProperty={(id) => setSelectedPropertyId(id)} />
         )}
 
-        {activeTab === 'owner' && <OwnerDashboard />}
-
         {activeTab === 'tenant' && <TenantDashboard />}
       </main>
 
-      {/* Mobile-First Bottom Nav (for smartphones & on-the-go PG Owners) */}
+      {/* Mobile-First Bottom Nav (for smartphones) */}
       <MobileBottomNav
-        activeTab={activeTab as any}
-        setActiveTab={setActiveTab as any}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
       />
 
       {/* Auth Modal */}
