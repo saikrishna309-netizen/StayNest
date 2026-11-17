@@ -16,7 +16,7 @@ spring:
     # Production Neon PostgreSQL database configuration
     url: ${DB_URL:jdbc:postgresql://ep-aged-band-b36kr503-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
     username: ${DB_USERNAME:neondb_owner}
-    password: ${DB_PASSWORD:Saikrishna@1998}
+    password: ${DB_PASSWORD:npg_Amq2OGJRKgs7}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -30,9 +30,6 @@ spring:
     hibernate:
       ddl-auto: ${DDL_AUTO:update} # Auto-sync schema on Neon cloud database
     show-sql: false
-    properties:
-      hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   sql:
     init:
