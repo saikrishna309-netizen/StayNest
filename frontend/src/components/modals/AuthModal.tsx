@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 
@@ -26,6 +26,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [role, setRole] = useState<'ROLE_CUSTOMER' | 'ROLE_OWNER'>('ROLE_OWNER');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setMode(initialMode);
+      setError(null);
+    }
+  }, [initialMode, isOpen]);
 
   if (!isOpen) return null;
 
@@ -81,14 +88,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <i className="fa-solid fa-xmark text-lg"></i>
         </button>
 
-        <div className="text-center mb-5">
-          <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xl mx-auto mb-3 shadow-md shadow-brand-500/30">
-            <i className="fa-solid fa-key"></i>
+        <div className="text-center mb-4">
+          <div className="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xl mx-auto mb-2 shadow-md shadow-brand-500/30">
+            <i className={mode === 'login' ? "fa-solid fa-right-to-bracket" : "fa-solid fa-user-plus"}></i>
           </div>
           <h3 className="text-lg font-extrabold text-slate-900">
-            {mode === 'login' ? 'Sign in to StayNest' : 'Create StayNest Account'}
+            {mode === 'login' ? 'Sign In to StayNest' : 'Create StayNest Account'}
           </h3>
-          <p className="text-xs text-slate-500 mt-1">Connect with verified credentials</p>
+          <p className="text-xs text-slate-500 mt-0.5">
+            {mode === 'login' ? 'Access your owner portal or tenant stays' : 'Register as a PG Owner or Customer'}
+          </p>
+        </div>
+
+        {/* Mode Switcher Tabs */}
+        <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => { setMode('login'); setError(null); }}
+            className={`flex-1 py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${
+              mode === 'login' ? 'bg-white text-brand-600 shadow-sm font-extrabold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <i className="fa-solid fa-right-to-bracket text-xs"></i> Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => { setMode('register'); setError(null); }}
+            className={`flex-1 py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${
+              mode === 'register' ? 'bg-white text-brand-600 shadow-sm font-extrabold' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <i className="fa-solid fa-user-plus text-xs"></i> Register
+          </button>
         </div>
 
         {/* 1-Click Quick Demo Sign In */}

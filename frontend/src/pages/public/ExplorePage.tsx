@@ -14,16 +14,22 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
   const [cities, setCities] = useState<City[]>([]);
   const [localities, setLocalities] = useState<Locality[]>([]);
 
-  const [search, setSearch] = useState('');
   const [selectedCityId, setSelectedCityId] = useState('');
   const [selectedLocalityId, setSelectedLocalityId] = useState('');
   const [genderPolicy, setGenderPolicy] = useState('');
+  const [budgetRange, setBudgetRange] = useState('');
+  const [foodIncluded, setFoodIncluded] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // Load cities on mount
   useEffect(() => {
     loadCities();
-    searchProperties();
   }, []);
+
+  // Automatically fetch properties whenever ANY filter changes
+  useEffect(() => {
+    searchProperties();
+  }, [selectedCityId, selectedLocalityId, genderPolicy, budgetRange, foodIncluded]);
 
   const loadCities = async () => {
     try {
@@ -49,14 +55,40 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
     }
   };
 
+  const handleResetFilters = () => {
+    setSelectedCityId('');
+    setSelectedLocalityId('');
+    setGenderPolicy('');
+    setBudgetRange('');
+    setFoodIncluded(false);
+    setLocalities([]);
+  };
+
   const searchProperties = async () => {
     setLoading(true);
     try {
+      let minRent: number | undefined = undefined;
+      let maxRent: number | undefined = undefined;
+
+      if (budgetRange === 'under8k') {
+        maxRent = 800000;
+      } else if (budgetRange === '8k-12k') {
+        minRent = 800000;
+        maxRent = 1200000;
+      } else if (budgetRange === '12k-18k') {
+        minRent = 1200000;
+        maxRent = 1800000;
+      } else if (budgetRange === '18k+') {
+        minRent = 1800000;
+      }
+
       const res = await propertyApi.searchProperties({
         cityId: selectedCityId || undefined,
         localityId: selectedLocalityId || undefined,
         genderPolicy: genderPolicy || undefined,
-        q: search.trim() || undefined,
+        minRent,
+        maxRent,
+        foodIncluded: foodIncluded ? true : undefined,
         size: 50,
       });
       setProperties(res.content || []);
@@ -90,52 +122,39 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
             Explore verified hostels across Bengaluru, Hyderabad, Pune, and Delhi NCR with floor-wise room visibility and instant 15-minute bed locks.
           </p>
 
-          {/* Search Card */}
-          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-2xl text-slate-800 grid grid-cols-1 sm:grid-cols-12 gap-3 text-left">
-            <div className="sm:col-span-3">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                PG Name / Area
-              </label>
-              <div className="relative">
-                <i className="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-slate-400 text-xs"></i>
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="e.g. Venkateswra..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-8 pr-3 py-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="sm:col-span-3">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                City
+          {/* Interactive Multi-Filter Bar (Auto-filters instantly on click) */}
+          <div className="bg-white rounded-2xl p-4 sm:p-5 shadow-2xl text-slate-800 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-left">
+            {/* 1. City Filter */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <i className="fa-solid fa-city text-brand-600"></i> City
               </label>
               <select
                 value={selectedCityId}
                 onChange={(e) => handleCityChange(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
               >
                 <option value="">All Supported Cities</option>
                 {cities.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {c.name} ({c.state})
                   </option>
                 ))}
               </select>
             </div>
 
-            <div className="sm:col-span-3">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Locality
+            {/* 2. Locality Filter */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <i className="fa-solid fa-location-dot text-brand-600"></i> Locality
               </label>
               <select
                 value={selectedLocalityId}
                 onChange={(e) => setSelectedLocalityId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
+                disabled={!selectedCityId || localities.length === 0}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none disabled:opacity-50 cursor-pointer"
               >
-                <option value="">All Localities</option>
+                <option value="">{selectedCityId ? 'All Localities' : 'Select City First'}</option>
                 {localities.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
@@ -144,29 +163,64 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
               </select>
             </div>
 
-            <div className="sm:col-span-2">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                Gender
+            {/* 3. Gender Policy Filter */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <i className="fa-solid fa-venus-mars text-brand-600"></i> Gender Policy
               </label>
               <select
                 value={genderPolicy}
                 onChange={(e) => setGenderPolicy(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
               >
-                <option value="">Any Policy</option>
-                <option value="BOYS">Gents / Boys</option>
-                <option value="GIRLS">Ladies / Girls</option>
+                <option value="">Any Policy (All PGs)</option>
+                <option value="BOYS">Gents / Boys Only</option>
+                <option value="GIRLS">Ladies / Girls Only</option>
                 <option value="CO_ED">Co-Ed Living</option>
               </select>
             </div>
 
-            <div className="sm:col-span-1 flex items-end">
-              <button
-                onClick={searchProperties}
-                className="w-full h-[34px] bg-brand-600 hover:bg-brand-700 text-white font-bold rounded-lg shadow-sm shadow-brand-500/30 transition flex items-center justify-center text-xs"
+            {/* 4. Budget Range Filter */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                <i className="fa-solid fa-indian-rupee-sign text-brand-600"></i> Monthly Budget
+              </label>
+              <select
+                value={budgetRange}
+                onChange={(e) => setBudgetRange(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-brand-500 outline-none cursor-pointer"
               >
-                <i className="fa-solid fa-filter"></i>
-              </button>
+                <option value="">Any Budget</option>
+                <option value="under8k">Under ₹8,000 / mo</option>
+                <option value="8k-12k">₹8,000 – ₹12,000 / mo</option>
+                <option value="12k-18k">₹12,000 – ₹18,000 / mo</option>
+                <option value="18k+">Above ₹18,000 / mo</option>
+              </select>
+            </div>
+
+            {/* 5. Food & Reset Controls */}
+            <div className="flex flex-col justify-end gap-1.5">
+              <label className="flex items-center gap-2 cursor-pointer p-1.5 rounded-lg hover:bg-slate-50 border border-slate-200 bg-white">
+                <input
+                  type="checkbox"
+                  checked={foodIncluded}
+                  onChange={(e) => setFoodIncluded(e.target.checked)}
+                  className="rounded text-brand-600 focus:ring-brand-500 h-4 w-4"
+                />
+                <span className="text-xs font-bold text-slate-700 flex items-center gap-1">
+                  <i className="fa-solid fa-utensils text-brand-600 text-[10px]"></i> Food Included Only
+                </span>
+              </label>
+
+              {(selectedCityId || selectedLocalityId || genderPolicy || budgetRange || foodIncluded) && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="w-full py-1.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1"
+                >
+                  <i className="fa-solid fa-xmark text-[10px]"></i> Reset Filters
+                </button>
+              )}
             </div>
           </div>
         </div>

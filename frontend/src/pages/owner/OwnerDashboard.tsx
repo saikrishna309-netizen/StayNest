@@ -5,6 +5,9 @@ import { financeApi } from '../../api/finance.api';
 import { Expense, Income, PropertySummary, RentInvoice, Tenant, TenantStay } from '../../types';
 import { OnboardTenantModal } from '../../components/modals/OnboardTenantModal';
 import { AssignBedModal } from '../../components/modals/AssignBedModal';
+import { EditPropertyModal } from '../../components/modals/EditPropertyModal';
+import { ManageRoomsBedsModal } from '../../components/modals/ManageRoomsBedsModal';
+import { AddPropertyModal } from '../../components/modals/AddPropertyModal';
 import { useToast } from '../../context/ToastContext';
 
 interface TenantWithStays extends Tenant {
@@ -25,6 +28,13 @@ export const OwnerDashboard: React.FC = () => {
   const [isOnboardModalOpen, setIsOnboardModalOpen] = useState(false);
   const [isAssignBedModalOpen, setIsAssignBedModalOpen] = useState(false);
   const [selectedTenantForBed, setSelectedTenantForBed] = useState<Tenant | null>(null);
+
+  // Property & Room/Bed Management Modal State
+  const [isAddPropertyModalOpen, setIsAddPropertyModalOpen] = useState(false);
+  const [isEditPropertyModalOpen, setIsEditPropertyModalOpen] = useState(false);
+  const [selectedPropertyForEdit, setSelectedPropertyForEdit] = useState<PropertySummary | null>(null);
+  const [isManageRoomsModalOpen, setIsManageRoomsModalOpen] = useState(false);
+  const [selectedPropertyForRooms, setSelectedPropertyForRooms] = useState<PropertySummary | null>(null);
 
   const [loading, setLoading] = useState(true);
 
@@ -298,31 +308,64 @@ export const OwnerDashboard: React.FC = () => {
       {activeSubtab === 'properties' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-900">My Properties List</h3>
-            <span className="text-xs text-slate-500">{properties.length} Active Listings</span>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">My Properties & Hostels</h3>
+              <p className="text-xs text-slate-500">Manage rooms, beds, floor plans, and pricing</p>
+            </div>
+            <button
+              onClick={() => setIsAddPropertyModalOpen(true)}
+              className="px-3.5 py-1.5 text-xs font-bold bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition flex items-center gap-1.5 shadow-sm"
+            >
+              <i className="fa-solid fa-plus"></i> Onboard New PG
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {properties.map((p) => (
-              <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                    {p.genderPolicy}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {p.approvalStatus}
-                  </span>
+              <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      {p.genderPolicy}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      {p.approvalStatus}
+                    </span>
+                  </div>
+                  <h4 className="text-base font-extrabold text-slate-900 mb-1">{p.name}</h4>
+                  <p className="text-xs text-slate-500 mb-3">
+                    <i className="fa-solid fa-location-dot text-slate-400 mr-1"></i> {p.localityName ? `${p.localityName}, ` : ''}{p.cityName}
+                  </p>
+                  <div className="text-xs font-bold text-brand-600 mb-3">
+                    Starting ₹{(p.startingPricePaise / 100).toLocaleString('en-IN')} /mo
+                  </div>
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 mb-4">
+                    <span><i className="fa-solid fa-utensils text-slate-400 mr-1"></i> Food: {p.foodIncluded ? 'Included' : 'No'}</span>
+                    <span className="font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded">Active PG</span>
+                  </div>
                 </div>
-                <h4 className="text-base font-extrabold text-slate-900 mb-1">{p.name}</h4>
-                <p className="text-xs text-slate-500 mb-3">
-                  <i className="fa-solid fa-location-dot text-slate-400 mr-1"></i> {p.localityName ? `${p.localityName}, ` : ''}{p.cityName}
-                </p>
-                <div className="text-xs font-bold text-brand-600 mb-3">
-                  Starting ₹{(p.startingPricePaise / 100).toLocaleString('en-IN')} /mo
-                </div>
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
-                  <span className="text-slate-400 font-medium">Food: {p.foodIncluded ? 'Included' : 'No'}</span>
-                  <span className="text-emerald-600 font-bold">5 Floors / 25 Rooms</span>
+
+                {/* Actions: Edit Property & Manage Floors/Rooms/Beds */}
+                <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedPropertyForRooms(p);
+                      setIsManageRoomsModalOpen(true);
+                    }}
+                    className="flex-1 py-2 px-3 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-sm"
+                  >
+                    <i className="fa-solid fa-layer-group"></i> Manage Rooms & Beds
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedPropertyForEdit(p);
+                      setIsEditPropertyModalOpen(true);
+                    }}
+                    className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition border border-slate-200"
+                    title="Edit Property Details"
+                  >
+                    <i className="fa-solid fa-pen"></i> Edit
+                  </button>
                 </div>
               </div>
             ))}
@@ -562,6 +605,32 @@ export const OwnerDashboard: React.FC = () => {
         tenant={selectedTenantForBed}
         properties={properties}
         onSuccess={loadAllData}
+      />
+
+      <AddPropertyModal
+        isOpen={isAddPropertyModalOpen}
+        onClose={() => setIsAddPropertyModalOpen(false)}
+        onSuccess={loadAllData}
+      />
+
+      <EditPropertyModal
+        property={selectedPropertyForEdit}
+        isOpen={isEditPropertyModalOpen}
+        onClose={() => {
+          setIsEditPropertyModalOpen(false);
+          setSelectedPropertyForEdit(null);
+        }}
+        onSuccess={loadAllData}
+      />
+
+      <ManageRoomsBedsModal
+        property={selectedPropertyForRooms}
+        isOpen={isManageRoomsModalOpen}
+        onClose={() => {
+          setIsManageRoomsModalOpen(false);
+          setSelectedPropertyForRooms(null);
+        }}
+        onRefreshParent={loadAllData}
       />
     </div>
   );

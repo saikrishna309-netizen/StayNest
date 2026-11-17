@@ -58,6 +58,9 @@ export const propertyApi = {
   createProperty: (payload: CreatePropertyPayload) => 
     apiClient<PropertyDetail>('/owner/properties', { method: 'POST', body: JSON.stringify(payload) }),
 
+  updateProperty: (id: string, payload: Partial<CreatePropertyPayload>) => 
+    apiClient<PropertyDetail>(`/owner/properties/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+
   submitProperty: (id: string) => 
     apiClient<{ message: string }>(`/owner/properties/${id}/submit`, { method: 'POST' }),
 
