@@ -44,7 +44,7 @@ staynest:
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
   cors:
-    allowed-origins: ${ALLOWED_ORIGINS:https://staynest.in,https://www.staynest.in}
+    allowed-origins: ${ALLOWED_ORIGINS:https://staynest.in,https://www.staynest.in,https://*.vercel.app,http://localhost:3000,http://localhost:8080}
     allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
     allowed-headers: "Authorization,Content-Type,Idempotency-Key,X-Trace-Id"
 
