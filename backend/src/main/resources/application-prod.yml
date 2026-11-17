@@ -12,6 +12,8 @@ spring:
   config:
     activate:
       on-profile: prod
+  main:
+    lazy-initialization: true
 
   datasource:
     # Production Neon PostgreSQL database configuration
@@ -20,10 +22,10 @@ spring:
     password: ${DB_PASSWORD:npg_Amq2OGJRKgs7}
     driver-class-name: org.postgresql.Driver
     hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
+      maximum-pool-size: 10
+      minimum-idle: 1
       idle-timeout: 300000
-      connection-timeout: 20000
+      connection-timeout: 30000
       max-lifetime: 1200000
 
   jpa:
@@ -31,6 +33,10 @@ spring:
     hibernate:
       ddl-auto: ${DDL_AUTO:none}
     show-sql: false
+    properties:
+      hibernate:
+        temp:
+          use_jdbc_metadata_defaults: false
 
   sql:
     init:
@@ -51,4 +57,6 @@ logging:
     root: WARN
     com.staynest: INFO
     org.springframework.security: INFO
+    org.springframework.boot.web.embedded.tomcat: INFO
+    org.apache.coyote.http11.Http11NioProtocol: INFO
 
