@@ -28,7 +28,7 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      ddl-auto: ${DDL_AUTO:update} # Auto-sync schema on Neon cloud database
+      ddl-auto: ${DDL_AUTO:none}
     show-sql: false
 
   sql:
