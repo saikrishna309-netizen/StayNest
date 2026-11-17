@@ -1023,14 +1023,14 @@
 
     function fillDemoCredentials(type) {
       if (type === 'owner') {
-        document.getElementById('auth-email').value = 'owner@staynest.in';
-        document.getElementById('auth-password').value = 'Owner@123456';
+        document.getElementById('auth-email').value = 'saikrishnakrishna1997@gmail.com';
+        document.getElementById('auth-password').value = 'Password@123';
       } else if (type === 'customer') {
         document.getElementById('auth-email').value = 'customer@staynest.in';
-        document.getElementById('auth-password').value = 'Customer@123456';
+        document.getElementById('auth-password').value = 'Password@123';
       } else if (type === 'admin') {
         document.getElementById('auth-email').value = 'admin@staynest.in';
-        document.getElementById('auth-password').value = 'Admin@123456';
+        document.getElementById('auth-password').value = 'Password@123';
       }
     }
 
@@ -1042,7 +1042,7 @@
 
       try {
         let endpoint = `${API_BASE}/auth/login`;
-        let payload = { email, password };
+        let payload = { username: email, password };
 
         if (AppState.authMode === 'register') {
           endpoint = `${API_BASE}/auth/register`;
