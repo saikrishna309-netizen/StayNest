@@ -1,0 +1,56 @@
+# =============================================================================
+# StayNest - PRODUCTION Environment (spring.profiles.active=prod)
+# =============================================================================
+server:
+  port: ${PORT:8080}
+  error:
+    include-stacktrace: never
+    include-message: never
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    # Production Neon PostgreSQL database configuration
+    url: ${DB_URL:jdbc:postgresql://ep-aged-band-b36kr503-pooler.c-4.ap-southeast-1.aws.neon.tech:5432/neondb?sslmode=require}
+    username: ${DB_USERNAME:neondb_owner}
+    password: ${DB_PASSWORD:Saikrishna@1998}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update} # Auto-sync schema on Neon cloud database
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  sql:
+    init:
+      mode: never
+
+staynest:
+  jwt:
+    secret: ${JWT_SECRET:prodStayNestSecretKeyMustBeAtLeast256BitsLongForHS512AlgorithmComplianceInProdEnvironment!}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  cors:
+    allowed-origins: ${ALLOWED_ORIGINS:https://staynest.in,https://www.staynest.in}
+    allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    allowed-headers: "Authorization,Content-Type,Idempotency-Key,X-Trace-Id"
+
+logging:
+  level:
+    root: WARN
+    com.staynest: INFO
+    org.springframework.security: INFO
+

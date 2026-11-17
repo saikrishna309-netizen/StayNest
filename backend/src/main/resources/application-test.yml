@@ -1,0 +1,39 @@
+# =============================================================================
+# StayNest - TESTING Environment (spring.profiles.active=test or active=h2)
+# In-memory database for automated integration and local smoke tests
+# =============================================================================
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:h2:mem:staynest_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+
+  sql:
+    init:
+      mode: always
+
+staynest:
+  jwt:
+    secret: "testStayNestSecretKeyMustBeAtLeast256BitsLongForHS256AlgorithmCompliance!"
+    expiration-ms: 3600000
+    refresh-expiration-ms: 86400000
+  cors:
+    allowed-origins: "*"
+    allowed-methods: "*"
+    allowed-headers: "*"
+
+logging:
+  level:
+    com.staynest: INFO
+

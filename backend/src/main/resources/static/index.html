@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StayNest - PG Discovery & Property Management</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Inter Google Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              900: '#312e81',
+            },
+            accent: {
+              emerald: '#10b981',
+              amber: '#f59e0b',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+  <!-- ========================================================================= -->
+  <!-- NAVIGATION BAR                                                            -->
+  <!-- ========================================================================= -->
+  <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- Logo -->
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('explore')">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-400 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+          <i class="fa-solid fa-hotel text-lg"></i>
+        </div>
+        <div>
+          <span class="text-xl font-extrabold tracking-tight text-slate-900">Stay<span class="text-brand-600">Nest</span></span>
+          <span class="hidden sm:inline-block ml-2 text-xs font-semibold px-2 py-0.5 rounded-full bg-brand-50 text-brand-700 border border-brand-100">Live API</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="hidden md:flex items-center space-x-1">
+        <button id="nav-explore" onclick="switchTab('explore')" class="px-4 py-2 rounded-lg text-sm font-semibold text-brand-600 bg-brand-50 transition">
+          <i class="fa-solid fa-compass mr-1.5"></i> Explore PGs
+        </button>
+        <button id="nav-owner" onclick="switchTab('owner')" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-slate-100 transition">
+          <i class="fa-solid fa-building-user mr-1.5"></i> Owner Portal (PMS)
+        </button>
+        <button id="nav-admin" onclick="switchTab('admin')" class="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-slate-100 transition">
+          <i class="fa-solid fa-shield-halved mr-1.5"></i> Admin Moderation
+        </button>
+      </nav>
+
+      <!-- User Auth State -->
+      <div class="flex items-center space-x-3">
+        <div id="auth-logged-out" class="flex items-center space-x-2">
+          <button onclick="openAuthModal('login')" class="text-sm font-semibold px-4 py-2 text-slate-700 hover:text-brand-600 transition">
+            Sign In
+          </button>
+          <button onclick="openAuthModal('register')" class="text-sm font-semibold px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-sm shadow-brand-500/30 transition">
+            Register PG / Owner
+          </button>
+        </div>
+
+        <div id="auth-logged-in" class="hidden flex items-center space-x-3">
+          <div class="flex items-center space-x-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
+            <div class="w-7 h-7 rounded-full bg-brand-600 text-white flex items-center justify-center text-xs font-bold" id="user-avatar-initial">U</div>
+            <span class="text-xs font-semibold text-slate-800" id="user-display-name">User</span>
+            <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-brand-100 text-brand-700" id="user-display-role">ROLE</span>
+          </div>
+          <button onclick="logout()" class="p-2 text-slate-400 hover:text-red-600 transition" title="Logout">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 1: PUBLIC TENANT DISCOVERY                                            -->
+  <!-- ========================================================================= -->
+  <main id="tab-explore" class="flex-grow">
+    <!-- Hero Banner -->
+    <div class="bg-gradient-to-b from-brand-900 via-indigo-950 to-slate-900 text-white pt-12 pb-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      <div class="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:16px_16px]"></div>
+      <div class="max-w-4xl mx-auto text-center relative z-10">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-200 border border-brand-400/30 mb-4">
+          <i class="fa-solid fa-bolt text-accent-amber"></i> Live PostgreSQL Database Connected
+        </span>
+        <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight mb-4">
+          Find a PG. Manage a PG. <br><span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-brand-200 to-emerald-300">Pay with clarity.</span>
+        </h1>
+        <p class="text-base sm:text-lg text-indigo-200/90 max-w-2xl mx-auto mb-8">
+          Verified PG & hostel accommodations across Bengaluru, Hyderabad, Pune, and Delhi NCR with instant 15-minute bed locks.
+        </p>
+
+        <!-- Quick Search Bar -->
+        <div class="bg-white rounded-2xl p-3 sm:p-4 shadow-2xl text-slate-800 grid grid-cols-1 sm:grid-cols-5 gap-3 text-left">
+          <!-- Search keyword -->
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">PG Name / Area</label>
+            <input type="text" id="filter-search" oninput="loadProperties()" placeholder="e.g. Venkateswra..." class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500">
+          </div>
+
+          <!-- City -->
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">City</label>
+            <select id="filter-city" onchange="onCityChange()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500">
+              <option value="">All Cities</option>
+            </select>
+          </div>
+
+          <!-- Locality -->
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Locality</label>
+            <select id="filter-locality" onchange="loadProperties()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500">
+              <option value="">All Localities</option>
+            </select>
+          </div>
+
+          <!-- Gender Policy -->
+          <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Gender</label>
+            <select id="filter-gender" onchange="loadProperties()" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-brand-500">
+              <option value="">Any Policy</option>
+              <option value="BOYS">Gents / Boys Only</option>
+              <option value="GIRLS">Ladies / Girls Only</option>
+              <option value="CO_ED">Co-Ed / Unisex</option>
+            </select>
+          </div>
+
+          <!-- Search Button -->
+          <div class="flex items-end">
+            <button onclick="loadProperties()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-magnifying-glass"></i> Search
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Listings Section -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-10 mb-16 relative z-20">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900" id="listings-heading">Available PGs & Hostels</h2>
+          <p class="text-sm text-slate-500" id="listings-count">Showing verified listings</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="loadProperties()" class="text-xs font-semibold px-3 py-1.5 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-600 shadow-sm transition">
+            <i class="fa-solid fa-arrows-rotate mr-1"></i> Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Properties Grid -->
+      <div id="properties-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Rendered dynamically -->
+        <div class="col-span-full py-16 text-center text-slate-400">
+          <i class="fa-solid fa-spinner fa-spin text-3xl mb-3 text-brand-600"></i>
+          <p class="text-sm font-medium">Fetching PG listings from local backend...</p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 2: OWNER PORTAL (PMS & ACCOUNTING)                                    -->
+  <!-- ========================================================================= -->
+  <main id="tab-owner" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    <!-- Owner Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Property Owner Portal (PMS)</h1>
+        <p class="text-sm text-slate-500 mt-1">Manage listings, floor-by-floor bed inventory, monthly rent collections, and reports.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="exportCsvReport()" class="px-4 py-2 text-sm font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 shadow-sm transition flex items-center gap-2">
+          <i class="fa-solid fa-file-csv text-emerald-600"></i> Export CSV
+        </button>
+        <button onclick="openCreatePropertyModal()" class="px-4 py-2 text-sm font-semibold bg-brand-600 hover:bg-brand-700 text-white rounded-lg shadow-sm shadow-brand-500/30 transition flex items-center gap-2">
+          <i class="fa-solid fa-plus"></i> New Property
+        </button>
+      </div>
+    </div>
+
+    <!-- Owner Stats KPI Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Beds</span>
+        <div class="text-2xl font-bold text-slate-900 mt-2" id="kpi-total-beds">--</div>
+        <span class="text-xs text-slate-400">In your inventory</span>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-emerald-600 uppercase tracking-wider">Available Beds</span>
+        <div class="text-2xl font-bold text-emerald-600 mt-2" id="kpi-available-beds">--</div>
+        <span class="text-xs text-slate-400">Ready for instant move-in</span>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-brand-600 uppercase tracking-wider">Occupied Beds</span>
+        <div class="text-2xl font-bold text-brand-600 mt-2" id="kpi-occupied-beds">--</div>
+        <span class="text-xs text-slate-400">Active tenant stays</span>
+      </div>
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-semibold text-amber-600 uppercase tracking-wider">Occupancy Rate</span>
+        <div class="text-2xl font-bold text-amber-600 mt-2" id="kpi-occupancy-rate">--%</div>
+        <span class="text-xs text-slate-400">Property utilization</span>
+      </div>
+    </div>
+
+    <!-- Owner Properties List -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div class="px-6 py-4 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+        <h2 class="text-base font-bold text-slate-900">My Properties & Hostels</h2>
+        <span class="text-xs text-slate-500">Live PostgreSQL records</span>
+      </div>
+      <div id="owner-properties-list" class="divide-y divide-slate-100">
+        <!-- Rendered dynamically -->
+        <div class="p-8 text-center text-slate-400 text-sm">Please sign in as Owner to view properties.</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- TAB 3: ADMIN MODERATION TAB                                               -->
+  <!-- ========================================================================= -->
+  <main id="tab-admin" class="hidden flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+    <div class="mb-8">
+      <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Platform Administration & Moderation</h1>
+      <p class="text-sm text-slate-500 mt-1">Review pending property listings, moderate platform content, and view system audit trail.</p>
+    </div>
+
+    <!-- Pending Approvals Queue -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-8">
+      <div class="px-6 py-4 border-b border-slate-200 bg-amber-50/50 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-clock text-amber-600"></i>
+          <h2 class="text-base font-bold text-slate-900">Pending Moderation Queue</h2>
+        </div>
+        <button onclick="loadAdminPending()" class="text-xs font-semibold text-brand-600 hover:underline">
+          <i class="fa-solid fa-rotate-right mr-1"></i> Refresh
+        </button>
+      </div>
+      <div id="admin-pending-list" class="divide-y divide-slate-100">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: PROPERTY DETAILS & ROOMS (5 FLOORS VIEW)                           -->
+  <!-- ========================================================================= -->
+  <div id="modal-property" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-4xl w-full shadow-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div>
+          <span id="modal-prop-badge" class="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-brand-100 text-brand-700">GENTS PG</span>
+          <h3 id="modal-prop-name" class="text-xl font-extrabold text-slate-900 mt-1">Property Name</h3>
+          <p id="modal-prop-location" class="text-xs text-slate-500 mt-0.5"><i class="fa-solid fa-location-dot mr-1"></i> Locality, City</p>
+        </div>
+        <button onclick="closePropertyModal()" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 hover:bg-slate-300 flex items-center justify-center transition">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 overflow-y-auto space-y-6 flex-grow">
+        <!-- Amenities Icons -->
+        <div>
+          <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider mb-2">Amenities Included</h4>
+          <div id="modal-prop-amenities" class="flex flex-wrap gap-2">
+            <!-- Amenities chips -->
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <h4 class="text-xs font-bold uppercase text-slate-400 tracking-wider mb-1">About This PG</h4>
+          <p id="modal-prop-description" class="text-sm text-slate-600 leading-relaxed"></p>
+        </div>
+
+        <!-- Floor & Room Explorer -->
+        <div class="border-t border-slate-200 pt-5">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h4 class="text-base font-bold text-slate-900">Rooms & Bed Availability</h4>
+              <p class="text-xs text-slate-500">Select a bed to place an instant 15-minute booking hold</p>
+            </div>
+            <!-- Floor filter buttons -->
+            <div id="modal-floor-tabs" class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+              <!-- Dynamically populated floors -->
+            </div>
+          </div>
+
+          <!-- Rooms Grid for selected floor -->
+          <div id="modal-rooms-container" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Dynamically populated room cards -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="px-6 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+        <span><i class="fa-solid fa-shield-halved text-emerald-600 mr-1"></i> 100% Verified StayNest Inventory</span>
+        <button onclick="closePropertyModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- MODAL: AUTHENTICATION (SIGN IN / REGISTER)                                 -->
+  <!-- ========================================================================= -->
+  <div id="modal-auth" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden p-6 relative">
+      <button onclick="closeAuthModal()" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-xl bg-brand-600 text-white flex items-center justify-center text-xl mx-auto mb-3 shadow-md shadow-brand-500/30">
+          <i class="fa-solid fa-key"></i>
+        </div>
+        <h3 id="auth-title" class="text-xl font-extrabold text-slate-900">Sign in to StayNest</h3>
+        <p class="text-xs text-slate-500 mt-1">Access tenant bookings, owner management, or admin portal</p>
+      </div>
+
+      <!-- Quick Demo Login Buttons -->
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 mb-5">
+        <span class="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Quick Demo Accounts:</span>
+        <div class="grid grid-cols-3 gap-2">
+          <button onclick="fillDemoCredentials('owner')" class="text-xs font-semibold py-1.5 px-2 bg-white border border-slate-200 rounded-lg hover:border-brand-500 text-slate-700 shadow-sm transition">
+            PG Owner
+          </button>
+          <button onclick="fillDemoCredentials('customer')" class="text-xs font-semibold py-1.5 px-2 bg-white border border-slate-200 rounded-lg hover:border-brand-500 text-slate-700 shadow-sm transition">
+            Customer
+          </button>
+          <button onclick="fillDemoCredentials('admin')" class="text-xs font-semibold py-1.5 px-2 bg-white border border-slate-200 rounded-lg hover:border-brand-500 text-slate-700 shadow-sm transition">
+            Admin
+          </button>
+        </div>
+      </div>
+
+      <!-- Auth Form -->
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-4">
+        <div id="auth-name-container" class="hidden">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Full Name</label>
+          <input type="text" id="auth-name" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500" placeholder="e.g. Ramesh Kumar">
+        </div>
+
+        <div id="auth-phone-container" class="hidden">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Phone Number</label>
+          <input type="tel" id="auth-phone" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500" placeholder="e.g. 9888811111">
+        </div>
+
+        <div id="auth-role-container" class="hidden">
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Account Role</label>
+          <select id="auth-role" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm font-semibold focus:ring-2 focus:ring-brand-500">
+            <option value="ROLE_OWNER">PG / Hostel Owner (List & Manage Properties)</option>
+            <option value="ROLE_CUSTOMER">Tenant / Customer (Search & Book Beds)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Email Address</label>
+          <input type="email" id="auth-email" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500" placeholder="name@example.com">
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-slate-600 uppercase tracking-wider mb-1">Password</label>
+          <input type="password" id="auth-password" required class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 text-sm focus:ring-2 focus:ring-brand-500" placeholder="••••••••">
+        </div>
+
+        <div id="auth-error" class="hidden text-xs text-red-600 font-semibold p-2 bg-red-50 rounded-lg border border-red-200"></div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-2.5 rounded-lg shadow-md shadow-brand-500/20 transition">
+          Sign In
+        </button>
+      </form>
+
+      <div class="mt-4 text-center">
+        <button id="auth-toggle-btn" onclick="toggleAuthMode()" class="text-xs font-semibold text-brand-600 hover:underline">
+          Don't have an account? Register here
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================= -->
+  <!-- JAVASCRIPT FRONTEND LOGIC & API CLIENT                                    -->
+  <!-- ========================================================================= -->
+  <script>
+    const API_BASE = 'http://localhost:8080/api/v1';
+
+    // State
+    let currentUser = JSON.parse(localStorage.getItem('staynest_user') || 'null');
+    let currentToken = localStorage.getItem('staynest_token') || '';
+    let currentProperties = [];
+    let activeCityList = [];
+    let selectedProperty = null;
+    let authMode = 'login'; // 'login' or 'register'
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+      updateAuthUI();
+      loadCities();
+      loadProperties();
+      if (currentUser && currentUser.role === 'ROLE_OWNER') {
+        loadOwnerData();
+      }
+    });
+
+    // ---------------------------------------------------------------------------
+    // Auth Management
+    // ---------------------------------------------------------------------------
+    function updateAuthUI() {
+      const loggedOutDiv = document.getElementById('auth-logged-out');
+      const loggedInDiv = document.getElementById('auth-logged-in');
+
+      if (currentUser && currentToken) {
+        loggedOutDiv.classList.add('hidden');
+        loggedInDiv.classList.remove('hidden');
+        document.getElementById('user-display-name').innerText = currentUser.fullName || currentUser.email;
+        document.getElementById('user-display-role').innerText = currentUser.role.replace('ROLE_', '');
+        document.getElementById('user-avatar-initial').innerText = (currentUser.fullName || currentUser.email).charAt(0).toUpperCase();
+      } else {
+        loggedOutDiv.classList.remove('hidden');
+        loggedInDiv.classList.add('hidden');
+      }
+    }
+
+    function openAuthModal(mode = 'login') {
+      authMode = mode;
+      const modal = document.getElementById('modal-auth');
+      const title = document.getElementById('auth-title');
+      const submitBtn = document.getElementById('auth-submit-btn');
+      const toggleBtn = document.getElementById('auth-toggle-btn');
+      const nameContainer = document.getElementById('auth-name-container');
+      const phoneContainer = document.getElementById('auth-phone-container');
+      const roleContainer = document.getElementById('auth-role-container');
+
+      if (mode === 'register') {
+        title.innerText = 'Create StayNest Account';
+        submitBtn.innerText = 'Create Account';
+        toggleBtn.innerText = 'Already have an account? Sign in';
+        nameContainer.classList.remove('hidden');
+        phoneContainer.classList.remove('hidden');
+        roleContainer.classList.remove('hidden');
+      } else {
+        title.innerText = 'Sign in to StayNest';
+        submitBtn.innerText = 'Sign In';
+        toggleBtn.innerText = "Don't have an account? Register here";
+        nameContainer.classList.add('hidden');
+        phoneContainer.classList.add('hidden');
+        roleContainer.classList.add('hidden');
+      }
+
+      document.getElementById('auth-error').classList.add('hidden');
+      modal.classList.remove('hidden');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('modal-auth').classList.add('hidden');
+    }
+
+    function toggleAuthMode() {
+      openAuthModal(authMode === 'login' ? 'register' : 'login');
+    }
+
+    function fillDemoCredentials(role) {
+      if (role === 'owner') {
+        document.getElementById('auth-email').value = 'owner@staynest.in';
+        document.getElementById('auth-password').value = 'Owner@123456';
+      } else if (role === 'customer') {
+        document.getElementById('auth-email').value = 'customer@staynest.in';
+        document.getElementById('auth-password').value = 'Customer@123456';
+      } else if (role === 'admin') {
+        document.getElementById('auth-email').value = 'admin@staynest.in';
+        document.getElementById('auth-password').value = 'Admin@123456';
+      }
+    }
+
+    async function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+      const errorDiv = document.getElementById('auth-error');
+
+      try {
+        let endpoint = `${API_BASE}/auth/login`;
+        let payload = { email, password };
+
+        if (authMode === 'register') {
+          endpoint = `${API_BASE}/auth/register`;
+          payload = {
+            fullName: document.getElementById('auth-name').value,
+            phone: document.getElementById('auth-phone').value,
+            email,
+            password,
+            role: document.getElementById('auth-role').value
+          };
+        }
+
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.message || 'Authentication failed');
+        }
+
+        currentToken = data.accessToken;
+        currentUser = data.user;
+        localStorage.setItem('staynest_token', currentToken);
+        localStorage.setItem('staynest_user', JSON.stringify(currentUser));
+
+        updateAuthUI();
+        closeAuthModal();
+
+        if (currentUser.role === 'ROLE_OWNER') {
+          switchTab('owner');
+        } else if (currentUser.role === 'ROLE_ADMIN') {
+          switchTab('admin');
+        }
+      } catch (err) {
+        errorDiv.innerText = err.message;
+        errorDiv.classList.remove('hidden');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('staynest_token');
+      localStorage.removeItem('staynest_user');
+      currentUser = null;
+      currentToken = '';
+      updateAuthUI();
+      switchTab('explore');
+    }
+
+    // ---------------------------------------------------------------------------
+    // Public Discovery & Cities
+    // ---------------------------------------------------------------------------
+    async function loadCities() {
+      try {
+        const res = await fetch(`${API_BASE}/cities`);
+        activeCityList = await res.json();
+        const citySelect = document.getElementById('filter-city');
+        citySelect.innerHTML = '<option value="">All Cities</option>';
+        activeCityList.forEach(city => {
+          citySelect.innerHTML += `<option value="${city.id}">${city.name}</option>`;
+        });
+      } catch (e) {
+        console.error('Failed to load cities', e);
+      }
+    }
+
+    async function onCityChange() {
+      const cityId = document.getElementById('filter-city').value;
+      const localitySelect = document.getElementById('filter-locality');
+      localitySelect.innerHTML = '<option value="">All Localities</option>';
+
+      if (cityId) {
+        try {
+          const res = await fetch(`${API_BASE}/localities?cityId=${cityId}`);
+          const localities = await res.json();
+          localities.forEach(l => {
+            localitySelect.innerHTML += `<option value="${l.id}">${l.name}</option>`;
+          });
+        } catch (e) {
+          console.error('Failed to load localities', e);
+        }
+      }
+      loadProperties();
+    }
+
+    async function loadProperties() {
+      const grid = document.getElementById('properties-grid');
+      const searchQuery = (document.getElementById('filter-search')?.value || '').trim();
+      const cityId = document.getElementById('filter-city').value;
+      const localityId = document.getElementById('filter-locality').value;
+      const gender = document.getElementById('filter-gender').value;
+
+      let url = `${API_BASE}/properties?size=50`;
+      if (searchQuery) url += `&q=${encodeURIComponent(searchQuery)}`;
+      if (cityId) url += `&cityId=${cityId}`;
+      if (localityId) url += `&localityId=${localityId}`;
+      if (gender) url += `&genderPolicy=${gender}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        currentProperties = data.content || [];
+        document.getElementById('listings-count').innerText = `${currentProperties.length} PG properties found`;
+
+        if (currentProperties.length === 0) {
+          grid.innerHTML = `
+            <div class="col-span-full py-16 text-center text-slate-400 bg-white rounded-2xl border border-dashed border-slate-300">
+              <i class="fa-solid fa-hotel text-4xl mb-3 text-slate-300"></i>
+              <p class="text-base font-bold text-slate-700">No PGs found matching criteria</p>
+              <p class="text-xs text-slate-400 mt-1">Try resetting your filters or deploy a new PG via the Owner Portal.</p>
+            </div>`;
+          return;
+        }
+
+        grid.innerHTML = currentProperties.map(p => {
+          const genderBadge = p.genderPolicy === 'BOYS' 
+            ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200"><i class="fa-solid fa-mars mr-1"></i> Gents PG</span>'
+            : p.genderPolicy === 'GIRLS'
+            ? '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-pink-50 text-pink-700 border border-pink-200"><i class="fa-solid fa-venus mr-1"></i> Ladies PG</span>'
+            : '<span class="px-2.5 py-1 rounded-full text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200"><i class="fa-solid fa-users mr-1"></i> Co-Ed Living</span>';
+
+          const startingRent = (p.startingPricePaise / 100).toLocaleString('en-IN');
+          const coverPhoto = p.coverPhotoUrl || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=600&q=80';
+
+          return `
+            <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition duration-200 flex flex-col">
+              <div class="relative h-48 bg-slate-100 overflow-hidden">
+                <img src="${coverPhoto}" alt="${p.name}" class="w-full h-full object-cover">
+                <div class="absolute top-3 left-3">${genderBadge}</div>
+                <div class="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-md text-white text-xs font-bold px-2.5 py-1 rounded-lg">
+                  ₹${startingRent} <span class="font-normal text-[10px] text-slate-300">/mo</span>
+                </div>
+              </div>
+              <div class="p-5 flex-grow flex flex-col justify-between">
+                <div>
+                  <h3 class="text-lg font-bold text-slate-900 hover:text-brand-600 transition cursor-pointer" onclick="openPropertyModal('${p.id}')">${p.name}</h3>
+                  <p class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                    <i class="fa-solid fa-location-dot text-slate-400"></i> ${p.localityName ? p.localityName + ', ' : ''}${p.cityName}
+                  </p>
+                  <p class="text-xs text-slate-600 mt-3 line-clamp-2">${p.description || 'Modern furnished PG with daily meals, power backup and high speed Wi-Fi.'}</p>
+                </div>
+
+                <div class="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                  <div class="text-xs text-slate-400">
+                    <i class="fa-solid fa-utensils mr-1 text-emerald-600"></i> ${p.foodIncluded ? 'Food Inc.' : 'Self Cook'}
+                  </div>
+                  <button onclick="openPropertyModal('${p.id}')" class="px-4 py-2 rounded-lg bg-brand-50 hover:bg-brand-600 text-brand-700 hover:text-white font-bold text-xs transition">
+                    View Rooms & Beds
+                  </button>
+                </div>
+              </div>
+            </div>`;
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load properties', e);
+        grid.innerHTML = `<div class="col-span-full py-12 text-center text-red-500">Failed to connect to backend at ${API_BASE}. Make sure the Spring Boot server is running on :8080.</div>`;
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Modal: Detailed Property & 5-Floor Explorer
+    // ---------------------------------------------------------------------------
+    async function openPropertyModal(propertyId) {
+      const modal = document.getElementById('modal-property');
+      modal.classList.remove('hidden');
+
+      try {
+        const res = await fetch(`${API_BASE}/properties/${propertyId}`);
+        selectedProperty = await res.json();
+
+        document.getElementById('modal-prop-name').innerText = selectedProperty.name;
+        document.getElementById('modal-prop-location').innerHTML = `<i class="fa-solid fa-location-dot mr-1 text-brand-600"></i> ${selectedProperty.addressLine || ''}, ${selectedProperty.localityName || ''}, ${selectedProperty.cityName}`;
+        document.getElementById('modal-prop-description').innerText = selectedProperty.description || '';
+        document.getElementById('modal-prop-badge').innerText = selectedProperty.genderPolicy;
+
+        // Amenities
+        const amContainer = document.getElementById('modal-prop-amenities');
+        amContainer.innerHTML = (selectedProperty.amenities || []).map(code => `
+          <span class="px-2.5 py-1 rounded-md text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+            <i class="fa-solid fa-check text-emerald-600 mr-1"></i> ${code}
+          </span>
+        `).join('') || '<span class="text-xs text-slate-400">Standard PG Amenities</span>';
+
+        // Extract Unique Floors
+        const rooms = selectedProperty.rooms || [];
+        const floorSet = new Set(rooms.map(r => r.floorNumber || 1));
+        const floors = Array.from(floorSet).sort((a,b) => a - b);
+
+        const floorTabs = document.getElementById('modal-floor-tabs');
+        floorTabs.innerHTML = floors.map((f, idx) => `
+          <button onclick="renderFloorRooms(${f})" class="px-3 py-1 rounded-md text-xs font-bold transition ${idx === 0 ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}">
+            Floor ${f}
+          </button>
+        `).join('');
+
+        if (floors.length > 0) {
+          renderFloorRooms(floors[0]);
+        } else {
+          document.getElementById('modal-rooms-container').innerHTML = '<p class="col-span-full text-xs text-slate-400">No rooms configured yet for this PG.</p>';
+        }
+
+      } catch (e) {
+        console.error('Failed to load property details', e);
+      }
+    }
+
+    function closePropertyModal() {
+      document.getElementById('modal-property').classList.add('hidden');
+    }
+
+    function renderFloorRooms(floorNumber) {
+      const container = document.getElementById('modal-rooms-container');
+      const rooms = (selectedProperty.rooms || []).filter(r => (r.floorNumber || 1) === floorNumber);
+
+      container.innerHTML = rooms.map(room => {
+        const rent = (room.rentMonthlyPaise / 100).toLocaleString('en-IN');
+        const beds = room.beds || [];
+        
+        return `
+          <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-col justify-between">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-sm font-extrabold text-slate-800">Room ${room.roomNumber}</span>
+                <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded bg-brand-100 text-brand-700">${room.sharingType}</span>
+              </div>
+              <div class="text-lg font-bold text-slate-900 mb-3">
+                ₹${rent} <span class="text-xs font-normal text-slate-400">/month</span>
+              </div>
+
+              <!-- Beds in room -->
+              <div class="space-y-1.5 mb-4">
+                ${beds.map(b => `
+                  <div class="flex items-center justify-between text-xs p-2 rounded-lg bg-white border border-slate-200">
+                    <span class="font-medium text-slate-700"><i class="fa-solid fa-bed text-slate-400 mr-1.5"></i> ${b.bedLabel}</span>
+                    ${b.status === 'AVAILABLE' 
+                      ? `<button onclick="holdAndBook('${b.id}', '${room.id}', '${selectedProperty.id}')" class="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white font-bold text-[11px] transition">
+                          Hold Bed
+                         </button>`
+                      : '<span class="text-[10px] font-bold text-slate-400">Occupied</span>'}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    async function holdAndBook(bedId, roomId, propertyId) {
+      if (!currentUser || !currentToken) {
+        alert('Please Sign In first to reserve a bed.');
+        openAuthModal('login');
+        return;
+      }
+
+      const checkInDate = prompt('Enter Check-In Date (YYYY-MM-DD):', '2026-12-01');
+      if (!checkInDate) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/bookings/holds`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${currentToken}`
+          },
+          body: JSON.stringify({
+            propertyId,
+            roomId,
+            bedId,
+            checkInDate,
+            checkOutDate: '2027-05-31'
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Hold failed');
+
+        alert(`🎉 Bed successfully held for 15 minutes! Hold ID: ${data.holdId}\n\nProceeding to booking confirmation.`);
+        closePropertyModal();
+      } catch (err) {
+        alert('Error holding bed: ' + err.message);
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Owner PMS Portal Logic
+    // ---------------------------------------------------------------------------
+    async function loadOwnerData() {
+      if (!currentToken) return;
+
+      // Occupancy KPIs
+      try {
+        const res = await fetch(`${API_BASE}/owner/reports/occupancy`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (res.ok) {
+          const occ = await res.json();
+          document.getElementById('kpi-total-beds').innerText = occ.totalBeds || 0;
+          document.getElementById('kpi-available-beds').innerText = occ.availableBeds || 0;
+          document.getElementById('kpi-occupied-beds').innerText = occ.occupiedBeds || 0;
+          document.getElementById('kpi-occupancy-rate').innerText = `${occ.occupancyPercentage || 0}%`;
+        }
+      } catch (e) {
+        console.error('Failed to load owner occupancy', e);
+      }
+
+      // Owner Properties List
+      try {
+        const res = await fetch(`${API_BASE}/owner/properties`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        const data = await res.json();
+        const listDiv = document.getElementById('owner-properties-list');
+        const properties = data.content || [];
+
+        if (properties.length === 0) {
+          listDiv.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm">No properties found. Click "+ New Property" to create one.</div>';
+          return;
+        }
+
+        listDiv.innerHTML = properties.map(p => `
+          <div class="p-5 flex items-center justify-between hover:bg-slate-50 transition">
+            <div class="flex items-center gap-4">
+              <div class="w-12 h-12 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center text-xl font-bold">
+                <i class="fa-solid fa-hotel"></i>
+              </div>
+              <div>
+                <h4 class="text-base font-bold text-slate-900">${p.name}</h4>
+                <p class="text-xs text-slate-500">${p.localityName || ''}, ${p.cityName} • Starting ₹${(p.startingPricePaise/100).toLocaleString('en-IN')}/mo</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-xs font-bold px-2.5 py-1 rounded-full ${p.approvalStatus === 'APPROVED' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}">
+                ${p.approvalStatus}
+              </span>
+              <button onclick="openPropertyModal('${p.id}')" class="px-3 py-1.5 text-xs font-semibold bg-white border border-slate-200 rounded-lg hover:bg-slate-50 text-slate-700 shadow-sm transition">
+                Manage Inventory
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('Failed to load owner properties', e);
+      }
+    }
+
+    async function exportCsvReport() {
+      if (!currentToken) {
+        alert('Please log in as Owner to export financial reports.');
+        return;
+      }
+      window.open(`${API_BASE}/owner/reports/export?format=csv`, '_blank');
+    }
+
+    function openCreatePropertyModal() {
+      alert('You can easily create properties either using the backend API or by running `bash create_venkateswra_pg.sh` in the terminal!');
+    }
+
+    // ---------------------------------------------------------------------------
+    // Tab Navigation
+    // ---------------------------------------------------------------------------
+    function switchTab(tab) {
+      document.getElementById('tab-explore').classList.add('hidden');
+      document.getElementById('tab-owner').classList.add('hidden');
+      document.getElementById('tab-admin').classList.add('hidden');
+
+      document.getElementById('nav-explore').className = 'px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-slate-100 transition';
+      document.getElementById('nav-owner').className = 'px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-slate-100 transition';
+      document.getElementById('nav-admin').className = 'px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:text-brand-600 hover:bg-slate-100 transition';
+
+      if (tab === 'owner') {
+        document.getElementById('tab-owner').classList.remove('hidden');
+        document.getElementById('nav-owner').className = 'px-4 py-2 rounded-lg text-sm font-semibold text-brand-600 bg-brand-50 transition';
+        loadOwnerData();
+      } else if (tab === 'admin') {
+        document.getElementById('tab-admin').classList.remove('hidden');
+        document.getElementById('nav-admin').className = 'px-4 py-2 rounded-lg text-sm font-semibold text-brand-600 bg-brand-50 transition';
+        loadAdminPending();
+      } else {
+        document.getElementById('tab-explore').classList.remove('hidden');
+        document.getElementById('nav-explore').className = 'px-4 py-2 rounded-lg text-sm font-semibold text-brand-600 bg-brand-50 transition';
+        loadProperties();
+      }
+    }
+
+    async function loadAdminPending() {
+      const listDiv = document.getElementById('admin-pending-list');
+      if (!currentToken) {
+        listDiv.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm">Please sign in with Admin credentials to review the moderation queue.</div>';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/admin/properties/pending`, {
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!res.ok) throw new Error('Admin authorization required');
+        const list = await res.json();
+
+        if (list.length === 0) {
+          listDiv.innerHTML = '<div class="p-8 text-center text-slate-400 text-sm">No listings currently awaiting moderation. All clean!</div>';
+          return;
+        }
+
+        listDiv.innerHTML = list.map(p => `
+          <div class="p-5 flex items-center justify-between hover:bg-slate-50 transition">
+            <div>
+              <h4 class="text-base font-bold text-slate-900">${p.name}</h4>
+              <p class="text-xs text-slate-500">${p.localityName || ''}, ${p.cityName} • Starting ₹${(p.startingPricePaise/100).toLocaleString('en-IN')}/mo</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="approveProperty('${p.id}')" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition">
+                Approve & Publish
+              </button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        listDiv.innerHTML = `<div class="p-8 text-center text-red-500 text-sm">${err.message}</div>`;
+      }
+    }
+
+    async function approveProperty(id) {
+      try {
+        const res = await fetch(`${API_BASE}/admin/properties/${id}/approve`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (res.ok) {
+          alert('Property approved and published live!');
+          loadAdminPending();
+        }
+      } catch (e) {
+        alert('Failed to approve property');
+      }
+    }
+  </script>
+</body>
+</html>
+

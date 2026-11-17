@@ -1,0 +1,48 @@
+# =============================================================================
+# StayNest - DEVELOPMENT Environment (spring.profiles.active=dev)
+# =============================================================================
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    # =========================================================================
+    # TODO: CONFIGURE YOUR LOCAL POSTGRESQL (DBeaver) CREDENTIALS HERE
+    # =========================================================================
+    url: jdbc:postgresql://localhost:5432/staynest
+    username: postgres
+    password: Saikrishna@1998
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update # Automatically sync schema in local dev
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  sql:
+    init:
+      mode: always # Automatically runs initial data seeder
+
+staynest:
+  jwt:
+    secret: "devStayNestSecretKeyMustBeAtLeast256BitsLongForHS256AlgorithmComplianceInDevMode!"
+    expiration-ms: 86400000     # 24 hours
+    refresh-expiration-ms: 604800000 # 7 days
+  cors:
+    allowed-origins: "http://localhost:3000,http://localhost:3001"
+    allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+    allowed-headers: "*"
+
+logging:
+  level:
+    com.staynest: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+

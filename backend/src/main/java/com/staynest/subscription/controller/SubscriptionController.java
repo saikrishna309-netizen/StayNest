@@ -1,0 +1,65 @@
+package com.staynest.subscription.controller;
+
+import com.staynest.security.UserPrincipal;
+import com.staynest.subscription.dto.CreateOwnerSubscriptionRequest;
+import com.staynest.subscription.dto.OwnerSubscriptionResponse;
+import com.staynest.subscription.dto.SubscriptionPlanResponse;
+import com.staynest.subscription.service.SubscriptionService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api/v1")
+@Tag(name = "Owner Subscriptions", description = "SaaS subscription plans, active plan management, and provider webhooks")
+public class SubscriptionController {
+
+    private final SubscriptionService subscriptionService;
+
+    public SubscriptionController(SubscriptionService subscriptionService) {
+        this.subscriptionService = subscriptionService;
+    }
+
+    @GetMapping("/subscription-plans")
+    @Operation(summary = "List available SaaS subscription tiers (Starter, Growth, Business)")
+    public ResponseEntity<List<SubscriptionPlanResponse>> listPlans() {
+        return ResponseEntity.ok(subscriptionService.listPlans());
+    }
+
+    @PostMapping("/owner/subscriptions")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(summary = "Start or change owner subscription plan")
+    public ResponseEntity<OwnerSubscriptionResponse> startSubscription(
+            @AuthenticationPrincipal UserPrincipal user,
+            @Valid @RequestBody CreateOwnerSubscriptionRequest request) {
+        return new ResponseEntity<>(subscriptionService.createOrChangeSubscription(user.getId(), request), HttpStatus.CREATED);
+    }
+
+    @GetMapping("/owner/subscription")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(summary = "Read owner's current active subscription and entitlements")
+    public ResponseEntity<OwnerSubscriptionResponse> getMySubscription(@AuthenticationPrincipal UserPrincipal user) {
+        return ResponseEntity.ok(subscriptionService.getCurrentSubscription(user.getId()));
+    }
+
+    @PostMapping("/subscriptions/webhooks/{provider}")
+    @Operation(summary = "Process subscription recurring billing provider webhook events")
+    public ResponseEntity<Map<String, String>> processSubscriptionWebhook(
+            @PathVariable String provider,
+            @RequestBody Map<String, Object> payload) {
+        subscriptionService.handleSubscriptionWebhook(provider, payload);
+        return ResponseEntity.ok(Map.of("status", "processed"));
+    }
+}
+
