@@ -24,16 +24,17 @@ public interface PropertyRepository extends JpaRepository<Property, UUID> {
 
     @Query("""
         SELECT p FROM Property p
-        WHERE (p.published = true OR p.approvalStatus = 'APPROVED' OR p.approvalStatus = 'DRAFT')
+        WHERE (p.published = true OR p.approvalStatus = 'APPROVED' OR p.approvalStatus = 'DRAFT' OR p.approvalStatus = 'SUBMITTED')
           AND (:cityId IS NULL OR p.cityId = :cityId)
           AND (:localityId IS NULL OR p.localityId = :localityId)
           AND (:genderPolicy IS NULL OR p.genderPolicy = :genderPolicy)
           AND (:minRent IS NULL OR p.startingPricePaise >= :minRent)
           AND (:maxRent IS NULL OR p.startingPricePaise <= :maxRent)
           AND (:foodIncluded IS NULL OR p.foodIncluded = :foodIncluded)
-          AND (:search IS NULL OR LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%'))
-               OR LOWER(p.description) LIKE LOWER(CONCAT('%', :search, '%'))
-               OR LOWER(p.addressLine) LIKE LOWER(CONCAT('%', :search, '%')))
+          AND (CAST(:search AS string) IS NULL
+               OR LOWER(p.name) LIKE CAST(:search AS string)
+               OR LOWER(p.description) LIKE CAST(:search AS string)
+               OR LOWER(p.addressLine) LIKE CAST(:search AS string))
     """)
     Page<Property> searchProperties(
             @Param("cityId") UUID cityId,

@@ -76,8 +76,10 @@ public class PropertyService {
             UUID cityId, UUID localityId, GenderPolicy genderPolicy,
             Long minRent, Long maxRent, Boolean foodIncluded, String q, Pageable pageable) {
 
+        String search = (q != null && !q.trim().isEmpty()) ? "%" + q.trim().toLowerCase() + "%" : null;
+
         Page<Property> page = propertyRepository.searchProperties(
-                cityId, localityId, genderPolicy, minRent, maxRent, foodIncluded, q, pageable);
+                cityId, localityId, genderPolicy, minRent, maxRent, foodIncluded, search, pageable);
 
         List<PropertySummaryResponse> dtos = page.getContent().stream()
                 .map(this::mapToSummaryResponse)

@@ -1,0 +1,13 @@
+{
+  "name": "staynest-frontend",
+  "version": "1.0.0",
+  "description": "StayNest - PG Discovery & Management Web Application",
+  "scripts": {
+    "dev": "python3 -m http.server 3000",
+    "start": "python3 -m http.server 3000"
+  },
+  "keywords": ["staynest", "pg", "hostel", "management", "react", "tailwind"],
+  "author": "StayNest Team",
+  "license": "MIT"
+}
+
