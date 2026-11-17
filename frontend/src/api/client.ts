@@ -10,8 +10,8 @@ export const API_BASE = (typeof window !== 'undefined' && (window.location.origi
       ? configuredUrl
       : 'https://staynest-6ylx.onrender.com/api/v1');
 
-if (typeof window !== 'undefined' && !import.meta.env.VITE_API_URL && window.location.hostname.includes('vercel.app')) {
-  console.warn('[StayNest] VITE_API_URL is missing in Vercel! Please set VITE_API_URL in Vercel Settings -> Environment Variables to your Render backend URL (e.g. https://staynest-backend.onrender.com/api/v1).');
+if (typeof window !== 'undefined') {
+  console.log('[StayNest] Connected to Backend API:', API_BASE);
 }
 
 export interface ApiRequestOptions extends RequestInit {

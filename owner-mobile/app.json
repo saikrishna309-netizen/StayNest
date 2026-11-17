@@ -1,0 +1,26 @@
+{
+  "expo": {
+    "name": "StayNest Owner",
+    "slug": "staynest-owner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#4f46e5"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "in.staynest.owner"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#4f46e5"
+      },
+      "package": "in.staynest.owner"
+    },
+    "extra": {
+      "apiUrl": "https://staynest-6ylx.onrender.com/api/v1"
+    }
+  }
+}
