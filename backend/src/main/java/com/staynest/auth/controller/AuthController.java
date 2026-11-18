@@ -60,6 +60,18 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("message", "Phone number verified successfully"));
     }
 
+    @PostMapping("/otp/send")
+    @Operation(summary = "Send OTP to phone number (auto-provisions owner if new)")
+    public ResponseEntity<Map<String, String>> sendOtp(@Valid @RequestBody SendOtpRequest request) {
+        return ResponseEntity.ok(authService.sendOtp(request));
+    }
+
+    @PostMapping("/otp/verify")
+    @Operation(summary = "Verify OTP and login, returning JWT access token")
+    public ResponseEntity<AuthResponse> verifyOtpAndLogin(@Valid @RequestBody VerifyPhoneRequest request) {
+        return ResponseEntity.ok(authService.verifyOtpAndLogin(request));
+    }
+
     @PostMapping("/forgot-password")
     @Operation(summary = "Start password recovery flow")
     public ResponseEntity<Map<String, String>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {

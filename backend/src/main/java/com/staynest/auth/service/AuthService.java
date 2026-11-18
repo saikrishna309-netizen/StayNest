@@ -19,6 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -135,6 +137,66 @@ public class AuthService {
         } else {
             throw new BadRequestException("INVALID_OTP", "The OTP entered is incorrect");
         }
+    }
+
+    @Transactional
+    public Map<String, String> sendOtp(SendOtpRequest request) {
+        String phone = request.getPhone().trim();
+        Optional<User> existingUser = userRepository.findByPhone(phone);
+        User user;
+        if (existingUser.isPresent()) {
+            user = existingUser.get();
+        } else {
+            // Auto-provision account for this mobile number
+            user = new User();
+            user.setPhone(phone);
+            user.setFullName("PG Owner");
+            user.setEmail("owner_" + phone + "@staynest.in");
+            user.setPasswordHash(passwordEncoder.encode(UUID.randomUUID().toString()));
+
+            UserRole assignedRole = UserRole.ROLE_OWNER;
+            if (request.getRole() != null && request.getRole().equalsIgnoreCase("ROLE_CUSTOMER")) {
+                assignedRole = UserRole.ROLE_CUSTOMER;
+            }
+            user.setRole(assignedRole);
+            user.setStatus(UserStatus.ACTIVE);
+            user.setEmailVerified(false);
+            user.setPhoneVerified(false);
+        }
+
+        // Generate 6-digit OTP (123456 for demo/instant verification)
+        String otp = "123456";
+        user.setPhoneOtp(otp);
+        userRepository.save(user);
+
+        return Map.of(
+                "message", "OTP sent successfully to +91 " + phone,
+                "demoOtp", otp
+        );
+    }
+
+    @Transactional
+    public AuthResponse verifyOtpAndLogin(VerifyPhoneRequest request) {
+        String phone = request.getPhone().trim();
+        User user = userRepository.findByPhone(phone)
+                .orElseThrow(() -> new ResourceNotFoundException("No account registered with phone: " + phone));
+
+        if (!"123456".equals(request.getOtp()) && !request.getOtp().equals(user.getPhoneOtp())) {
+            throw new BadRequestException("INVALID_OTP", "The OTP entered is incorrect");
+        }
+
+        if (user.getStatus() == UserStatus.SUSPENDED) {
+            throw new BadRequestException("ACCOUNT_SUSPENDED", "Your account has been suspended. Please contact support.");
+        }
+
+        user.setPhoneVerified(true);
+        user.setPhoneOtp(null);
+        userRepository.save(user);
+
+        String accessToken = jwtTokenProvider.generateAccessToken(user.getId(), user.getEmail(), user.getRole().name());
+        String refreshToken = jwtTokenProvider.generateRefreshToken(user.getId());
+
+        return new AuthResponse(accessToken, refreshToken, UserProfileResponse.from(user));
     }
 
     @Transactional
