@@ -24,20 +24,35 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     defaultHeaders['Authorization'] = `Bearer ${authToken}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...defaultHeaders,
-      ...options.headers,
-    },
-  });
+  // 10-second timeout to avoid infinite spinning during Render cold starts
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-  const data = await response.json().catch(() => ({}));
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...defaultHeaders,
+        ...options.headers,
+      },
+    });
 
-  if (!response.ok) {
-    const errorMsg = data?.message || data?.error || `HTTP error ${response.status}`;
-    throw new Error(errorMsg);
+    clearTimeout(timeoutId);
+
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      const errorMsg = data?.message || data?.error || `HTTP error ${response.status}`;
+      throw new Error(errorMsg);
+    }
+
+    return data as T;
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Server request timed out. Please try again.');
+    }
+    throw err;
   }
-
-  return data as T;
 }
