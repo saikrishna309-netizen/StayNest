@@ -30,15 +30,18 @@ public class AuthService {
     private final OwnerProfileRepository ownerProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final SmsService smsService;
 
     public AuthService(UserRepository userRepository,
                        OwnerProfileRepository ownerProfileRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtTokenProvider jwtTokenProvider) {
+                       JwtTokenProvider jwtTokenProvider,
+                       SmsService smsService) {
         this.userRepository = userRepository;
         this.ownerProfileRepository = ownerProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
+        this.smsService = smsService;
     }
 
     @Transactional
@@ -164,13 +167,22 @@ public class AuthService {
             user.setPhoneVerified(false);
         }
 
-        // Generate 6-digit OTP (123456 for demo/instant verification)
-        String otp = "123456";
+        // Generate real 6-digit OTP (use 123456 only for 9876543210 demo number)
+        String otp;
+        if ("9876543210".equals(phone)) {
+            otp = "123456";
+        } else {
+            otp = String.valueOf((int) (Math.random() * 900000) + 100000);
+        }
         user.setPhoneOtp(otp);
         userRepository.save(user);
 
+        // Dispatch real SMS via Fast2SMS
+        boolean smsSent = smsService.sendOtpSms(phone, otp);
+
         return Map.of(
-                "message", "OTP sent successfully to +91 " + phone,
+                "message", smsSent ? "Real OTP SMS sent to +91 " + phone : "OTP generated for +91 " + phone,
+                "smsDelivered", String.valueOf(smsSent),
                 "demoOtp", otp
         );
     }
