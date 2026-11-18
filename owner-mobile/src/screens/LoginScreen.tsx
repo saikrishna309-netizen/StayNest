@@ -22,6 +22,7 @@ export const LoginScreen: React.FC = () => {
   // Phone + OTP State
   const [phone, setPhone] = useState('9876543210');
   const [otp, setOtp] = useState('');
+  const [lastOtp, setLastOtp] = useState('123456');
   const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
   const [timer, setTimer] = useState(30);
   const [timerActive, setTimerActive] = useState(false);
@@ -60,6 +61,9 @@ export const LoginScreen: React.FC = () => {
       const res = await sendOtp(cleanPhone);
       setStep('OTP');
       setOtp('');
+      if (res.demoOtp) {
+        setLastOtp(res.demoOtp);
+      }
       setTimer(30);
       setTimerActive(true);
       setInfoMessage(res.message || `OTP sent to +91 ${cleanPhone}`);
@@ -205,9 +209,9 @@ export const LoginScreen: React.FC = () => {
                   {/* Auto-fill test OTP */}
                   <TouchableOpacity
                     style={styles.quickFillPill}
-                    onPress={() => setOtp('123456')}
+                    onPress={() => setOtp(lastOtp)}
                   >
-                    <Text style={styles.quickFillText}>⚡ Tap to auto-fill demo OTP: 123456</Text>
+                    <Text style={styles.quickFillText}>⚡ Tap to auto-fill code: {lastOtp}</Text>
                   </TouchableOpacity>
 
                   {/* Resend OTP Timer */}

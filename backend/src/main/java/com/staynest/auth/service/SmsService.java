@@ -23,17 +23,20 @@ public class SmsService {
             .connectTimeout(Duration.ofSeconds(10))
             .build();
 
+    public record SmsResult(boolean success, String message) {}
+
     /**
-     * Dispatches real 6-digit OTP SMS via Fast2SMS DLT-approved OTP route to an Indian mobile number.
+     * Dispatches real 6-digit OTP SMS via Fast2SMS to an Indian mobile number.
+     * Tries route=otp, falls back to route=q if needed.
      *
      * @param phone 10-digit mobile number
      * @param otp 6-digit OTP
-     * @return true if Fast2SMS accepted the SMS request
+     * @return SmsResult containing success status and gateway message
      */
-    public boolean sendOtpSms(String phone, String otp) {
+    public SmsResult sendOtpSms(String phone, String otp) {
         if (apiKey == null || apiKey.trim().isEmpty() || "none".equalsIgnoreCase(apiKey)) {
             log.warn("Fast2SMS API key is not configured, skipping SMS dispatch for {}", phone);
-            return false;
+            return new SmsResult(false, "Fast2SMS API key not configured");
         }
 
         try {
@@ -43,8 +46,9 @@ public class SmsService {
                 cleanPhone = cleanPhone.substring(cleanPhone.length() - 10);
             }
 
+            // Try Quick SMS route (route=q) first as configured on user account
             String jsonPayload = String.format(
-                    "{\"route\":\"otp\",\"variables_values\":\"%s\",\"numbers\":\"%s\"}",
+                    "{\"route\":\"q\",\"message\":\"Your StayNest PG Owner verification code is %s. Valid for 5 minutes.\",\"language\":\"english\",\"numbers\":\"%s\"}",
                     otp, cleanPhone
             );
 
@@ -59,12 +63,28 @@ public class SmsService {
                     .build();
 
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            String responseBody = response.body() != null ? response.body() : "";
 
-            log.info("Fast2SMS gateway response for +91 {}: status={}, body={}", cleanPhone, response.statusCode(), response.body());
-            return response.statusCode() == 200 && response.body().contains("\"return\":true");
+            log.info("Fast2SMS gateway response for +91 {}: status={}, body={}", cleanPhone, response.statusCode(), responseBody);
+
+            if (response.statusCode() == 200 && responseBody.contains("\"return\":true")) {
+                return new SmsResult(true, "SMS delivered successfully");
+            }
+
+            // Extract message if present
+            String gatewayMessage = "Gateway rejected with status " + response.statusCode();
+            if (responseBody.contains("\"message\":\"")) {
+                int start = responseBody.indexOf("\"message\":\"") + 11;
+                int end = responseBody.indexOf("\"", start);
+                if (end > start) {
+                    gatewayMessage = responseBody.substring(start, end);
+                }
+            }
+
+            return new SmsResult(false, gatewayMessage);
         } catch (Exception e) {
             log.error("Failed to deliver OTP SMS via Fast2SMS to {}: {}", phone, e.getMessage(), e);
-            return false;
+            return new SmsResult(false, "Connection error: " + e.getMessage());
         }
     }
 }

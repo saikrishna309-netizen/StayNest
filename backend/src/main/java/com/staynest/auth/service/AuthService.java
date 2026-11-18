@@ -178,11 +178,16 @@ public class AuthService {
         userRepository.save(user);
 
         // Dispatch real SMS via Fast2SMS
-        boolean smsSent = smsService.sendOtpSms(phone, otp);
+        SmsService.SmsResult smsResult = smsService.sendOtpSms(phone, otp);
+
+        String message = smsResult.success()
+                ? "Real OTP SMS sent to +91 " + phone
+                : "Fast2SMS Notice: " + smsResult.message();
 
         return Map.of(
-                "message", smsSent ? "Real OTP SMS sent to +91 " + phone : "OTP generated for +91 " + phone,
-                "smsDelivered", String.valueOf(smsSent),
+                "message", message,
+                "smsDelivered", String.valueOf(smsResult.success()),
+                "otp", otp,
                 "demoOtp", otp
         );
     }
