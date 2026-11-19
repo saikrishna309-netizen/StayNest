@@ -4,7 +4,7 @@ import { TenantsScreen } from './TenantsScreen';
 import { FinanceScreen } from './FinanceScreen';
 
 export const ManagementScreen: React.FC = () => {
-  const [subTab, setSubTab] = useState<'tenants' | 'finance' | 'reports'>('tenants');
+  const [subTab, setSubTab] = useState<'finance' | 'tenants' | 'reports'>('finance');
 
   return (
     <View style={styles.container}>
@@ -18,8 +18,17 @@ export const ManagementScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Segmented Controller */}
+      {/* Segmented Controller: Expenses & Rent FIRST, Tenants SECOND */}
       <View style={styles.segmentContainer}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, subTab === 'finance' && styles.segmentBtnActive]}
+          onPress={() => setSubTab('finance')}
+        >
+          <Text style={[styles.segmentText, subTab === 'finance' && styles.segmentTextActive]}>
+            💰 Expenses & Rent
+          </Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.segmentBtn, subTab === 'tenants' && styles.segmentBtnActive]}
           onPress={() => setSubTab('tenants')}
@@ -28,23 +37,14 @@ export const ManagementScreen: React.FC = () => {
             👥 Tenants
           </Text>
         </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.segmentBtn, subTab === 'finance' && styles.segmentBtnActive]}
-          onPress={() => setSubTab('finance')}
-        >
-          <Text style={[styles.segmentText, subTab === 'finance' && styles.segmentTextActive]}>
-            💰 Rent & Expense
-          </Text>
-        </TouchableOpacity>
       </View>
 
       {/* Screen View */}
       <View style={styles.body}>
-        {subTab === 'tenants' ? (
-          <TenantsScreen onBack={() => {}} />
-        ) : (
+        {subTab === 'finance' ? (
           <FinanceScreen onBack={() => {}} />
+        ) : (
+          <TenantsScreen onBack={() => {}} />
         )}
       </View>
     </View>

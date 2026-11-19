@@ -54,6 +54,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [manualPayNotes, setManualPayNotes] = useState('Paid in full');
   const [recordingPayment, setRecordingPayment] = useState(false);
 
+  // Edit / Delete Tenant State
+  const [isEditingTenant, setIsEditingTenant] = useState(false);
+  const [editTenantName, setEditTenantName] = useState('');
+  const [editTenantPhone, setEditTenantPhone] = useState('');
+  const [editEmergencyContact, setEditEmergencyContact] = useState('');
+  const [savingTenantEdit, setSavingTenantEdit] = useState(false);
+  const [deletingTenant, setDeletingTenant] = useState(false);
+
+
   useEffect(() => {
     loadData();
   }, []);
@@ -191,6 +200,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   // Open Tenant Action Modal
   const handleOpenTenantModal = (tenant: Tenant) => {
     setSelectedTenantForAction(tenant);
+    setIsEditingTenant(false);
+    setEditTenantName(tenant.fullName || '');
+    setEditTenantPhone(tenant.phone || '');
+    setEditEmergencyContact(tenant.emergencyContact || '');
     const rentAmount = tenant.monthlyRentPaise
       ? String(tenant.monthlyRentPaise / 100)
       : '8500';
@@ -297,6 +310,64 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               Alert.alert('Notice', err.message || 'Tenant stay updated.');
               setSelectedTenantForAction(null);
               loadData();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // Handle Save Tenant Profile Edit
+  const handleSaveTenantEdit = async () => {
+    if (!selectedTenantForAction) return;
+    if (!editTenantName.trim() || !editTenantPhone.trim()) {
+      Alert.alert('Required', 'Please enter resident name and phone');
+      return;
+    }
+    setSavingTenantEdit(true);
+    try {
+      await apiClient(`/owner/tenants/${selectedTenantForAction.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fullName: editTenantName.trim(),
+          phone: editTenantPhone.trim(),
+          emergencyContact: editEmergencyContact.trim() || null,
+        }),
+      });
+      Alert.alert('✓ Saved', 'Resident profile updated successfully!');
+      setIsEditingTenant(false);
+      setSelectedTenantForAction(null);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not update resident');
+    } finally {
+      setSavingTenantEdit(false);
+    }
+  };
+
+  // Handle Permanently Delete Tenant
+  const handleDeleteTenant = (tenant: Tenant) => {
+    Alert.alert(
+      '⚠️ Delete Resident?',
+      `Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingTenant(true);
+            try {
+              await apiClient(`/owner/tenants/${tenant.id}`, {
+                method: 'DELETE',
+              });
+              Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
+              setSelectedTenantForAction(null);
+              loadData();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Could not delete resident');
+            } finally {
+              setDeletingTenant(false);
             }
           },
         },
@@ -642,11 +713,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             {activeTenants.map((t) => {
               const initials = t.fullName
                 ? t.fullName
-                    .split(' ')
-                    .map((w) => w[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2)
+                  .split(' ')
+                  .map((w) => w[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2)
                 : 'TN';
 
               const rentPaid = t.rentStatus === 'PAID';
@@ -814,13 +885,79 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* ACTION SECTION 3: CHECK OUT RESIDENT */}
-              <View style={{ marginTop: 12, alignItems: 'center' }}>
+              {/* ACTION SECTION 3: EDIT RESIDENT DETAILS */}
+              <View style={styles.actionSectionBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.actionSectionTitle}>✏️ Resident Profile</Text>
+                  <TouchableOpacity onPress={() => setIsEditingTenant(!isEditingTenant)}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#4f46e5' }}>
+                      {isEditingTenant ? '✕ Cancel Edit' : 'Edit Details'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {isEditingTenant ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.inputLabel}>Full Name</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editTenantName}
+                      onChangeText={setEditTenantName}
+                      placeholder="e.g. Rahul Sharma"
+                    />
+
+                    <Text style={styles.inputLabel}>Mobile Phone</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editTenantPhone}
+                      onChangeText={setEditTenantPhone}
+                      keyboardType="phone-pad"
+                      placeholder="9876543210"
+                    />
+
+                    <Text style={styles.inputLabel}>Emergency Contact</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editEmergencyContact}
+                      onChangeText={setEditEmergencyContact}
+                      keyboardType="phone-pad"
+                      placeholder="9876500000"
+                    />
+
+                    <TouchableOpacity
+                      style={[styles.saveEditBtn, savingTenantEdit && { opacity: 0.6 }]}
+                      onPress={handleSaveTenantEdit}
+                      disabled={savingTenantEdit}
+                    >
+                      <Text style={styles.saveEditBtnText}>
+                        {savingTenantEdit ? 'Saving...' : '💾 Save Resident Changes'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={styles.actionSectionSub}>
+                    Tap 'Edit Details' above to update resident's name, mobile number or emergency contact.
+                  </Text>
+                )}
+              </View>
+
+              {/* ACTION SECTION 4: CHECK OUT OR DELETE RESIDENT */}
+              <View style={{ marginTop: 12, gap: 10 }}>
                 <TouchableOpacity
-                  style={styles.checkoutLinkBtn}
+                  style={styles.checkoutBtnPrimary}
                   onPress={() => selectedTenantForAction && handleCheckoutTenant(selectedTenantForAction)}
                 >
-                  <Text style={styles.checkoutLinkText}>Check Out Resident from Room</Text>
+                  <Text style={styles.checkoutBtnPrimaryText}>🚪 Exit / Check Out from PG</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.deleteBtnOutline}
+                  onPress={() => selectedTenantForAction && handleDeleteTenant(selectedTenantForAction)}
+                  disabled={deletingTenant}
+                >
+                  <Text style={styles.deleteBtnOutlineText}>
+                    {deletingTenant ? 'Deleting...' : '🗑️ Delete Resident Record'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -1627,5 +1764,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#ffffff',
+  },
+  saveEditBtn: {
+    backgroundColor: '#4f46e5',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveEditBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  checkoutBtnPrimary: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  checkoutBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#e11d48',
+  },
+  deleteBtnOutline: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  deleteBtnOutlineText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
   },
 });

@@ -28,6 +28,21 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [category, setCategory] = useState('ELECTRICITY');
   const [submittingExpense, setSubmittingExpense] = useState(false);
 
+  const STANDARD_EXPENSES = [
+    { label: '🏢 Building Rent', category: 'BUILDING_RENT', defaultTitle: 'Building Monthly Rent' },
+    { label: '👷 Workers Salary', category: 'SALARY', defaultTitle: 'Cook & Staff Salary' },
+    { label: '🥦 Vegetables & Goods', category: 'GROCERIES', defaultTitle: 'Daily Vegetables & Mess Groceries' },
+    { label: '⚡ Electricity & Water', category: 'UTILITIES', defaultTitle: 'Electricity & Water Bill' },
+    { label: '📶 Wi-Fi & Internet', category: 'INTERNET', defaultTitle: 'Wi-Fi & Broadband Bill' },
+    { label: '🔧 Maintenance & Repairs', category: 'MAINTENANCE', defaultTitle: 'Plumbing & Electrical Repair' },
+  ];
+
+  const handleSelectTemplate = (template: typeof STANDARD_EXPENSES[0]) => {
+    setTitle(template.defaultTitle);
+    setCategory(template.category);
+    setShowExpenseForm(true);
+  };
+
   useEffect(() => {
     loadFinanceData();
   }, []);
@@ -110,10 +125,44 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
+        {/* Quick Add Standard Expenses */}
+        <View style={styles.quickExpensesCard}>
+          <Text style={styles.quickExpensesTitle}>⚡ QUICK ADD DAILY EXPENSE</Text>
+          <Text style={styles.quickExpensesSub}>
+            Tap any standard PG expense to quickly log payments:
+          </Text>
+          <View style={styles.templatesGrid}>
+            {STANDARD_EXPENSES.map((tpl) => (
+              <TouchableOpacity
+                key={tpl.category}
+                style={[
+                  styles.templateChip,
+                  category === tpl.category && showExpenseForm && styles.templateChipActive,
+                ]}
+                onPress={() => handleSelectTemplate(tpl)}
+              >
+                <Text
+                  style={[
+                    styles.templateChipText,
+                    category === tpl.category && showExpenseForm && styles.templateChipTextActive,
+                  ]}
+                >
+                  {tpl.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Log Expense Form */}
         {showExpenseForm && (
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Log Operational Expense</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={styles.formTitle}>Log Operational Expense</Text>
+              <TouchableOpacity onPress={() => setShowExpenseForm(false)}>
+                <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>✕ Cancel</Text>
+              </TouchableOpacity>
+            </View>
             <Text style={styles.label}>TITLE / DESCRIPTION</Text>
             <TextInput
               style={styles.input}
@@ -423,5 +472,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#94a3b8',
     paddingVertical: 10,
+  },
+  quickExpensesCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  quickExpensesTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#4f46e5',
+    letterSpacing: 0.5,
+  },
+  quickExpensesSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    marginBottom: 10,
+  },
+  templatesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  templateChip: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  templateChipActive: {
+    backgroundColor: '#eef2ff',
+    borderColor: '#4f46e5',
+  },
+  templateChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  templateChipTextActive: {
+    color: '#4f46e5',
+    fontWeight: '900',
   },
 });

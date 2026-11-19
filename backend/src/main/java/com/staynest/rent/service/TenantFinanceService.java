@@ -253,6 +253,31 @@ public class TenantFinanceService {
         return tenantStayRepository.findByTenantId(tenant.getId());
     }
 
+    @Transactional
+    public void deleteTenant(UUID ownerId, UUID tenantId) {
+        Tenant tenant = tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+
+        // 1. Free any beds currently held by active stays
+        List<TenantStay> stays = tenantStayRepository.findByTenantId(tenant.getId());
+        for (TenantStay stay : stays) {
+            if ("ACTIVE".equalsIgnoreCase(stay.getStatus()) && stay.getBedId() != null) {
+                bedRepository.findById(stay.getBedId()).ifPresent(bed -> {
+                    bed.setStatus(BedStatus.AVAILABLE);
+                    bedRepository.save(bed);
+                });
+            }
+        }
+        tenantStayRepository.deleteAll(stays);
+
+        // 2. Delete payments and rent invoices for this tenant
+        rentPaymentRepository.deleteAll(rentPaymentRepository.findByTenantId(tenant.getId()));
+        rentInvoiceRepository.deleteAll(rentInvoiceRepository.findByTenantId(tenant.getId()));
+
+        // 3. Delete tenant profile
+        tenantRepository.delete(tenant);
+    }
+
     // --- Rent Invoices & Collections ---
 
     @Transactional

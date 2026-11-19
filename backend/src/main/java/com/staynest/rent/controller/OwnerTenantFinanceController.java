@@ -83,6 +83,15 @@ public class OwnerTenantFinanceController {
         return ResponseEntity.ok(tenantFinanceService.updateTenant(user.getId(), id, request));
     }
 
+    @DeleteMapping("/tenants/{id}")
+    @Operation(summary = "Delete tenant profile, delete stay/invoices, and release any assigned bed")
+    public ResponseEntity<Void> deleteTenant(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id) {
+        tenantFinanceService.deleteTenant(user.getId(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/tenants/{id}/stays")
     @Operation(summary = "Record tenant stay in property room/bed")
     public ResponseEntity<TenantStay> recordStay(

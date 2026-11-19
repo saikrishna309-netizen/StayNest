@@ -51,6 +51,27 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   const [manualPayMode, setManualPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [recordingPayment, setRecordingPayment] = useState(false);
 
+  // Edit / Delete Tenant State
+  const [isEditingTenant, setIsEditingTenant] = useState(false);
+  const [editTenantName, setEditTenantName] = useState('');
+  const [editTenantPhone, setEditTenantPhone] = useState('');
+  const [editEmergencyContact, setEditEmergencyContact] = useState('');
+  const [savingTenantEdit, setSavingTenantEdit] = useState(false);
+  const [deletingTenant, setDeletingTenant] = useState(false);
+
+  const handleOpenTenantModal = (tenant: Tenant) => {
+    setSelectedTenantForAction(tenant);
+    setIsEditingTenant(false);
+    setEditTenantName(tenant.fullName || '');
+    setEditTenantPhone(tenant.phone || '');
+    setEditEmergencyContact(tenant.emergencyContact || '');
+    const rentAmount = tenant.monthlyRentPaise
+      ? String(tenant.monthlyRentPaise / 100)
+      : '8500';
+    setManualPayAmount(rentAmount);
+    setManualPayMode('UPI');
+  };
+
   useEffect(() => {
     loadData();
   }, []);
@@ -219,13 +240,6 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     }
   };
 
-  // Handle Open Payment Modal
-  const handleOpenTenantModal = (tenant: Tenant) => {
-    setSelectedTenantForAction(tenant);
-    setManualPayAmount(tenant.monthlyRentPaise ? String(tenant.monthlyRentPaise / 100) : '8500');
-    setManualPayMode('UPI');
-  };
-
   // Record Manual Rent Payment
   const handleRecordManualPayment = async () => {
     if (!selectedTenantForAction) return;
@@ -297,10 +311,68 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                 method: 'POST',
               });
               Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
+              setSelectedTenantForAction(null);
               loadData();
             } catch (err: any) {
               Alert.alert('Notice', err.message || 'Tenant stay updated.');
+              setSelectedTenantForAction(null);
               loadData();
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaveTenantEdit = async () => {
+    if (!selectedTenantForAction) return;
+    if (!editTenantName.trim() || !editTenantPhone.trim()) {
+      Alert.alert('Required', 'Please enter resident name and phone');
+      return;
+    }
+    setSavingTenantEdit(true);
+    try {
+      await apiClient(`/owner/tenants/${selectedTenantForAction.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          fullName: editTenantName.trim(),
+          phone: editTenantPhone.trim(),
+          emergencyContact: editEmergencyContact.trim() || null,
+        }),
+      });
+      Alert.alert('✓ Saved', 'Resident profile updated successfully!');
+      setIsEditingTenant(false);
+      setSelectedTenantForAction(null);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not update resident');
+    } finally {
+      setSavingTenantEdit(false);
+    }
+  };
+
+  const handleDeleteTenant = (tenant: Tenant) => {
+    Alert.alert(
+      '⚠️ Delete Resident?',
+      `Are you sure you want to permanently delete ${tenant.fullName}? This will delete their records and immediately release their bed back to available.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Permanently',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingTenant(true);
+            try {
+              await apiClient(`/owner/tenants/${tenant.id}`, {
+                method: 'DELETE',
+              });
+              Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
+              setSelectedTenantForAction(null);
+              loadData();
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Could not delete resident');
+            } finally {
+              setDeletingTenant(false);
             }
           },
         },
@@ -560,13 +632,20 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
 
             return (
               <View key={t.id} style={styles.tenantCard}>
-                <View style={styles.tenantHeader}>
+                <TouchableOpacity
+                  style={styles.tenantHeader}
+                  onPress={() => handleOpenTenantModal(t)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{initials}</Text>
                   </View>
 
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.tenantName}>{t.fullName}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.tenantName}>{t.fullName}</Text>
+                      <Text style={{ fontSize: 11, color: '#4f46e5' }}>✏️</Text>
+                    </View>
                     <Text style={styles.tenantPhone}>📱 {t.phone}</Text>
                   </View>
 
@@ -585,7 +664,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                       {isAct ? 'ACTIVE' : 'VACATED'}
                     </Text>
                   </View>
-                </View>
+                </TouchableOpacity>
 
                 {/* Stay and Room Info */}
                 <View style={styles.detailGrid}>
@@ -652,7 +731,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
           })
         )}
       </ScrollView>
-      {/* Modal: Record Rent Payment */}
+      {/* Modal: Full Resident Actions (Pay, Remind, Edit, Check Out, Delete) */}
       <Modal
         visible={!!selectedTenantForAction}
         transparent
@@ -665,7 +744,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
               <View>
                 <Text style={styles.modalTitle}>{selectedTenantForAction?.fullName}</Text>
                 <Text style={styles.modalSub}>
-                  Room {selectedTenantForAction?.roomNumber || '101'} • {selectedTenantForAction?.bedLabel || 'Bed 1'}
+                  Room {selectedTenantForAction?.roomNumber || '101'} • {selectedTenantForAction?.bedLabel || 'Bed 1'} • {selectedTenantForAction?.propertyName || 'Ramesh PG'}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setSelectedTenantForAction(null)}>
@@ -673,56 +752,177 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.actionSectionBox}>
-              <Text style={styles.actionSectionTitle}>💰 Record Rent Payment</Text>
-              <Text style={styles.actionSectionSub}>Record money received from resident</Text>
-
-              <Text style={styles.label}>Amount Received (₹)</Text>
-              <TextInput
-                style={styles.input}
-                value={manualPayAmount}
-                onChangeText={setManualPayAmount}
-                keyboardType="numeric"
-                placeholder="8500"
-              />
-
-              <Text style={styles.label}>Payment Mode</Text>
-              <View style={styles.payModeRow}>
-                {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
-                  <TouchableOpacity
-                    key={mode}
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Tenant Summary Banner */}
+              <View style={styles.tenantModalInfoCard}>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Contact Number:</Text>
+                  <Text style={styles.infoVal}>📱 {selectedTenantForAction?.phone}</Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Monthly Rent:</Text>
+                  <Text style={[styles.infoVal, { color: '#4f46e5', fontWeight: '900' }]}>
+                    ₹{selectedTenantForAction?.monthlyRentPaise ? (selectedTenantForAction.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500'}/mo
+                  </Text>
+                </View>
+                <View style={styles.infoRow}>
+                  <Text style={styles.infoLabel}>Rent Status:</Text>
+                  <Text
                     style={[
-                      styles.payModeBtn,
-                      manualPayMode === mode && styles.payModeBtnActive,
+                      styles.infoVal,
+                      { color: selectedTenantForAction?.rentStatus === 'PAID' ? '#059669' : '#dc2626', fontWeight: '800' },
                     ]}
-                    onPress={() => setManualPayMode(mode)}
                   >
-                    <Text
-                      style={[
-                        styles.payModeText,
-                        manualPayMode === mode && styles.payModeTextActive,
-                      ]}
-                    >
-                      {mode.replace('_', ' ')}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                    {selectedTenantForAction?.rentStatus === 'PAID' ? '🟢 Paid' : '🔴 Payment Due'}
+                  </Text>
+                </View>
               </View>
 
-              <TouchableOpacity
-                style={[styles.recordPayBtn, recordingPayment && { opacity: 0.7 }]}
-                onPress={handleRecordManualPayment}
-                disabled={recordingPayment}
-              >
-                {recordingPayment ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
+              {/* ACTION SECTION 1: RECORD MANUAL RENT PAYMENT */}
+              <View style={styles.actionSectionBox}>
+                <Text style={styles.actionSectionTitle}>💰 Record Rent Payment</Text>
+                <Text style={styles.actionSectionSub}>Record money received from resident</Text>
+
+                <Text style={styles.label}>Amount Received (₹)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={manualPayAmount}
+                  onChangeText={setManualPayAmount}
+                  keyboardType="numeric"
+                  placeholder="8500"
+                />
+
+                <Text style={styles.label}>Payment Mode</Text>
+                <View style={styles.payModeRow}>
+                  {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.payModeBtn,
+                        manualPayMode === mode && styles.payModeBtnActive,
+                      ]}
+                      onPress={() => setManualPayMode(mode)}
+                    >
+                      <Text
+                        style={[
+                          styles.payModeText,
+                          manualPayMode === mode && styles.payModeTextActive,
+                        ]}
+                      >
+                        {mode.replace('_', ' ')}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.recordPayBtn, recordingPayment && { opacity: 0.7 }]}
+                  onPress={handleRecordManualPayment}
+                  disabled={recordingPayment}
+                >
+                  {recordingPayment ? (
+                    <ActivityIndicator color="#ffffff" size="small" />
+                  ) : (
+                    <Text style={styles.recordPayBtnText}>
+                      ✓ Confirm Payment (₹{Number(manualPayAmount || 0).toLocaleString('en-IN')})
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* ACTION SECTION 2: SEND RENT REMINDER */}
+              <View style={styles.actionSectionBox}>
+                <Text style={styles.actionSectionTitle}>🔔 Send Payment Reminder</Text>
+                <Text style={styles.actionSectionSub}>Send WhatsApp or SMS rent reminder</Text>
+
+                <TouchableOpacity
+                  style={styles.sendReminderBtn}
+                  onPress={() => selectedTenantForAction && handleSendReminder(selectedTenantForAction)}
+                >
+                  <Text style={styles.sendReminderBtnText}>
+                    📩 Send Rent Reminder (WhatsApp / SMS)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* ACTION SECTION 3: EDIT RESIDENT DETAILS */}
+              <View style={styles.actionSectionBox}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.actionSectionTitle}>✏️ Resident Profile</Text>
+                  <TouchableOpacity onPress={() => setIsEditingTenant(!isEditingTenant)}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#4f46e5' }}>
+                      {isEditingTenant ? '✕ Cancel Edit' : 'Edit Details'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {isEditingTenant ? (
+                  <View style={{ marginTop: 10 }}>
+                    <Text style={styles.label}>Full Name</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editTenantName}
+                      onChangeText={setEditTenantName}
+                      placeholder="e.g. Rahul Sharma"
+                    />
+
+                    <Text style={styles.label}>Mobile Phone</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editTenantPhone}
+                      onChangeText={setEditTenantPhone}
+                      keyboardType="phone-pad"
+                      placeholder="9876543210"
+                    />
+
+                    <Text style={styles.label}>Emergency Contact</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editEmergencyContact}
+                      onChangeText={setEditEmergencyContact}
+                      keyboardType="phone-pad"
+                      placeholder="9876500000"
+                    />
+
+                    <TouchableOpacity
+                      style={[styles.saveEditBtn, savingTenantEdit && { opacity: 0.6 }]}
+                      onPress={handleSaveTenantEdit}
+                      disabled={savingTenantEdit}
+                    >
+                      <Text style={styles.saveEditBtnText}>
+                        {savingTenantEdit ? 'Saving...' : '💾 Save Resident Changes'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
-                  <Text style={styles.recordPayBtnText}>
-                    Confirm Payment (₹{Number(manualPayAmount || 0).toLocaleString('en-IN')})
+                  <Text style={styles.actionSectionSub}>
+                    Tap 'Edit Details' above to update resident's name, phone, or emergency contact.
                   </Text>
                 )}
-              </TouchableOpacity>
-            </View>
+              </View>
+
+              {/* ACTION SECTION 4: CHECK OUT OR DELETE RESIDENT */}
+              <View style={{ marginTop: 12, gap: 10 }}>
+                {selectedTenantForAction?.active !== false && selectedTenantForAction?.stayStatus !== 'TERMINATED' && (
+                  <TouchableOpacity
+                    style={styles.checkoutBtnPrimary}
+                    onPress={() => selectedTenantForAction && handleCheckout(selectedTenantForAction)}
+                  >
+                    <Text style={styles.checkoutBtnPrimaryText}>🚪 Exit / Check Out from PG</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity
+                  style={styles.deleteBtnOutline}
+                  onPress={() => selectedTenantForAction && handleDeleteTenant(selectedTenantForAction)}
+                  disabled={deletingTenant}
+                >
+                  <Text style={styles.deleteBtnOutlineText}>
+                    {deletingTenant ? 'Deleting...' : '🗑️ Delete Resident Record'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1130,5 +1330,79 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     marginTop: 4,
+  },
+  tenantModalInfoCard: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 12,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 3,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  infoVal: {
+    fontSize: 12,
+    color: '#1e293b',
+    fontWeight: '700',
+  },
+  sendReminderBtn: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  sendReminderBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  saveEditBtn: {
+    backgroundColor: '#4f46e5',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  saveEditBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  checkoutBtnPrimary: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  checkoutBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#e11d48',
+  },
+  deleteBtnOutline: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  deleteBtnOutlineText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
   },
 });
