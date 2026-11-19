@@ -67,9 +67,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
 
     // 2. Fetch tenants (live records from backend)
+    let loadedTenants: Tenant[] = [];
     try {
       const tRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
-      const loadedTenants = tRes.content || [];
+      loadedTenants = tRes.content || [];
       setTenants(loadedTenants);
     } catch {
       // ignore
@@ -91,7 +92,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       // ignore
     }
 
-    // 5. Fetch full room & bed structure for each property to calculate room occupancy
+    // 5. Fetch full room & bed structure for each property
     const roomsMap: Record<string, Room[]> = {};
     for (const p of loadedProps) {
       try {
@@ -148,6 +149,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     (t) => t.active !== false && t.stayStatus !== 'TERMINATED'
   );
 
+  // Set of all bed IDs currently assigned to active tenants (1 person = 1 bed rule)
+  const activeOccupiedBedIds = new Set<string>();
+  activeTenants.forEach((t) => {
+    if (t.bedId) {
+      activeOccupiedBedIds.add(t.bedId);
+    }
+  });
+
   const totalExpense = expenses.reduce((sum, e) => sum + (e.amountPaise || 0), 0) / 100;
   const totalRentCollected = invoices
     .filter((i) => i.status === 'PAID')
@@ -157,7 +166,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const handleCheckoutTenant = (tenant: Tenant) => {
     Alert.alert(
       'Confirm Check-Out',
-      `Are you sure you want to check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
+      `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -187,6 +196,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       return;
     }
 
+    if (!selectedBedId) {
+      Alert.alert('Required', 'Please select an available bed');
+      return;
+    }
+
+    // Enforce 1 person = 1 bed check
+    if (activeOccupiedBedIds.has(selectedBedId)) {
+      Alert.alert('Bed Occupied', 'This bed is already occupied by another resident. Please select a vacant bed.');
+      return;
+    }
+
     setSubmittingOnboard(true);
     try {
       // 1. Create tenant profile
@@ -200,7 +220,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }),
       });
 
-      // 2. Allocate stay if bed selected
+      // 2. Allocate stay with selected bed
       if (selectedBedId && selectedPropId) {
         await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
           method: 'POST',
@@ -232,12 +252,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  // Available beds for selected property in modal
+  // Available beds for selected property (strictly 1 person = 1 bed; occupied beds are hidden)
   const modalAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number }[] = [];
   const currentPropRooms = propertyRoomsMap[selectedPropId] || [];
   currentPropRooms.forEach((r) => {
     (r.beds || []).forEach((b) => {
-      if (b.status === 'AVAILABLE') {
+      const isOccupied = b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id);
+      if (!isOccupied) {
         modalAvailableBeds.push({
           bed: b,
           roomNumber: r.roomNumber,
@@ -315,7 +336,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => setShowOnboardModal(true)}
           >
             <Text style={styles.actionBtnTitle}>+ Onboard Tenant</Text>
-            <Text style={styles.actionBtnSub}>Assign bed, floor & KYC</Text>
+            <Text style={styles.actionBtnSub}>Assign vacant bed & KYC</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -327,14 +348,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* ─── 4. MY PG LISTINGS & ROOM OCCUPANCY ─── */}
+        {/* ─── 4. MY PG LISTINGS (SHOW ONLY 2 ROOMS IN OCCUPANCY TABLE) ─── */}
         <View style={styles.sectionHeaderRow}>
           <View>
             <Text style={styles.sectionTitle}>MY PG LISTINGS</Text>
-            <Text style={styles.subtext}>Live room occupancy by floor</Text>
+            <Text style={styles.subtext}>Live room occupancy overview</Text>
           </View>
           <TouchableOpacity onPress={() => onNavigateTab('rooms')}>
-            <Text style={styles.linkText}>Manage All →</Text>
+            <Text style={styles.linkText}>View All Rooms →</Text>
           </TouchableOpacity>
         </View>
 
@@ -347,6 +368,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         ) : (
           properties.map((p) => {
             const pRooms = propertyRoomsMap[p.id] || [];
+            // Show only first 2 rooms on the dashboard
+            const displayedRooms = pRooms.slice(0, 2);
+            const remainingRoomsCount = Math.max(0, pRooms.length - 2);
+
             return (
               <View key={p.id} style={styles.propertyCard}>
                 <View style={styles.propertyHeader}>
@@ -360,10 +385,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   📍 {p.localityName ? `${p.localityName}, ` : ''}{p.cityName || 'Vijayawada'}
                 </Text>
 
-                {/* Room Occupancy Breakdown Table */}
-                {pRooms.length > 0 && (
+                {/* Room Occupancy Breakdown Table (Max 2 rooms) */}
+                {displayedRooms.length > 0 && (
                   <View style={styles.occupancyTableBox}>
-                    <Text style={styles.occupancyTableHeader}>ROOM OCCUPANCY BREAKDOWN</Text>
+                    <Text style={styles.occupancyTableHeader}>ROOM OCCUPANCY (SHOWING 2 ROOMS)</Text>
                     <View style={styles.occTableRowHeader}>
                       <Text style={[styles.occTableCol, { flex: 1.2 }]}>ROOM</Text>
                       <Text style={[styles.occTableCol, { flex: 1.4 }]}>SHARING</Text>
@@ -371,9 +396,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       <Text style={[styles.occTableCol, { flex: 1, textAlign: 'right' }]}>AVAILABLE</Text>
                     </View>
 
-                    {pRooms.map((r) => {
-                      const occCount = (r.beds || []).filter((b) => b.status === 'OCCUPIED').length;
-                      const availCount = (r.beds || []).filter((b) => b.status === 'AVAILABLE').length;
+                    {displayedRooms.map((r) => {
+                      const occCount = (r.beds || []).filter(
+                        (b) => b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id)
+                      ).length;
+                      const availCount = Math.max(0, (r.beds || []).length - occCount);
                       return (
                         <View key={r.id} style={styles.occTableRow}>
                           <Text style={[styles.occTableCell, { flex: 1.2, fontWeight: '700' }]}>
@@ -401,6 +428,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         </View>
                       );
                     })}
+
+                    {/* Button if more rooms exist */}
+                    {remainingRoomsCount > 0 && (
+                      <TouchableOpacity
+                        style={styles.moreRoomsRow}
+                        onPress={() => onSelectPropertyForRooms(p)}
+                      >
+                        <Text style={styles.moreRoomsText}>
+                          +{remainingRoomsCount} more rooms configured • Tap to view all →
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 )}
 
@@ -417,8 +456,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           })
         )}
 
-        {/* ─── 5. MY ACTIVE TENANTS SECTION ─── */}
-        <View style={[styles.sectionHeaderRow, { marginTop: 20 }]}>
+        {/* ─── 5. MY ACTIVE TENANTS (COMPACT SMALL BOXES) ─── */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Text style={styles.sectionTitle}>MY ACTIVE TENANTS</Text>
             <View style={styles.tenantCountPill}>
@@ -435,118 +474,50 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
 
         {loading && activeTenants.length === 0 ? (
-          <ActivityIndicator color="#4f46e5" style={{ marginVertical: 30 }} />
+          <ActivityIndicator color="#4f46e5" style={{ marginVertical: 20 }} />
         ) : activeTenants.length === 0 ? (
           <View style={styles.emptyTenantCard}>
-            <Text style={{ fontSize: 28, marginBottom: 8 }}>👥</Text>
+            <Text style={{ fontSize: 22, marginBottom: 4 }}>👥</Text>
             <Text style={styles.emptyTenantTitle}>No Active Tenants Registered</Text>
             <Text style={styles.emptyTenantSub}>
-              Tap '+ Onboard Tenant' above to assign a room and bed to your first resident.
+              Tap '+ Onboard Tenant' above to assign a vacant bed to your resident.
             </Text>
           </View>
         ) : (
-          activeTenants.map((t) => {
-            const initials = t.fullName
-              ? t.fullName
-                  .split(' ')
-                  .map((w) => w[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2)
-              : 'TN';
+          <View style={styles.compactTenantsContainer}>
+            {activeTenants.map((t) => {
+              const initials = t.fullName
+                ? t.fullName
+                    .split(' ')
+                    .map((w) => w[0])
+                    .join('')
+                    .toUpperCase()
+                    .slice(0, 2)
+                : 'TN';
 
-            const rentPaid = t.rentStatus === 'PAID';
-
-            return (
-              <View key={t.id} style={styles.tenantCard}>
-                {/* Top Row: Avatar, Name, Mobile, Rent Badge */}
-                <View style={styles.tenantCardHeader}>
-                  <View style={styles.tenantAvatar}>
-                    <Text style={styles.avatarText}>{initials}</Text>
+              return (
+                <View key={t.id} style={styles.compactTenantBox}>
+                  <View style={styles.compactAvatar}>
+                    <Text style={styles.compactAvatarText}>{initials}</Text>
                   </View>
 
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.tenantName}>{t.fullName}</Text>
-                    <Text style={styles.tenantPhone}>📱 {t.phone}</Text>
-                  </View>
-
-                  {/* Rent Status Badge */}
-                  <View
-                    style={[
-                      styles.rentStatusBadge,
-                      { backgroundColor: rentPaid ? '#ecfdf5' : '#fef2f2' },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.statusDotSmall,
-                        { backgroundColor: rentPaid ? '#10b981' : '#ef4444' },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.rentStatusText,
-                        { color: rentPaid ? '#065f46' : '#991b1b' },
-                      ]}
-                    >
-                      {rentPaid ? 'Rent Paid' : 'Rent Due'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Stay & Room Details Grid */}
-                <View style={styles.tenantDetailsGrid}>
-                  <View style={styles.tenantDetailItem}>
-                    <Text style={styles.detailLabel}>PROPERTY</Text>
-                    <Text style={styles.detailVal}>{t.propertyName || 'Ramesh PG'}</Text>
-                  </View>
-
-                  <View style={styles.tenantDetailItem}>
-                    <Text style={styles.detailLabel}>FLOOR & ROOM</Text>
-                    <Text style={styles.detailVal}>
-                      Floor {t.floorNumber || 1} • Room {t.roomNumber || '101'}
+                  <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Text style={styles.compactTenantName}>{t.fullName}</Text>
+                    <Text style={styles.compactTenantSub}>
+                      Floor {t.floorNumber || 1} • Room {t.roomNumber || '101'} • {t.bedLabel || 'Bed 1'}
                     </Text>
                   </View>
 
-                  <View style={styles.tenantDetailItem}>
-                    <Text style={styles.detailLabel}>BED & SHARING</Text>
-                    <Text style={styles.detailVal}>
-                      {t.bedLabel || 'Bed 1'} ({t.sharingType ? t.sharingType.replace('_', ' ') : 'Double'})
-                    </Text>
-                  </View>
-
-                  <View style={styles.tenantDetailItem}>
-                    <Text style={styles.detailLabel}>MONTHLY RENT</Text>
-                    <Text style={[styles.detailVal, { color: '#4f46e5', fontWeight: '800' }]}>
-                      ₹{t.monthlyRentPaise ? (t.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500'}/mo
-                    </Text>
-                  </View>
-
-                  <View style={styles.tenantDetailItem}>
-                    <Text style={styles.detailLabel}>MOVE-IN DATE</Text>
-                    <Text style={styles.detailVal}>{t.checkIn || '01 Nov 2026'}</Text>
-                  </View>
-
-                  <View style={styles.tenantDetailItem}>
-                    <Text style={styles.detailLabel}>ID PROOF</Text>
-                    <Text style={styles.detailVal}>
-                      {t.idProofType || 'AADHAAR'}: {t.idProofNumber || 'Verified'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Card Action Footer */}
-                <View style={styles.tenantCardFooter}>
                   <TouchableOpacity
-                    style={styles.checkoutBtn}
+                    style={styles.compactCheckoutBtn}
                     onPress={() => handleCheckoutTenant(t)}
                   >
-                    <Text style={styles.checkoutBtnText}>Check Out Resident</Text>
+                    <Text style={styles.compactCheckoutText}>Checkout</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-            );
-          })
+              );
+            })}
+          </View>
         )}
       </ScrollView>
 
@@ -560,7 +531,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Onboard Resident</Text>
-            <Text style={styles.modalSub}>Assign room, bed & record resident details</Text>
+            <Text style={styles.modalSub}>Assign a vacant bed (1 person = 1 bed only)</Text>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
               {/* Property Choice */}
@@ -595,13 +566,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
               )}
 
-              {/* Select Available Bed */}
+              {/* Select Available Bed (Occupied beds are excluded) */}
               <Text style={styles.inputLabel}>
-                Select Available Bed ({modalAvailableBeds.length} Free)
+                Select Vacant Bed ({modalAvailableBeds.length} Available)
               </Text>
               {modalAvailableBeds.length === 0 ? (
                 <Text style={styles.noBedText}>
-                  No vacant beds available in this property. Add beds in Properties tab.
+                  No vacant beds available in this property. All beds are occupied.
                 </Text>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
@@ -689,7 +660,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <TouchableOpacity
                 style={styles.modalSaveBtn}
                 onPress={handleOnboardSubmit}
-                disabled={submittingOnboard}
+                disabled={submittingOnboard || modalAvailableBeds.length === 0}
               >
                 {submittingOnboard ? (
                   <ActivityIndicator color="#ffffff" size="small" />
@@ -911,12 +882,24 @@ const styles = StyleSheet.create({
   },
   occTableRow: {
     flexDirection: 'row',
-    paddingVertical: 4,
+    paddingVertical: 5,
     alignItems: 'center',
   },
   occTableCell: {
     fontSize: 11,
     color: '#1e293b',
+  },
+  moreRoomsRow: {
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    marginTop: 6,
+    alignItems: 'center',
+  },
+  moreRoomsText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4f46e5',
   },
   propertyFooter: {
     flexDirection: 'row',
@@ -961,16 +944,16 @@ const styles = StyleSheet.create({
     color: '#4f46e5',
   },
   emptyTenantCard: {
-    padding: 24,
+    padding: 20,
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     marginBottom: 14,
   },
   emptyTenantTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#334155',
   },
@@ -979,109 +962,65 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     textAlign: 'center',
     marginTop: 4,
-    lineHeight: 16,
   },
-  tenantCard: {
+
+  // ─── Compact Small Tenant Box Styles (Point 3) ───
+  compactTenantsContainer: {
+    gap: 8,
+    marginBottom: 16,
+  },
+  compactTenantBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     shadowColor: '#000',
     shadowOpacity: 0.02,
-    shadowRadius: 4,
+    shadowRadius: 3,
     elevation: 1,
   },
-  tenantCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  tenantAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  compactAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#6366f1',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: {
-    fontSize: 15,
+  compactAvatarText: {
+    fontSize: 12,
     fontWeight: '900',
     color: '#ffffff',
   },
-  tenantName: {
-    fontSize: 15,
+  compactTenantName: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
   },
-  tenantPhone: {
-    fontSize: 12,
+  compactTenantSub: {
+    fontSize: 11,
     color: '#64748b',
-    marginTop: 2,
+    marginTop: 1,
+    fontWeight: '600',
   },
-  rentStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  statusDotSmall: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginRight: 4,
-  },
-  rentStatusText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  tenantDetailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  tenantDetailItem: {
-    width: '48%',
-    marginBottom: 4,
-  },
-  detailLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 0.5,
-  },
-  detailVal: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginTop: 2,
-  },
-  tenantCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  checkoutBtn: {
+  compactCheckoutBtn: {
     backgroundColor: '#fff1f2',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: '#fecdd3',
   },
-  checkoutBtnText: {
-    fontSize: 11,
+  compactCheckoutText: {
+    fontSize: 10,
     fontWeight: '800',
     color: '#e11d48',
   },
+
   emptyCard: {
     padding: 30,
     alignItems: 'center',

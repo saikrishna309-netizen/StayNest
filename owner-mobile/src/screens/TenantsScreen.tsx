@@ -238,11 +238,20 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     );
   };
 
-  // Collect available beds
+  // Active occupied bed IDs to enforce 1 person = 1 bed rule
+  const activeOccupiedBedIds = new Set<string>();
+  tenants.forEach((t) => {
+    if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
+      activeOccupiedBedIds.add(t.bedId);
+    }
+  });
+
+  // Collect vacant beds only (occupied beds are hidden)
   const availableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number }[] = [];
   propRooms.forEach((r) => {
     (r.beds || []).forEach((b) => {
-      if (b.status === 'AVAILABLE') {
+      const isOccupied = b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id);
+      if (!isOccupied) {
         availableBeds.push({
           bed: b,
           roomNumber: r.roomNumber,

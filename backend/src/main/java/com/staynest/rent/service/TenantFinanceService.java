@@ -220,6 +220,13 @@ public class TenantFinanceService {
         Bed bed = bedRepository.findById(request.getBedId())
                 .orElseThrow(() -> new ResourceNotFoundException("Bed", request.getBedId()));
 
+        // Enforce 1 Person = 1 Bed: verify bed is not already occupied
+        List<TenantStay> activeStays = tenantStayRepository.findByPropertyIdAndStatus(property.getId(), "ACTIVE");
+        boolean bedOccupiedByStay = activeStays.stream().anyMatch(s -> bed.getId().equals(s.getBedId()));
+        if (bedOccupiedByStay || bed.getStatus() == BedStatus.OCCUPIED) {
+            throw new BadRequestException("Bed " + bed.getBedLabel() + " is already occupied. Only one person per bed is allowed.");
+        }
+
         UUID effectiveRoomId = request.getRoomId() != null ? request.getRoomId() : bed.getRoomId();
 
         TenantStay stay = new TenantStay();
