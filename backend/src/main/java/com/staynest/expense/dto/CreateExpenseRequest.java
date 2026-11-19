@@ -7,20 +7,28 @@ import java.util.UUID;
 
 public class CreateExpenseRequest {
 
-    @NotNull(message = "Property ID is required")
     private UUID propertyId;
 
-    @NotBlank(message = "Category is required (ELECTRICITY, WATER, GAS, INTERNET, FOOD_GROCERIES, SALARY, REPAIRS_MAINTENANCE, CLEANING, FURNITURE_EQUIPMENT, OTHER)")
+    @NotBlank(message = "Category is required")
     private String category;
 
     @NotNull(message = "Amount in paise is required")
     private Long amountPaise;
 
     private LocalDate transactionDate;
+    private String title;
     private String notes;
     private String attachmentKey;
 
     public CreateExpenseRequest() {
+    }
+
+    public String getTitle() {
+        return title;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 
     public UUID getPropertyId() {

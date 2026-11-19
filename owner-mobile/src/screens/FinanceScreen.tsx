@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { apiClient } from '../api/client';
-import { RentInvoice, Expense } from '../types';
+import { RentInvoice, Expense, Property } from '../types';
 
 interface FinanceScreenProps {
   onBack: () => void;
@@ -20,6 +20,8 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
 
   // Log Expense Form
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -50,12 +52,18 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const loadFinanceData = async () => {
     setLoading(true);
     try {
-      const [invRes, expRes] = await Promise.all([
+      const [invRes, expRes, propRes] = await Promise.all([
         apiClient<{ content: RentInvoice[] }>('/owner/rent-invoices'),
         apiClient<{ content: Expense[] }>('/owner/expenses'),
+        apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
       ]);
       setInvoices(invRes.content || []);
       setExpenses(expRes.content || []);
+      const props = propRes.content || [];
+      setProperties(props);
+      if (props.length > 0) {
+        setSelectedPropertyId((prev) => prev || props[0].id);
+      }
     } catch {
       // ignore
     } finally {
@@ -87,13 +95,16 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
     setSubmittingExpense(true);
     try {
+      const propId = selectedPropertyId || (properties.length > 0 ? properties[0].id : undefined);
       await apiClient('/owner/expenses', {
         method: 'POST',
         body: JSON.stringify({
+          propertyId: propId,
           title: title.trim(),
+          notes: title.trim(),
           amountPaise: Number(amountRupees) * 100,
           category,
-          expenseDate: new Date().toISOString().split('T')[0],
+          transactionDate: new Date().toISOString().split('T')[0],
         }),
       });
       Alert.alert('Saved', 'Expense record added to ledger');
@@ -163,6 +174,34 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                 <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>✕ Cancel</Text>
               </TouchableOpacity>
             </View>
+            {/* Property Selector if Multiple Properties */}
+            {properties.length > 1 && (
+              <View style={{ marginBottom: 10 }}>
+                <Text style={styles.label}>PROPERTY</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
+                  {properties.map((p) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[
+                        styles.propertySelectChip,
+                        selectedPropertyId === p.id && styles.propertySelectChipActive,
+                      ]}
+                      onPress={() => setSelectedPropertyId(p.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.propertySelectChipText,
+                          selectedPropertyId === p.id && styles.propertySelectChipTextActive,
+                        ]}
+                      >
+                        🏢 {p.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <Text style={styles.label}>TITLE / DESCRIPTION</Text>
             <TextInput
               style={styles.input}
@@ -264,17 +303,23 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         {expenses.length === 0 ? (
           <Text style={styles.emptyText}>No expenses logged yet.</Text>
         ) : (
-          expenses.map((e) => (
-            <View key={e.id} style={styles.expCard}>
-              <View>
-                <Text style={styles.expTitle}>{e.title}</Text>
-                <Text style={styles.expCategory}>{e.category}</Text>
+          expenses.map((e) => {
+            const expTitle = e.title || e.notes || e.category;
+            const expDate = e.transactionDate || e.date || '';
+            return (
+              <View key={e.id} style={styles.expCard}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.expTitle}>{expTitle}</Text>
+                  <Text style={styles.expCategory}>
+                    {e.category}{expDate ? ` • ${expDate}` : ''}
+                  </Text>
+                </View>
+                <Text style={styles.expAmount}>
+                  -₹{(e.amountPaise / 100).toLocaleString('en-IN')}
+                </Text>
               </View>
-              <Text style={styles.expAmount}>
-                -₹{(e.amountPaise / 100).toLocaleString('en-IN')}
-              </Text>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -522,5 +567,26 @@ const styles = StyleSheet.create({
   templateChipTextActive: {
     color: '#4f46e5',
     fontWeight: '900',
+  },
+  propertySelectChip: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginRight: 8,
+  },
+  propertySelectChipActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4338ca',
+  },
+  propertySelectChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  propertySelectChipTextActive: {
+    color: '#ffffff',
   },
 });

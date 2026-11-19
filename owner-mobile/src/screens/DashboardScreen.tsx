@@ -417,7 +417,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             depositPaise: Number(onboardDeposit || 8500) * 100,
             checkIn: new Date().toISOString().split('T')[0],
           }),
-        }).catch(() => {});
+        }).catch(() => { });
       }
 
       Alert.alert('✓ Success', `${onboardFullName} successfully onboarded!`);

@@ -14,6 +14,7 @@ public class ExpenseResponse {
     private Long amountPaise;
     private LocalDate transactionDate;
     private String notes;
+    private String title;
     private String attachmentKey;
     private Instant createdAt;
 
@@ -29,9 +30,18 @@ public class ExpenseResponse {
         res.setAmountPaise(e.getAmountPaise());
         res.setTransactionDate(e.getTransactionDate());
         res.setNotes(e.getNotes());
+        res.setTitle(e.getNotes());
         res.setAttachmentKey(e.getAttachmentKey());
         res.setCreatedAt(e.getCreatedAt());
         return res;
+    }
+
+    public String getTitle() {
+        return title != null ? title : notes;
+    }
+
+    public void setTitle(String title) {
+        this.title = title;
     }
 
     public UUID getId() {

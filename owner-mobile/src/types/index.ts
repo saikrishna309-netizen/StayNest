@@ -105,9 +105,12 @@ export interface RentInvoice {
 
 export interface Expense {
   id: string;
-  title: string;
+  title?: string;
+  notes?: string;
   amountPaise: number;
   category: string;
-  date: string;
+  date?: string;
+  transactionDate?: string;
   paidTo?: string;
+  propertyId?: string;
 }

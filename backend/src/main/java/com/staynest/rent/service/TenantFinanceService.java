@@ -438,12 +438,25 @@ public class TenantFinanceService {
 
     @Transactional
     public ExpenseResponse recordExpense(UUID ownerId, CreateExpenseRequest request) {
-        Property property = propertyRepository.findById(request.getPropertyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Property", request.getPropertyId()));
-
-        if (!property.getOwnerId().equals(ownerId)) {
-            throw new ForbiddenException("You do not own this property");
+        Property property;
+        if (request.getPropertyId() != null) {
+            property = propertyRepository.findById(request.getPropertyId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Property", request.getPropertyId()));
+            if (!property.getOwnerId().equals(ownerId)) {
+                throw new ForbiddenException("You do not own this property");
+            }
+        } else {
+            List<Property> ownerProps = propertyRepository.findByOwnerId(ownerId);
+            if (!ownerProps.isEmpty()) {
+                property = ownerProps.get(0);
+            } else {
+                throw new BadRequestException("No properties found for owner to associate expense with");
+            }
         }
+
+        String effectiveNotes = request.getTitle() != null && !request.getTitle().isBlank()
+                ? request.getTitle().trim()
+                : request.getNotes();
 
         ExpenseRecord exp = new ExpenseRecord();
         exp.setOwnerId(ownerId);
@@ -451,7 +464,7 @@ public class TenantFinanceService {
         exp.setCategory(request.getCategory().toUpperCase());
         exp.setAmountPaise(request.getAmountPaise());
         exp.setTransactionDate(request.getTransactionDate() != null ? request.getTransactionDate() : LocalDate.now());
-        exp.setNotes(request.getNotes());
+        exp.setNotes(effectiveNotes);
         exp.setAttachmentKey(request.getAttachmentKey());
         exp.setRecordedBy(ownerId);
 
