@@ -341,6 +341,43 @@ public class TenantFinanceService {
         return RentInvoiceResponse.from(saved);
     }
 
+    @Transactional
+    public RentInvoiceResponse recordTenantDirectPayment(UUID ownerId, UUID tenantId, RecordRentPaymentRequest request) {
+        Tenant tenant = tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+
+        List<RentInvoice> invoices = rentInvoiceRepository.findByTenantId(tenant.getId());
+        RentInvoice dueInvoice = invoices.stream()
+                .filter(i -> !"PAID".equalsIgnoreCase(i.getStatus()))
+                .findFirst()
+                .orElse(null);
+
+        if (dueInvoice == null) {
+            List<TenantStay> stays = tenantStayRepository.findByTenantId(tenant.getId());
+            TenantStay stay = stays.stream().filter(s -> "ACTIVE".equalsIgnoreCase(s.getStatus())).findFirst().orElse(null);
+            UUID propertyId = stay != null ? stay.getPropertyId() : null;
+            if (propertyId == null) {
+                List<Property> props = propertyRepository.findByOwnerId(ownerId);
+                propertyId = !props.isEmpty() ? props.get(0).getId() : null;
+            }
+
+            String currentMonth = YearMonth.now().toString();
+            dueInvoice = new RentInvoice();
+            dueInvoice.setTenantId(tenant.getId());
+            dueInvoice.setPropertyId(propertyId);
+            dueInvoice.setInvoiceNumber("INV-" + currentMonth + "-" + (1000 + new Random().nextInt(9000)));
+            dueInvoice.setBillingMonth(currentMonth);
+            dueInvoice.setRentAmountPaise(request.getAmountPaidPaise());
+            dueInvoice.setTotalAmountPaise(request.getAmountPaidPaise());
+            dueInvoice.setPaidAmountPaise(0L);
+            dueInvoice.setDueDate(LocalDate.now());
+            dueInvoice.setStatus("DUE");
+            dueInvoice = rentInvoiceRepository.save(dueInvoice);
+        }
+
+        return recordRentPayment(ownerId, dueInvoice.getId(), request);
+    }
+
     // --- Income & Expense Operations ---
 
     @Transactional

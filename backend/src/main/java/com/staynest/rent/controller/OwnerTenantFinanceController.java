@@ -108,6 +108,15 @@ public class OwnerTenantFinanceController {
         return ResponseEntity.ok(tenantFinanceService.checkoutTenant(user.getId(), id));
     }
 
+    @PostMapping("/tenants/{id}/payments")
+    @Operation(summary = "Record rent collection directly for a tenant (Cash, UPI, Bank Transfer)")
+    public ResponseEntity<RentInvoiceResponse> recordTenantDirectPayment(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id,
+            @Valid @RequestBody RecordRentPaymentRequest request) {
+        return ResponseEntity.ok(tenantFinanceService.recordTenantDirectPayment(user.getId(), id, request));
+    }
+
     // --- Rent Invoices & Collections ---
 
     @PostMapping("/rent-invoices")

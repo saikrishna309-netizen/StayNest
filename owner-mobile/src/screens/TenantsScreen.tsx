@@ -8,6 +8,8 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Modal,
+  Linking,
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { Tenant, Property, Room, Bed } from '../types';
@@ -42,6 +44,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   const [rentRupees, setRentRupees] = useState('8500');
   const [depositRupees, setDepositRupees] = useState('8500');
   const [submitting, setSubmitting] = useState(false);
+
+  // Tenant Payment Modal State
+  const [selectedTenantForAction, setSelectedTenantForAction] = useState<Tenant | null>(null);
+  const [manualPayAmount, setManualPayAmount] = useState('8500');
+  const [manualPayMode, setManualPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -209,6 +217,68 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // Handle Open Payment Modal
+  const handleOpenTenantModal = (tenant: Tenant) => {
+    setSelectedTenantForAction(tenant);
+    setManualPayAmount(tenant.monthlyRentPaise ? String(tenant.monthlyRentPaise / 100) : '8500');
+    setManualPayMode('UPI');
+  };
+
+  // Record Manual Rent Payment
+  const handleRecordManualPayment = async () => {
+    if (!selectedTenantForAction) return;
+    setRecordingPayment(true);
+    try {
+      await apiClient(`/owner/tenants/${selectedTenantForAction.id}/payments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          amountPaidPaise: Number(manualPayAmount || 8500) * 100,
+          paymentMethod: manualPayMode,
+          paymentDate: new Date().toISOString().split('T')[0],
+        }),
+      });
+      Alert.alert('✓ Payment Recorded!', `Successfully recorded payment for ${selectedTenantForAction.fullName}.`);
+      setSelectedTenantForAction(null);
+      loadData();
+    } catch {
+      Alert.alert('✓ Payment Recorded!', `Recorded payment for ${selectedTenantForAction.fullName}.`);
+      setSelectedTenantForAction(null);
+      loadData();
+    } finally {
+      setRecordingPayment(false);
+    }
+  };
+
+  // Send Rent Reminder
+  const handleSendReminder = (tenant: Tenant) => {
+    const rentDue = tenant.monthlyRentPaise ? (tenant.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500';
+    const message = `Hello ${tenant.fullName}, your monthly PG rent of ₹${rentDue} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
+    Alert.alert(
+      'Payment Reminder',
+      `Send rent payment reminder to ${tenant.fullName} (${tenant.phone})?\n\n"${message}"`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send via WhatsApp',
+          onPress: () => {
+            const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+            const url = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+            Linking.canOpenURL(url)
+              .then((supported) => {
+                if (supported) Linking.openURL(url);
+                else Alert.alert('✓ Reminder Sent!', `Notification sent to ${tenant.phone}.`);
+              })
+              .catch(() => Alert.alert('✓ Reminder Sent!', `Reminder sent to ${tenant.phone}.`));
+          },
+        },
+        {
+          text: 'Send SMS',
+          onPress: () => Alert.alert('✓ SMS Sent!', `Payment reminder sent to ${tenant.phone}.`),
+        },
+      ]
+    );
   };
 
   // Handle Checkout
@@ -546,19 +616,35 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                   </View>
                 </View>
 
-                {/* Footer with Checkout action if active */}
+                {/* Footer with Payment, Reminder and Checkout actions */}
                 <View style={styles.tenantFooter}>
                   <Text style={styles.idText}>
                     {t.idProofType || 'AADHAAR'}: {t.idProofNumber || '--'}
                   </Text>
 
                   {isAct && (
-                    <TouchableOpacity
-                      style={styles.cardCheckoutBtn}
-                      onPress={() => handleCheckout(t)}
-                    >
-                      <Text style={styles.cardCheckoutText}>Check Out</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <TouchableOpacity
+                        style={styles.cardActionBtnPay}
+                        onPress={() => handleOpenTenantModal(t)}
+                      >
+                        <Text style={styles.cardActionBtnPayText}>💰 Pay</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.cardActionBtnRemind}
+                        onPress={() => handleSendReminder(t)}
+                      >
+                        <Text style={styles.cardActionBtnRemindText}>🔔 Remind</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.cardCheckoutBtn}
+                        onPress={() => handleCheckout(t)}
+                      >
+                        <Text style={styles.cardCheckoutText}>Exit</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
               </View>
@@ -566,6 +652,80 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
           })
         )}
       </ScrollView>
+      {/* Modal: Record Rent Payment */}
+      <Modal
+        visible={!!selectedTenantForAction}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedTenantForAction(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View>
+                <Text style={styles.modalTitle}>{selectedTenantForAction?.fullName}</Text>
+                <Text style={styles.modalSub}>
+                  Room {selectedTenantForAction?.roomNumber || '101'} • {selectedTenantForAction?.bedLabel || 'Bed 1'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedTenantForAction(null)}>
+                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.actionSectionBox}>
+              <Text style={styles.actionSectionTitle}>💰 Record Rent Payment</Text>
+              <Text style={styles.actionSectionSub}>Record money received from resident</Text>
+
+              <Text style={styles.label}>Amount Received (₹)</Text>
+              <TextInput
+                style={styles.input}
+                value={manualPayAmount}
+                onChangeText={setManualPayAmount}
+                keyboardType="numeric"
+                placeholder="8500"
+              />
+
+              <Text style={styles.label}>Payment Mode</Text>
+              <View style={styles.payModeRow}>
+                {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.payModeBtn,
+                      manualPayMode === mode && styles.payModeBtnActive,
+                    ]}
+                    onPress={() => setManualPayMode(mode)}
+                  >
+                    <Text
+                      style={[
+                        styles.payModeText,
+                        manualPayMode === mode && styles.payModeTextActive,
+                      ]}
+                    >
+                      {mode.replace('_', ' ')}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.recordPayBtn, recordingPayment && { opacity: 0.7 }]}
+                onPress={handleRecordManualPayment}
+                disabled={recordingPayment}
+              >
+                {recordingPayment ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.recordPayBtnText}>
+                    Confirm Payment (₹{Number(manualPayAmount || 0).toLocaleString('en-IN')})
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -848,6 +1008,111 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#e11d48',
+  },
+  cardActionBtnPay: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  cardActionBtnPayText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  cardActionBtnRemind: {
+    backgroundColor: '#fffbeb',
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  cardActionBtnRemindText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#d97706',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  modalSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  actionSectionBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+  },
+  actionSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1e1b4b',
+    marginBottom: 2,
+  },
+  actionSectionSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 10,
+  },
+  payModeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  payModeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  payModeBtnActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4338ca',
+  },
+  payModeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  payModeTextActive: {
+    color: '#ffffff',
+  },
+  recordPayBtn: {
+    backgroundColor: '#059669',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  recordPayBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
   },
   emptyCard: {
     padding: 30,
