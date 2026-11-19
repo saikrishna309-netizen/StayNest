@@ -10,9 +10,9 @@ export interface User {
 export interface Bed {
   id: string;
   roomId: string;
-  propertyId: string;
+  propertyId?: string;
   bedLabel: string;
-  status: 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE';
+  status: 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
 }
 
 export interface Room {
