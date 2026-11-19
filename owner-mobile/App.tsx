@@ -5,15 +5,14 @@ import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
-import { PropertySetupScreen } from './src/screens/PropertySetupScreen';
-import { RoomsBedsScreen } from './src/screens/RoomsBedsScreen';
+import { PropertiesScreen } from './src/screens/PropertiesScreen';
 import { ManagementScreen } from './src/screens/ManagementScreen';
 import { Property } from './src/types';
 
 const MainNavigator: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'property' | 'rooms' | 'management'>('dashboard');
-  const [selectedPropertyForRooms, setSelectedPropertyForRooms] = useState<Property | null>(null);
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'properties' | 'management'>('dashboard');
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [registrationSkipped, setRegistrationSkipped] = useState(false);
 
   // 1. If not authenticated -> Login Screen (Mobile + OTP)
@@ -27,9 +26,9 @@ const MainNavigator: React.FC = () => {
     return <OwnerRegistrationScreen onComplete={() => setRegistrationSkipped(true)} />;
   }
 
-  const handleOpenRooms = (property: Property) => {
-    setSelectedPropertyForRooms(property);
-    setCurrentTab('rooms');
+  const handleOpenProperty = (property: Property) => {
+    setSelectedProperty(property);
+    setCurrentTab('properties');
   };
 
   return (
@@ -39,31 +38,26 @@ const MainNavigator: React.FC = () => {
         {/* Tab 1: Dashboard */}
         {currentTab === 'dashboard' && (
           <DashboardScreen
-            onSelectPropertyForRooms={handleOpenRooms}
+            onSelectPropertyForRooms={handleOpenProperty}
             onNavigateTab={(tab) => {
-              if (tab === 'rooms') setCurrentTab('rooms');
+              if (tab === 'rooms') setCurrentTab('properties');
               else if (tab === 'tenants' || tab === 'finance') setCurrentTab('management');
             }}
           />
         )}
 
-        {/* Tab 2: Property Setup */}
-        {currentTab === 'property' && (
-          <PropertySetupScreen onSelectPropertyForRooms={handleOpenRooms} />
-        )}
-
-        {/* Tab 3: Rooms and Beds */}
-        {currentTab === 'rooms' && (
-          <RoomsBedsScreen
-            property={selectedPropertyForRooms}
-            onBack={() => setCurrentTab('dashboard')}
+        {/* Tab 2: Properties (Combined Property, Floors, Rooms & Beds) */}
+        {currentTab === 'properties' && (
+          <PropertiesScreen
+            initialProperty={selectedProperty}
+            onBackToDashboard={() => setCurrentTab('dashboard')}
           />
         )}
 
-        {/* Tab 4: Management (Tenants, Rent, Expenses & Reports) */}
+        {/* Tab 3: Management (Tenants, Rent, Expenses & Reports) */}
         {currentTab === 'management' && <ManagementScreen />}
 
-        {/* Bottom Navigation Bar with the 4 Dedicated Tabs */}
+        {/* Bottom Navigation Bar: Dashboard, Properties, Management */}
         <View style={styles.bottomNav}>
           <TouchableOpacity
             style={styles.navItem}
@@ -82,31 +76,16 @@ const MainNavigator: React.FC = () => {
 
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => setCurrentTab('property')}
+            onPress={() => setCurrentTab('properties')}
           >
             <Text style={styles.navIcon}>🏢</Text>
             <Text
               style={[
                 styles.navLabel,
-                currentTab === 'property' && styles.navLabelActive,
+                currentTab === 'properties' && styles.navLabelActive,
               ]}
             >
-              Property
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navItem}
-            onPress={() => setCurrentTab('rooms')}
-          >
-            <Text style={styles.navIcon}>🛏️</Text>
-            <Text
-              style={[
-                styles.navLabel,
-                currentTab === 'rooms' && styles.navLabelActive,
-              ]}
-            >
-              Rooms & Beds
+              Properties
             </Text>
           </TouchableOpacity>
 
@@ -152,7 +131,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingBottom: 16,
     justifyContent: 'space-around',
     shadowColor: '#000',
@@ -165,8 +144,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   navIcon: {
-    fontSize: 18,
-    marginBottom: 2,
+    fontSize: 20,
+    marginBottom: 3,
   },
   navLabel: {
     fontSize: 11,
