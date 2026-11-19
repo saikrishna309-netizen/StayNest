@@ -9,7 +9,6 @@ public class RecordStayRequest {
     @NotNull(message = "Property ID is required")
     private UUID propertyId;
 
-    @NotNull(message = "Room ID is required")
     private UUID roomId;
 
     @NotNull(message = "Bed ID is required")

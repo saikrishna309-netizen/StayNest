@@ -140,10 +140,12 @@ public class TenantFinanceService {
         Bed bed = bedRepository.findById(request.getBedId())
                 .orElseThrow(() -> new ResourceNotFoundException("Bed", request.getBedId()));
 
+        UUID effectiveRoomId = request.getRoomId() != null ? request.getRoomId() : bed.getRoomId();
+
         TenantStay stay = new TenantStay();
         stay.setTenantId(tenant.getId());
         stay.setPropertyId(property.getId());
-        stay.setRoomId(request.getRoomId());
+        stay.setRoomId(effectiveRoomId);
         stay.setBedId(bed.getId());
         stay.setCheckIn(request.getCheckIn());
         stay.setCheckOut(request.getCheckOut());
