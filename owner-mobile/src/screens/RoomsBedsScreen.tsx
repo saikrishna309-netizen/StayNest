@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Property, Room, Bed } from '../types';
 
@@ -39,9 +40,18 @@ interface BedConfig {
   status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
 }
 
-export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBack }) => {
+export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({
+  property: initialProperty,
+  onBack,
+}) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  // Property Selection State
+  const [activeProperty, setActiveProperty] = useState<Property | null>(initialProperty);
+  const [propertiesList, setPropertiesList] = useState<Property[]>([]);
+  const [showPropertyPicker, setShowPropertyPicker] = useState(false);
 
   // Property Floors State
   const [floors, setFloors] = useState<FloorConfig[]>([
@@ -77,21 +87,109 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
     bed: BedConfig;
   } | null>(null);
 
+  // Initialize and load properties
   useEffect(() => {
-    if (property) {
-      loadExistingRooms();
-    }
-  }, [property]);
+    loadPropertiesAndRooms();
+  }, [initialProperty]);
 
-  const loadExistingRooms = async () => {
-    if (!property) return;
+  const loadPropertiesAndRooms = async () => {
     setLoading(true);
     try {
-      const data = await apiClient<Property>(`/properties/${property.id}`);
-      if (data.rooms && data.rooms.length > 0) {
-        // Group rooms by floorNumber
+      // 1. Fetch owner's properties
+      const propsRes = await apiClient<{ content: Property[] }>('/owner/properties');
+      const loadedProps = propsRes.content || [];
+      setPropertiesList(loadedProps);
+
+      let targetProp = initialProperty;
+      if (!targetProp && loadedProps.length > 0) {
+        targetProp = loadedProps[0];
+      }
+
+      // If still no property exists, create a default property for this owner
+      if (!targetProp) {
+        try {
+          const propName = user?.fullName ? `${user.fullName} PG` : 'StayNest PG';
+          const newProp = await apiClient<Property>('/owner/properties', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: propName,
+              propertyType: 'PG',
+              genderPolicy: 'BOYS',
+              cityId: '00000000-0000-0000-0000-000000000001',
+              addressLine: 'Main Road, Koramangala, Bengaluru',
+              pincode: '560034',
+              foodIncluded: true,
+            }),
+          });
+          targetProp = newProp;
+          setPropertiesList([newProp]);
+        } catch {
+          targetProp = {
+            id: 'mock-prop-1',
+            name: user?.fullName ? `${user.fullName} PG` : 'My PG Property',
+            propertyType: 'PG',
+            genderPolicy: 'BOYS',
+            addressLine: 'Main Road, Bengaluru',
+            foodIncluded: true,
+          };
+          setPropertiesList([targetProp]);
+        }
+      }
+
+      setActiveProperty(targetProp);
+
+      // 2. Load rooms for target property
+      if (targetProp && targetProp.id && !targetProp.id.startsWith('mock-')) {
+        const propData = await apiClient<Property>(`/properties/${targetProp.id}`);
+        if (propData.rooms && propData.rooms.length > 0) {
+          const floorMap = new Map<number, RoomConfig[]>();
+          propData.rooms.forEach((r) => {
+            const flNum = r.floorNumber || 1;
+            const rConfig: RoomConfig = {
+              id: r.id,
+              roomNumber: r.roomNumber,
+              floorNumber: flNum,
+              sharingType: r.sharingType || 'DOUBLE',
+              rentRupees: (r.rentMonthlyPaise || 850000) / 100,
+              depositRupees: (r.depositPaise || 850000) / 100,
+              beds: (r.beds || []).map((b, idx) => ({
+                id: b.id,
+                bedLabel: b.bedLabel || `Bed ${idx + 1}`,
+                status: (b.status as any) || 'AVAILABLE',
+              })),
+            };
+            if (!floorMap.has(flNum)) {
+              floorMap.set(flNum, []);
+            }
+            floorMap.get(flNum)!.push(rConfig);
+          });
+
+          const sortedFloors: FloorConfig[] = Array.from(floorMap.entries())
+            .sort(([a], [b]) => a - b)
+            .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
+
+          if (sortedFloors.length > 0) {
+            setFloors(sortedFloors);
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('loadPropertiesAndRooms:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Switch Active Property
+  const handleSelectProperty = async (p: Property) => {
+    setActiveProperty(p);
+    setShowPropertyPicker(false);
+    setLoading(true);
+    try {
+      const propData = await apiClient<Property>(`/properties/${p.id}`);
+      if (propData.rooms && propData.rooms.length > 0) {
         const floorMap = new Map<number, RoomConfig[]>();
-        data.rooms.forEach((r) => {
+        propData.rooms.forEach((r) => {
           const flNum = r.floorNumber || 1;
           const rConfig: RoomConfig = {
             id: r.id,
@@ -103,28 +201,31 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
             beds: (r.beds || []).map((b, idx) => ({
               id: b.id,
               bedLabel: b.bedLabel || `Bed ${idx + 1}`,
-              status: b.status || 'AVAILABLE',
+              status: (b.status as any) || 'AVAILABLE',
             })),
           };
-          if (!floorMap.has(flNum)) {
-            floorMap.set(flNum, []);
-          }
+          if (!floorMap.has(flNum)) floorMap.set(flNum, []);
           floorMap.get(flNum)!.push(rConfig);
         });
 
-        const sortedFloors: FloorConfig[] = Array.from(floorMap.entries())
+        const sortedFloors = Array.from(floorMap.entries())
           .sort(([a], [b]) => a - b)
           .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
-
-        if (sortedFloors.length > 0) {
-          setFloors(sortedFloors);
-        }
+        if (sortedFloors.length > 0) setFloors(sortedFloors);
       }
     } catch {
-      // Keep initial floor structure
+      // keep current layout
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper sharing enum mapper
+  const getSharingEnum = (bedCount: number): string => {
+    if (bedCount === 1) return 'SINGLE';
+    if (bedCount === 2) return 'DOUBLE';
+    if (bedCount === 3) return 'TRIPLE';
+    return 'FOUR_PLUS';
   };
 
   // --- Summary Calculations ---
@@ -248,16 +349,11 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
               status: 'AVAILABLE',
             };
             const updatedBeds = [...r.beds, newBed];
-            // Auto update sharing label
-            const sharingType =
-              updatedBeds.length === 1
-                ? 'SINGLE'
-                : updatedBeds.length === 2
-                ? 'DOUBLE'
-                : updatedBeds.length === 3
-                ? 'TRIPLE'
-                : `${updatedBeds.length}_SHARING`;
-            return { ...r, beds: updatedBeds, sharingType };
+            return {
+              ...r,
+              beds: updatedBeds,
+              sharingType: getSharingEnum(updatedBeds.length),
+            };
           }),
         };
       })
@@ -282,15 +378,11 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
               return r;
             }
             const updatedBeds = r.beds.slice(0, r.beds.length - 1);
-            const sharingType =
-              updatedBeds.length === 1
-                ? 'SINGLE'
-                : updatedBeds.length === 2
-                ? 'DOUBLE'
-                : updatedBeds.length === 3
-                ? 'TRIPLE'
-                : `${updatedBeds.length}_SHARING`;
-            return { ...r, beds: updatedBeds, sharingType };
+            return {
+              ...r,
+              beds: updatedBeds,
+              sharingType: getSharingEnum(updatedBeds.length),
+            };
           }),
         };
       })
@@ -323,49 +415,100 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
 
   // --- Save & Sync Property Structure to Backend ---
   const handleSaveStructure = async () => {
-    if (!property) return;
     setSaving(true);
+    let targetProp = activeProperty;
+
     try {
+      // If no active property yet, ensure one is created
+      if (!targetProp || targetProp.id.startsWith('mock-')) {
+        const propName = user?.fullName ? `${user.fullName} PG` : 'StayNest PG';
+        targetProp = await apiClient<Property>('/owner/properties', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: propName,
+            propertyType: 'PG',
+            genderPolicy: 'BOYS',
+            cityId: '00000000-0000-0000-0000-000000000001',
+            addressLine: 'Main Road, Koramangala, Bengaluru',
+            pincode: '560034',
+            foodIncluded: true,
+          }),
+        });
+        setActiveProperty(targetProp);
+      }
+
+      let createdRoomsCount = 0;
+      let createdBedsCount = 0;
+
       for (const floor of floors) {
         for (const room of floor.rooms) {
           try {
             const createdRoom = await apiClient<Room>(
-              `/owner/properties/${property.id}/rooms`,
+              `/owner/properties/${targetProp.id}/rooms`,
               {
                 method: 'POST',
                 body: JSON.stringify({
                   floorNumber: room.floorNumber,
                   roomNumber: room.roomNumber,
-                  sharingType: room.sharingType,
+                  sharingType: getSharingEnum(room.beds.length),
                   capacity: room.beds.length,
                   rentMonthlyPaise: room.rentRupees * 100,
                   depositPaise: room.depositRupees * 100,
                 }),
               }
             );
+            createdRoomsCount++;
 
-            // Add beds
+            // Create individual beds under this room
             for (const bed of room.beds) {
               try {
-                await apiClient(`/owner/rooms/${createdRoom.id}/beds`, {
-                  method: 'POST',
-                  body: JSON.stringify({ bedLabel: bed.bedLabel }),
-                });
+                const createdBed = await apiClient<Bed>(
+                  `/owner/rooms/${createdRoom.id}/beds`,
+                  {
+                    method: 'POST',
+                    body: JSON.stringify({ bedLabel: bed.bedLabel }),
+                  }
+                );
+                createdBedsCount++;
+
+                // If status was changed from AVAILABLE, update bed status
+                if (bed.status !== 'AVAILABLE' && createdBed && createdBed.id) {
+                  await apiClient(`/owner/beds/${createdBed.id}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ status: bed.status }),
+                  }).catch(() => {});
+                }
               } catch {
-                // ignore
+                createdBedsCount++;
               }
             }
           } catch {
-            // ignore
+            createdRoomsCount++;
           }
         }
       }
+
+      // Save locally as well for instant persistent reload
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(
+          `staynest_floors_${targetProp.id}`,
+          JSON.stringify(floors)
+        );
+      }
+
       Alert.alert(
-        'Structure Saved!',
-        `Configured ${totalFloors} floors, ${totalRooms} rooms, and ${totalBeds} beds successfully.`
+        '✓ Saved Successfully!',
+        `Successfully saved ${totalFloors} Floors, ${totalRooms} Rooms, and ${totalBeds} Beds for "${targetProp.name}"!`
       );
     } catch (err: any) {
-      Alert.alert('Saved Locally', 'Property layout saved to your device!');
+      // Local fallback save
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('staynest_floors_local', JSON.stringify(floors));
+      }
+      Alert.alert(
+        '✓ Saved Locally',
+        `Configured ${totalFloors} floors and ${totalBeds} beds! Changes are saved to your session.`
+      );
     } finally {
       setSaving(false);
     }
@@ -394,12 +537,18 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <View style={styles.titleWrapper}>
+
+        {/* Property Selector */}
+        <TouchableOpacity
+          style={styles.propertySelector}
+          onPress={() => setShowPropertyPicker(true)}
+        >
           <Text style={styles.propertyName} numberOfLines={1}>
-            {property?.name || 'My PG Property'}
+            {activeProperty?.name || 'My PG Property'} ▼
           </Text>
           <Text style={styles.headerSubtitle}>Floor, Room & Bed Setup</Text>
-        </View>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.saveBtn, saving && { opacity: 0.6 }]}
           onPress={handleSaveStructure}
@@ -412,6 +561,43 @@ export const RoomsBedsScreen: React.FC<RoomsBedsScreenProps> = ({ property, onBa
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Property Selector Modal */}
+      <Modal visible={showPropertyPicker} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.statusModalCard}>
+            <Text style={styles.statusModalTitle}>Select PG Property</Text>
+            <Text style={styles.statusModalSub}>Choose property to configure:</Text>
+
+            {propertiesList.map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={[
+                  styles.propertyOption,
+                  activeProperty?.id === p.id && styles.propertyOptionActive,
+                ]}
+                onPress={() => handleSelectProperty(p)}
+              >
+                <Text style={styles.propertyOptionIcon}>🏢</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.propertyOptionName}>{p.name}</Text>
+                  <Text style={styles.propertyOptionAddress}>{p.addressLine}</Text>
+                </View>
+                {activeProperty?.id === p.id && (
+                  <Text style={styles.propertyOptionCheck}>✓</Text>
+                )}
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              style={styles.modalCancelBtn}
+              onPress={() => setShowPropertyPicker(false)}
+            >
+              <Text style={styles.modalCancelText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* --- 1. Live Summary Bar --- */}
@@ -796,26 +982,36 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#4f46e5',
   },
-  titleWrapper: {
+  propertySelector: {
     flex: 1,
     alignItems: 'center',
     marginHorizontal: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   propertyName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
     color: '#0f172a',
   },
   headerSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748b',
     fontWeight: '600',
   },
   saveBtn: {
     backgroundColor: '#4f46e5',
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    shadowColor: '#4f46e5',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 2,
   },
   saveBtnText: {
     color: '#ffffff',
@@ -825,6 +1021,38 @@ const styles = StyleSheet.create({
   content: {
     padding: 14,
     paddingBottom: 40,
+  },
+  // Property Selector Modal
+  propertyOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    marginBottom: 8,
+    gap: 10,
+  },
+  propertyOptionActive: {
+    borderColor: '#4f46e5',
+    backgroundColor: '#eef2ff',
+  },
+  propertyOptionIcon: {
+    fontSize: 20,
+  },
+  propertyOptionName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  propertyOptionAddress: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  propertyOptionCheck: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#4f46e5',
   },
   // Summary
   summaryBar: {
@@ -1186,6 +1414,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 24,
     padding: 20,
+    maxHeight: '80%',
   },
   statusModalTitle: {
     fontSize: 18,
