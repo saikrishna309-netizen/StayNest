@@ -36,6 +36,14 @@ public class UserService {
             user.setFullName(request.getFullName().trim());
         }
 
+        if (request.getEmail() != null && !request.getEmail().isBlank() && !request.getEmail().equalsIgnoreCase(user.getEmail())) {
+            String newEmail = request.getEmail().trim().toLowerCase();
+            if (userRepository.existsByEmail(newEmail)) {
+                throw new ConflictException("EMAIL_ALREADY_EXISTS", "Email address is already in use by another account");
+            }
+            user.setEmail(newEmail);
+        }
+
         if (request.getPhone() != null && !request.getPhone().isBlank() && !request.getPhone().equals(user.getPhone())) {
             if (userRepository.existsByPhone(request.getPhone().trim())) {
                 throw new ConflictException("PHONE_ALREADY_EXISTS", "Phone number is already registered with another account");

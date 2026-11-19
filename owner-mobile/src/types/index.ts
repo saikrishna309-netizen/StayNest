@@ -33,13 +33,19 @@ export interface Property {
   name: string;
   propertyType: string;
   genderPolicy: string;
-  cityName: string;
-  localityName: string;
+  cityName?: string;
+  localityName?: string;
   addressLine: string;
-  startingPricePaise: number;
+  pincode?: string;
+  startingPricePaise?: number;
   foodIncluded: boolean;
-  approvalStatus: string;
-  published: boolean;
+  approvalStatus?: string;
+  published?: boolean;
+  status?: string;
+  amenities?: string[];
+  rules?: string;
+  noticePeriodDays?: number;
+  depositMonths?: number;
   rooms?: Room[];
 }
 

@@ -8,6 +8,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   sendOtp: (phone: string) => Promise<{ message: string; demoOtp?: string }>;
   verifyOtp: (phone: string, otp: string) => Promise<void>;
+  updateProfile: (fullName: string, email: string) => Promise<void>;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => void;
 }
@@ -62,6 +63,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const updateProfile = async (fullName: string, email: string) => {
+    try {
+      const updatedUser = await apiClient<User>('/users/me', {
+        method: 'PATCH',
+        body: JSON.stringify({ fullName: fullName.trim(), email: email.trim() }),
+      });
+      setUser(updatedUser);
+    } catch {
+      // Local fallback for smooth offline / demo experience
+      setUser((prev) => (prev ? { ...prev, fullName: fullName.trim(), email: email.trim() } : null));
+    }
+  };
+
   const login = async (email: string, pass: string) => {
     const res = await apiClient<{ accessToken: string; user: User }>('/auth/login', {
       method: 'POST',
@@ -87,6 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!token,
         sendOtp,
         verifyOtp,
+        updateProfile,
         login,
         logout,
       }}

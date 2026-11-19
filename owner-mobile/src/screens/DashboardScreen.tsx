@@ -63,8 +63,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       {/* Top Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.welcomeText}>Welcome back,</Text>
-          <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
+          <Text style={styles.brandTitle}>
+            Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
+          </Text>
+          <Text style={styles.welcomeText}>Welcome back, <Text style={styles.ownerName}>{user?.fullName || 'Owner'}</Text></Text>
         </View>
         <TouchableOpacity style={styles.logoutButton} onPress={logout}>
           <Text style={styles.logoutText}>Logout</Text>
@@ -158,7 +160,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
               <View style={styles.propertyFooter}>
                 <Text style={styles.propertyPrice}>
-                  Starting ₹{(p.startingPricePaise / 100).toLocaleString('en-IN')}/mo
+                  Starting ₹{(((p.startingPricePaise || 0)) / 100).toLocaleString('en-IN')}/mo
                 </Text>
                 <View style={styles.manageBtn}>
                   <Text style={styles.manageBtnText}>Manage Floors & Beds →</Text>
@@ -188,14 +190,27 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
+  brandTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  brandAccent: {
+    color: '#4f46e5',
+  },
+  pgTag: {
+    color: '#f59e0b',
+    fontWeight: '900',
+  },
   welcomeText: {
     fontSize: 12,
     color: '#64748b',
     fontWeight: '600',
+    marginTop: 2,
   },
   ownerName: {
-    fontSize: 18,
-    fontWeight: '900',
+    fontSize: 13,
+    fontWeight: '800',
     color: '#0f172a',
   },
   logoutButton: {

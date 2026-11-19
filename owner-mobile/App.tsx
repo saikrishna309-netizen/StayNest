@@ -3,19 +3,28 @@ import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView } from 'react-na
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
+import { PropertySetupScreen } from './src/screens/PropertySetupScreen';
 import { RoomsBedsScreen } from './src/screens/RoomsBedsScreen';
-import { TenantsScreen } from './src/screens/TenantsScreen';
-import { FinanceScreen } from './src/screens/FinanceScreen';
+import { ManagementScreen } from './src/screens/ManagementScreen';
 import { Property } from './src/types';
 
 const MainNavigator: React.FC = () => {
-  const { isAuthenticated } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'rooms' | 'tenants' | 'finance'>('dashboard');
+  const { isAuthenticated, user } = useAuth();
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'property' | 'rooms' | 'management'>('dashboard');
   const [selectedPropertyForRooms, setSelectedPropertyForRooms] = useState<Property | null>(null);
+  const [registrationSkipped, setRegistrationSkipped] = useState(false);
 
+  // 1. If not authenticated -> Login Screen (Mobile + OTP)
   if (!isAuthenticated) {
     return <LoginScreen />;
+  }
+
+  // 2. If newly registered via phone and profile incomplete -> Owner Registration Screen
+  const isProfileIncomplete = (!user?.fullName || user.fullName === 'PG Owner') && !registrationSkipped;
+  if (isProfileIncomplete) {
+    return <OwnerRegistrationScreen onComplete={() => setRegistrationSkipped(true)} />;
   }
 
   const handleOpenRooms = (property: Property) => {
@@ -27,13 +36,23 @@ const MainNavigator: React.FC = () => {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <View style={styles.container}>
+        {/* Tab 1: Dashboard */}
         {currentTab === 'dashboard' && (
           <DashboardScreen
             onSelectPropertyForRooms={handleOpenRooms}
-            onNavigateTab={(tab) => setCurrentTab(tab)}
+            onNavigateTab={(tab) => {
+              if (tab === 'rooms') setCurrentTab('rooms');
+              else if (tab === 'tenants' || tab === 'finance') setCurrentTab('management');
+            }}
           />
         )}
 
+        {/* Tab 2: Property Setup */}
+        {currentTab === 'property' && (
+          <PropertySetupScreen onSelectPropertyForRooms={handleOpenRooms} />
+        )}
+
+        {/* Tab 3: Rooms and Beds */}
         {currentTab === 'rooms' && (
           <RoomsBedsScreen
             property={selectedPropertyForRooms}
@@ -41,20 +60,16 @@ const MainNavigator: React.FC = () => {
           />
         )}
 
-        {currentTab === 'tenants' && (
-          <TenantsScreen onBack={() => setCurrentTab('dashboard')} />
-        )}
+        {/* Tab 4: Management (Tenants, Rent, Expenses & Reports) */}
+        {currentTab === 'management' && <ManagementScreen />}
 
-        {currentTab === 'finance' && (
-          <FinanceScreen onBack={() => setCurrentTab('dashboard')} />
-        )}
-
-        {/* Bottom Navigation Bar */}
+        {/* Bottom Navigation Bar with the 4 Dedicated Tabs */}
         <View style={styles.bottomNav}>
           <TouchableOpacity
             style={styles.navItem}
             onPress={() => setCurrentTab('dashboard')}
           >
+            <Text style={styles.navIcon}>📊</Text>
             <Text
               style={[
                 styles.navLabel,
@@ -67,29 +82,46 @@ const MainNavigator: React.FC = () => {
 
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => setCurrentTab('tenants')}
+            onPress={() => setCurrentTab('property')}
           >
+            <Text style={styles.navIcon}>🏢</Text>
             <Text
               style={[
                 styles.navLabel,
-                currentTab === 'tenants' && styles.navLabelActive,
+                currentTab === 'property' && styles.navLabelActive,
               ]}
             >
-              Tenants
+              Property
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.navItem}
-            onPress={() => setCurrentTab('finance')}
+            onPress={() => setCurrentTab('rooms')}
           >
+            <Text style={styles.navIcon}>🛏️</Text>
             <Text
               style={[
                 styles.navLabel,
-                currentTab === 'finance' && styles.navLabelActive,
+                currentTab === 'rooms' && styles.navLabelActive,
               ]}
             >
-              Ledger
+              Rooms & Beds
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setCurrentTab('management')}
+          >
+            <Text style={styles.navIcon}>📋</Text>
+            <Text
+              style={[
+                styles.navLabel,
+                currentTab === 'management' && styles.navLabelActive,
+              ]}
+            >
+              Management
             </Text>
           </TouchableOpacity>
         </View>
@@ -120,22 +152,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e2e8f0',
-    paddingVertical: 12,
+    paddingVertical: 8,
+    paddingBottom: 16,
     justifyContent: 'space-around',
     shadowColor: '#000',
     shadowOpacity: 0.05,
-    shadowRadius: 5,
+    shadowRadius: 10,
     elevation: 8,
   },
   navItem: {
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 16,
+    flex: 1,
+  },
+  navIcon: {
+    fontSize: 18,
+    marginBottom: 2,
   },
   navLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#94a3b8',
   },
   navLabelActive: {
     color: '#4f46e5',

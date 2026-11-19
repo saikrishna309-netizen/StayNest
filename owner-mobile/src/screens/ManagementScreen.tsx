@@ -1,0 +1,117 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { TenantsScreen } from './TenantsScreen';
+import { FinanceScreen } from './FinanceScreen';
+
+export const ManagementScreen: React.FC = () => {
+  const [subTab, setSubTab] = useState<'tenants' | 'finance' | 'reports'>('tenants');
+
+  return (
+    <View style={styles.container}>
+      {/* Top Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.brandTitle}>
+            Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
+          </Text>
+          <Text style={styles.pageTitle}>PG Operations & Management</Text>
+        </View>
+      </View>
+
+      {/* Segmented Controller */}
+      <View style={styles.segmentContainer}>
+        <TouchableOpacity
+          style={[styles.segmentBtn, subTab === 'tenants' && styles.segmentBtnActive]}
+          onPress={() => setSubTab('tenants')}
+        >
+          <Text style={[styles.segmentText, subTab === 'tenants' && styles.segmentTextActive]}>
+            👥 Tenants
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.segmentBtn, subTab === 'finance' && styles.segmentBtnActive]}
+          onPress={() => setSubTab('finance')}
+        >
+          <Text style={[styles.segmentText, subTab === 'finance' && styles.segmentTextActive]}>
+            💰 Rent & Expense
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Screen View */}
+      <View style={styles.body}>
+        {subTab === 'tenants' ? (
+          <TenantsScreen onBack={() => {}} />
+        ) : (
+          <FinanceScreen onBack={() => {}} />
+        )}
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    backgroundColor: '#ffffff',
+    paddingTop: 50,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  brandTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  brandAccent: {
+    color: '#4f46e5',
+  },
+  pgTag: {
+    color: '#f59e0b',
+    fontWeight: '900',
+  },
+  pageTitle: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  segmentContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    margin: 12,
+    padding: 4,
+    borderRadius: 14,
+  },
+  segmentBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  segmentBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  segmentTextActive: {
+    color: '#4f46e5',
+    fontWeight: '800',
+  },
+  body: {
+    flex: 1,
+  },
+});
