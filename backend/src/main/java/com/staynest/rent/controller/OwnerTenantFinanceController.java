@@ -100,6 +100,14 @@ public class OwnerTenantFinanceController {
         return ResponseEntity.ok(tenantFinanceService.getTenantStays(user.getId(), id));
     }
 
+    @PostMapping("/tenants/{id}/checkout")
+    @Operation(summary = "Check out a tenant, free up their bed, and mark stay terminated")
+    public ResponseEntity<TenantResponse> checkoutTenant(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id) {
+        return ResponseEntity.ok(tenantFinanceService.checkoutTenant(user.getId(), id));
+    }
+
     // --- Rent Invoices & Collections ---
 
     @PostMapping("/rent-invoices")

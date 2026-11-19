@@ -51,13 +51,32 @@ export interface Property {
 
 export interface Tenant {
   id: string;
-  ownerId: string;
+  ownerId?: string;
   fullName: string;
   phone: string;
   email?: string;
-  idProofType: string;
-  idProofNumber: string;
-  status: string;
+  emergencyContact?: string;
+  idProofType?: string;
+  idProofNumber?: string;
+  active?: boolean;
+  status?: string;
+  propertyId?: string;
+  propertyName?: string;
+  floorNumber?: number;
+  roomId?: string;
+  roomNumber?: string;
+  sharingType?: string;
+  bedId?: string;
+  bedLabel?: string;
+  monthlyRentPaise?: number;
+  securityDepositPaise?: number;
+  checkIn?: string;
+  checkOut?: string;
+  stayStatus?: 'ACTIVE' | 'TERMINATED' | 'COMPLETED';
+  rentStatus?: 'PAID' | 'DUE' | 'OVERDUE' | 'PARTIALLY_PAID';
+  rentDueDate?: string;
+  outstandingPaise?: number;
+  createdAt?: string;
 }
 
 export interface TenantStay {

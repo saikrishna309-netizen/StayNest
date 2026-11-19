@@ -21,6 +21,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
 
+  // Search & Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'VACATED'>('ACTIVE');
+  const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
+
   // Onboard Form State
   const [showForm, setShowForm] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -34,8 +39,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   const [propRooms, setPropRooms] = useState<Room[]>([]);
   const [selectedBedId, setSelectedBedId] = useState<string>('');
   const [selectedRoomId, setSelectedRoomId] = useState<string>('');
-  const [rentRupees, setRentRupees] = useState('9500');
-  const [depositRupees, setDepositRupees] = useState('9500');
+  const [rentRupees, setRentRupees] = useState('8500');
+  const [depositRupees, setDepositRupees] = useState('8500');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -52,7 +57,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
       setTenants(tRes.content || []);
       const loadedProps = pRes.content || [];
       setProperties(loadedProps);
-      if (loadedProps.length > 0) {
+      if (loadedProps.length > 0 && !selectedPropId) {
         setSelectedPropId(loadedProps[0].id);
         loadRoomsForProperty(loadedProps[0].id);
       }
@@ -181,8 +186,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
               propertyId: selectedPropId,
               roomId: targetRoomId,
               bedId: selectedBedId,
-              monthlyRentPaise: Number(rentRupees || 9500) * 100,
-              depositPaise: Number(depositRupees || 9500) * 100,
+              monthlyRentPaise: Number(rentRupees || 8500) * 100,
+              depositPaise: Number(depositRupees || 8500) * 100,
               checkIn: new Date().toISOString().split('T')[0],
             }),
           });
@@ -206,6 +211,33 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     }
   };
 
+  // Handle Checkout
+  const handleCheckout = (tenant: Tenant) => {
+    Alert.alert(
+      'Confirm Check-Out',
+      `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Check Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
+                method: 'POST',
+              });
+              Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
+              loadData();
+            } catch (err: any) {
+              Alert.alert('Notice', err.message || 'Tenant stay updated.');
+              loadData();
+            }
+          },
+        },
+      ]
+    );
+  };
+
   // Collect available beds
   const availableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number }[] = [];
   propRooms.forEach((r) => {
@@ -221,14 +253,35 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     });
   });
 
+  // Filtered tenants list
+  const filteredTenants = tenants.filter((t) => {
+    const isAct = t.active !== false && t.stayStatus !== 'TERMINATED';
+    if (statusFilter === 'ACTIVE' && !isAct) return false;
+    if (statusFilter === 'VACATED' && isAct) return false;
+
+    if (propertyFilter !== 'ALL' && t.propertyId && t.propertyId !== propertyFilter) {
+      return false;
+    }
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const matchName = t.fullName && t.fullName.toLowerCase().includes(q);
+      const matchPhone = t.phone && t.phone.includes(q);
+      const matchRoom = t.roomNumber && t.roomNumber.toLowerCase().includes(q);
+      if (!matchName && !matchPhone && !matchRoom) return false;
+    }
+
+    return true;
+  });
+
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backBtnText}>← Back</Text>
+          <Text style={styles.backBtnText}>← Dashboard</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tenants & Bed Allocation</Text>
+        <Text style={styles.headerTitle}>Tenant Management</Text>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => setShowForm(!showForm)}
@@ -237,13 +290,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Onboarding Form */}
         {showForm && (
           <View style={styles.formCard}>
             <Text style={styles.formTitle}>Onboard New Resident</Text>
 
-            {/* Property Selector if multiple properties */}
+            {/* Property Selector */}
             {properties.length > 1 && (
               <View style={{ marginBottom: 12 }}>
                 <Text style={styles.label}>SELECT PROPERTY</Text>
@@ -372,36 +425,136 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
           </View>
         )}
 
+        {/* ─── Search & Filter Bar ─── */}
+        <View style={styles.searchBarBox}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="🔍 Search resident by name, phone or room..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+
+        {/* Segment Tabs: Active vs Vacated vs All */}
+        <View style={styles.statusFilterRow}>
+          {(['ACTIVE', 'VACATED', 'ALL'] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[
+                styles.statusFilterBtn,
+                statusFilter === tab && styles.statusFilterBtnActive,
+              ]}
+              onPress={() => setStatusFilter(tab)}
+            >
+              <Text
+                style={[
+                  styles.statusFilterText,
+                  statusFilter === tab && styles.statusFilterTextActive,
+                ]}
+              >
+                {tab === 'ACTIVE' ? 'Active Residents' : tab === 'VACATED' ? 'Vacated' : 'All Records'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* List of Tenants */}
         {loading ? (
           <ActivityIndicator color="#4f46e5" style={{ marginVertical: 40 }} />
-        ) : tenants.length === 0 ? (
+        ) : filteredTenants.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyTitle}>No Tenants Onboarded Yet</Text>
+            <Text style={{ fontSize: 26, marginBottom: 8 }}>📋</Text>
+            <Text style={styles.emptyTitle}>No Matching Tenants Found</Text>
             <Text style={styles.emptySub}>
-              Tap '+ Onboard' to register a tenant and allocate a bed in real-time.
+              {statusFilter === 'ACTIVE'
+                ? 'No active residents found. Tap "+ Onboard" to register a tenant.'
+                : 'No records matching your search/filter.'}
             </Text>
           </View>
         ) : (
-          tenants.map((t) => (
-            <View key={t.id} style={styles.tenantCard}>
-              <View style={styles.tenantHeader}>
-                <View>
-                  <Text style={styles.tenantName}>{t.fullName}</Text>
-                  <Text style={styles.tenantPhone}>{t.phone}</Text>
-                </View>
-                <View style={styles.activeBadge}>
-                  <Text style={styles.activeBadgeText}>ACTIVE</Text>
-                </View>
-              </View>
+          filteredTenants.map((t) => {
+            const isAct = t.active !== false && t.stayStatus !== 'TERMINATED';
+            const rentPaid = t.rentStatus === 'PAID';
+            const initials = t.fullName
+              ? t.fullName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
+              : 'TN';
 
-              <View style={styles.tenantFooter}>
-                <Text style={styles.idText}>
-                  {t.idProofType}: {t.idProofNumber || '--'}
-                </Text>
-                <Text style={styles.stayText}>Registered in PostgreSQL</Text>
+            return (
+              <View key={t.id} style={styles.tenantCard}>
+                <View style={styles.tenantHeader}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{initials}</Text>
+                  </View>
+
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={styles.tenantName}>{t.fullName}</Text>
+                    <Text style={styles.tenantPhone}>📱 {t.phone}</Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.activeBadge,
+                      { backgroundColor: isAct ? '#ecfdf5' : '#f1f5f9' },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.activeBadgeText,
+                        { color: isAct ? '#059669' : '#64748b' },
+                      ]}
+                    >
+                      {isAct ? 'ACTIVE' : 'VACATED'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Stay and Room Info */}
+                <View style={styles.detailGrid}>
+                  <View style={styles.detailItem}>
+                    <Text style={styles.metaLabel}>PROPERTY</Text>
+                    <Text style={styles.metaVal}>{t.propertyName || 'Ramesh PG'}</Text>
+                  </View>
+
+                  <View style={styles.detailItem}>
+                    <Text style={styles.metaLabel}>ROOM & BED</Text>
+                    <Text style={styles.metaVal}>
+                      Room {t.roomNumber || '101'} • {t.bedLabel || 'Bed 1'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailItem}>
+                    <Text style={styles.metaLabel}>MONTHLY RENT</Text>
+                    <Text style={[styles.metaVal, { color: '#4f46e5', fontWeight: '800' }]}>
+                      ₹{t.monthlyRentPaise ? (t.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500'}/mo
+                    </Text>
+                  </View>
+
+                  <View style={styles.detailItem}>
+                    <Text style={styles.metaLabel}>RENT STATUS</Text>
+                    <Text style={[styles.metaVal, { color: rentPaid ? '#059669' : '#dc2626', fontWeight: '800' }]}>
+                      {rentPaid ? '🟢 Paid' : '🔴 Due'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Footer with Checkout action if active */}
+                <View style={styles.tenantFooter}>
+                  <Text style={styles.idText}>
+                    {t.idProofType || 'AADHAAR'}: {t.idProofNumber || '--'}
+                  </Text>
+
+                  {isAct && (
+                    <TouchableOpacity
+                      style={styles.cardCheckoutBtn}
+                      onPress={() => handleCheckout(t)}
+                    >
+                      <Text style={styles.cardCheckoutText}>Check Out</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -450,6 +603,49 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
+    paddingBottom: 40,
+  },
+  searchBarBox: {
+    marginBottom: 12,
+  },
+  searchInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 13,
+    color: '#0f172a',
+  },
+  statusFilterRow: {
+    flexDirection: 'row',
+    backgroundColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 3,
+    marginBottom: 16,
+  },
+  statusFilterBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  statusFilterBtnActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statusFilterText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  statusFilterTextActive: {
+    color: '#4f46e5',
+    fontWeight: '800',
   },
   formCard: {
     backgroundColor: '#ffffff',
@@ -522,8 +718,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   bedPickChipSelected: {
-    backgroundColor: '#4f46e5',
-    borderColor: '#4338ca',
+    backgroundColor: '#059669',
+    borderColor: '#047857',
   },
   bedPickText: {
     fontSize: 11,
@@ -555,15 +751,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 14,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   tenantHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  avatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#6366f1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#ffffff',
   },
   tenantName: {
     fontSize: 15,
@@ -576,7 +784,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   activeBadge: {
-    backgroundColor: '#ecfdf5',
     paddingVertical: 3,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -584,24 +791,54 @@ const styles = StyleSheet.create({
   activeBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#059669',
+  },
+  detailGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  detailItem: {
+    width: '48%',
+  },
+  metaLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
+  },
+  metaVal: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginTop: 1,
   },
   tenantFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    alignItems: 'center',
+    paddingTop: 10,
   },
   idText: {
     fontSize: 11,
     color: '#64748b',
     fontWeight: '600',
   },
-  stayText: {
-    fontSize: 11,
-    color: '#4f46e5',
-    fontWeight: '700',
+  cardCheckoutBtn: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  cardCheckoutText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#e11d48',
   },
   emptyCard: {
     padding: 30,

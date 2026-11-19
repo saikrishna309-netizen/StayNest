@@ -36,7 +36,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     setLoading(true);
     try {
       const [invRes, expRes] = await Promise.all([
-        apiClient<{ content: RentInvoice[] }>('/owner/invoices'),
+        apiClient<{ content: RentInvoice[] }>('/owner/rent-invoices'),
         apiClient<{ content: Expense[] }>('/owner/expenses'),
       ]);
       setInvoices(invRes.content || []);
@@ -50,7 +50,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
   const handleMarkPaid = async (invoiceId: string) => {
     try {
-      await apiClient(`/owner/invoices/${invoiceId}/payments`, {
+      await apiClient(`/owner/rent-invoices/${invoiceId}/payments`, {
         method: 'POST',
         body: JSON.stringify({
           paymentMode: 'UPI_QR',

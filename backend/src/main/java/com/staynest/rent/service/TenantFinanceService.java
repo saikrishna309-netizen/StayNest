@@ -77,6 +77,59 @@ public class TenantFinanceService {
 
     // --- Tenant Operations ---
 
+    public TenantResponse enrichTenantResponse(Tenant tenant) {
+        TenantResponse res = TenantResponse.from(tenant);
+
+        // Find stays for this tenant
+        List<TenantStay> stays = tenantStayRepository.findByTenantId(tenant.getId());
+        TenantStay activeStay = stays.stream()
+                .filter(s -> "ACTIVE".equalsIgnoreCase(s.getStatus()))
+                .findFirst()
+                .orElse(stays.isEmpty() ? null : stays.get(stays.size() - 1));
+
+        if (activeStay != null) {
+            res.setPropertyId(activeStay.getPropertyId());
+            res.setRoomId(activeStay.getRoomId());
+            res.setBedId(activeStay.getBedId());
+            res.setMonthlyRentPaise(activeStay.getMonthlyRentPaise());
+            res.setSecurityDepositPaise(activeStay.getSecurityDepositPaise());
+            res.setCheckIn(activeStay.getCheckIn());
+            res.setCheckOut(activeStay.getCheckOut());
+            res.setStayStatus(activeStay.getStatus());
+
+            if (activeStay.getPropertyId() != null) {
+                propertyRepository.findById(activeStay.getPropertyId()).ifPresent(p -> res.setPropertyName(p.getName()));
+            }
+
+            if (activeStay.getRoomId() != null) {
+                roomRepository.findById(activeStay.getRoomId()).ifPresent(r -> {
+                    res.setRoomNumber(r.getRoomNumber());
+                    res.setFloorNumber(r.getFloorNumber());
+                    res.setSharingType(r.getSharingType() != null ? r.getSharingType().name() : null);
+                });
+            }
+
+            if (activeStay.getBedId() != null) {
+                bedRepository.findById(activeStay.getBedId()).ifPresent(b -> res.setBedLabel(b.getBedLabel()));
+            }
+        }
+
+        // Rent payment status
+        List<RentInvoice> invoices = rentInvoiceRepository.findByTenantId(tenant.getId());
+        if (!invoices.isEmpty()) {
+            RentInvoice latest = invoices.get(invoices.size() - 1);
+            res.setRentStatus(latest.getStatus());
+            res.setRentDueDate(latest.getDueDate());
+            long outstanding = Math.max(0, latest.getTotalAmountPaise() - latest.getPaidAmountPaise());
+            res.setOutstandingPaise(outstanding);
+        } else {
+            res.setRentStatus("PAID");
+            res.setOutstandingPaise(0L);
+        }
+
+        return res;
+    }
+
     @Transactional
     public TenantResponse createTenant(UUID ownerId, CreateTenantRequest request) {
         Tenant tenant = new Tenant(ownerId, request.getFullName().trim(), request.getPhone().trim(), request.getEmail());
@@ -85,7 +138,7 @@ public class TenantFinanceService {
         tenant.setIdProofNumber(request.getIdProofNumber());
 
         tenant = tenantRepository.save(tenant);
-        return TenantResponse.from(tenant);
+        return enrichTenantResponse(tenant);
     }
 
     @Transactional(readOnly = true)
@@ -95,7 +148,7 @@ public class TenantFinanceService {
                 : tenantRepository.findByOwnerId(ownerId, pageable);
 
         List<TenantResponse> dtos = page.getContent().stream()
-                .map(TenantResponse::from)
+                .map(this::enrichTenantResponse)
                 .collect(Collectors.toList());
 
         return new PageResponse<>(dtos, page.getNumber(), page.getSize(), page.getTotalElements(), page.getTotalPages(), page.isLast());
@@ -105,7 +158,7 @@ public class TenantFinanceService {
     public TenantResponse getTenant(UUID ownerId, UUID tenantId) {
         Tenant tenant = tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
-        return TenantResponse.from(tenant);
+        return enrichTenantResponse(tenant);
     }
 
     @Transactional
@@ -122,7 +175,34 @@ public class TenantFinanceService {
         if (request.getActive() != null) tenant.setActive(request.getActive());
 
         tenant = tenantRepository.save(tenant);
-        return TenantResponse.from(tenant);
+        return enrichTenantResponse(tenant);
+    }
+
+    @Transactional
+    public TenantResponse checkoutTenant(UUID ownerId, UUID tenantId) {
+        Tenant tenant = tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+
+        List<TenantStay> stays = tenantStayRepository.findByTenantId(tenant.getId());
+        for (TenantStay stay : stays) {
+            if ("ACTIVE".equalsIgnoreCase(stay.getStatus())) {
+                stay.setStatus("TERMINATED");
+                stay.setCheckOut(LocalDate.now());
+                tenantStayRepository.save(stay);
+
+                if (stay.getBedId() != null) {
+                    bedRepository.findById(stay.getBedId()).ifPresent(bed -> {
+                        bed.setStatus(BedStatus.AVAILABLE);
+                        bedRepository.save(bed);
+                    });
+                }
+            }
+        }
+
+        tenant.setActive(false);
+        tenantRepository.save(tenant);
+
+        return enrichTenantResponse(tenant);
     }
 
     @Transactional
