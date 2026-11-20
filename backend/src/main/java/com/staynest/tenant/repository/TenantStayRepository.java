@@ -12,5 +12,7 @@ public interface TenantStayRepository extends JpaRepository<TenantStay, UUID> {
     List<TenantStay> findByTenantId(UUID tenantId);
     List<TenantStay> findByPropertyIdAndStatus(UUID propertyId, String status);
     List<TenantStay> findByPropertyId(UUID propertyId);
+    List<TenantStay> findByBedId(UUID bedId);
+    List<TenantStay> findByBedIdAndStatus(UUID bedId, String status);
 }
 

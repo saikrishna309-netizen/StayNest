@@ -59,8 +59,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [editTenantName, setEditTenantName] = useState('');
   const [editTenantPhone, setEditTenantPhone] = useState('');
   const [editEmergencyContact, setEditEmergencyContact] = useState('');
+  const [editMonthlyRent, setEditMonthlyRent] = useState('8500');
   const [savingTenantEdit, setSavingTenantEdit] = useState(false);
   const [deletingTenant, setDeletingTenant] = useState(false);
+
+  // Shift / Transfer Bed State
+  const [isShiftingBed, setIsShiftingBed] = useState(false);
+  const [shiftSelectedBedId, setShiftSelectedBedId] = useState('');
+  const [shiftNewRent, setShiftNewRent] = useState('8500');
+  const [shiftingBed, setShiftingBed] = useState(false);
 
 
   useEffect(() => {
@@ -201,12 +208,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const handleOpenTenantModal = (tenant: Tenant) => {
     setSelectedTenantForAction(tenant);
     setIsEditingTenant(false);
+    setIsShiftingBed(false);
+    setShiftSelectedBedId('');
     setEditTenantName(tenant.fullName || '');
     setEditTenantPhone(tenant.phone || '');
     setEditEmergencyContact(tenant.emergencyContact || '');
     const rentAmount = tenant.monthlyRentPaise
       ? String(tenant.monthlyRentPaise / 100)
       : '8500';
+    setEditMonthlyRent(rentAmount);
+    setShiftNewRent(rentAmount);
     setManualPayAmount(rentAmount);
     setManualPayMode('UPI');
     setManualPayNotes('Paid in full');
@@ -332,9 +343,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           fullName: editTenantName.trim(),
           phone: editTenantPhone.trim(),
           emergencyContact: editEmergencyContact.trim() || null,
+          monthlyRentPaise: editMonthlyRent ? Number(editMonthlyRent) * 100 : undefined,
         }),
       });
-      Alert.alert('✓ Saved', 'Resident profile updated successfully!');
+      Alert.alert('✓ Saved', 'Resident profile and rent updated successfully!');
       setIsEditingTenant(false);
       setSelectedTenantForAction(null);
       loadData();
@@ -342,6 +354,33 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       Alert.alert('Error', err.message || 'Could not update resident');
     } finally {
       setSavingTenantEdit(false);
+    }
+  };
+
+  // Handle Confirm Bed Shift
+  const handleConfirmShift = async () => {
+    if (!selectedTenantForAction) return;
+    if (!shiftSelectedBedId) {
+      Alert.alert('Select Bed', 'Please select a vacant bed to shift to.');
+      return;
+    }
+    setShiftingBed(true);
+    try {
+      await apiClient(`/owner/tenants/${selectedTenantForAction.id}/transfer`, {
+        method: 'POST',
+        body: JSON.stringify({
+          newBedId: shiftSelectedBedId,
+          monthlyRentPaise: shiftNewRent ? Number(shiftNewRent) * 100 : undefined,
+        }),
+      });
+      Alert.alert('✓ Bed Shifted!', `${selectedTenantForAction.fullName} has been shifted to the new room & bed. Previous bed is now available.`);
+      setIsShiftingBed(false);
+      setSelectedTenantForAction(null);
+      loadData();
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not shift tenant to new bed');
+    } finally {
+      setShiftingBed(false);
     }
   };
 
@@ -436,6 +475,25 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setSubmittingOnboard(false);
     }
   };
+
+  // Available beds across all loaded properties
+  const allAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; propertyId: string; rentPaise?: number }[] = [];
+  Object.entries(propertyRoomsMap).forEach(([pId, rooms]) => {
+    rooms.forEach((r) => {
+      (r.beds || []).forEach((b) => {
+        const isOccupied = b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id);
+        if (!isOccupied) {
+          allAvailableBeds.push({
+            bed: b,
+            roomNumber: r.roomNumber,
+            roomId: r.id,
+            propertyId: pId,
+            rentPaise: r.rentMonthlyPaise,
+          });
+        }
+      });
+    });
+  });
 
   // Available beds for selected property (strictly 1 person = 1 bed; occupied beds are hidden)
   const modalAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number }[] = [];
@@ -777,7 +835,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <View>
                 <Text style={styles.modalTitle}>{selectedTenantForAction?.fullName}</Text>
                 <Text style={styles.modalSub}>
-                  Room {selectedTenantForAction?.roomNumber || '101'} • {selectedTenantForAction?.bedLabel || 'Bed 1'} • {selectedTenantForAction?.propertyName || 'Ramesh PG'}
+                  {selectedTenantForAction?.active !== false && selectedTenantForAction?.stayStatus !== 'TERMINATED'
+                    ? `Room ${selectedTenantForAction?.roomNumber || '101'} • ${selectedTenantForAction?.bedLabel || 'Bed 1'} • ${selectedTenantForAction?.propertyName || 'Ramesh PG'}`
+                    : `Vacated (No bed assigned) • ${selectedTenantForAction?.propertyName || 'StayNest PG'}`}
                 </Text>
               </View>
               <TouchableOpacity
@@ -885,10 +945,91 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* ACTION SECTION 3: EDIT RESIDENT DETAILS */}
+              {/* ACTION SECTION 3: SHIFT / TRANSFER ROOM & BED */}
+              {selectedTenantForAction?.active !== false && selectedTenantForAction?.stayStatus !== 'TERMINATED' && (
+                <View style={styles.actionSectionBox}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.actionSectionTitle}>🔄 Shift Room & Bed</Text>
+                    <TouchableOpacity onPress={() => setIsShiftingBed(!isShiftingBed)}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#4f46e5' }}>
+                        {isShiftingBed ? '✕ Cancel' : 'Shift Bed →'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {isShiftingBed ? (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={styles.actionSectionSub}>
+                        Shift resident to another vacant bed. Their current bed will become available immediately.
+                      </Text>
+
+                      <Text style={styles.inputLabel}>SELECT VACANT BED</Text>
+                      {allAvailableBeds.filter((b) => b.bed.id !== selectedTenantForAction?.bedId).length === 0 ? (
+                        <Text style={{ fontSize: 12, color: '#dc2626', marginVertical: 6 }}>
+                          No vacant beds available in the PG property.
+                        </Text>
+                      ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginBottom: 12 }}>
+                          {allAvailableBeds
+                            .filter((b) => b.bed.id !== selectedTenantForAction?.bedId)
+                            .map((b) => (
+                              <TouchableOpacity
+                                key={b.bed.id}
+                                style={[
+                                  styles.shiftBedChip,
+                                  shiftSelectedBedId === b.bed.id && styles.shiftBedChipActive,
+                                ]}
+                                onPress={() => {
+                                  setShiftSelectedBedId(b.bed.id);
+                                  if (b.rentPaise) {
+                                    setShiftNewRent(String(b.rentPaise / 100));
+                                  }
+                                }}
+                              >
+                                <Text
+                                  style={[
+                                    styles.shiftBedChipText,
+                                    shiftSelectedBedId === b.bed.id && styles.shiftBedChipTextActive,
+                                  ]}
+                                >
+                                  Room {b.roomNumber} • {b.bed.bedLabel}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                        </ScrollView>
+                      )}
+
+                      <Text style={styles.inputLabel}>MONTHLY RENT FOR NEW BED (₹)</Text>
+                      <TextInput
+                        style={styles.textInput}
+                        value={shiftNewRent}
+                        onChangeText={setShiftNewRent}
+                        keyboardType="numeric"
+                        placeholder="8500"
+                      />
+
+                      <TouchableOpacity
+                        style={[styles.saveEditBtn, (!shiftSelectedBedId || shiftingBed) && { opacity: 0.5 }]}
+                        onPress={handleConfirmShift}
+                        disabled={!shiftSelectedBedId || shiftingBed}
+                      >
+                        <Text style={styles.saveEditBtnText}>
+                          {shiftingBed ? 'Shifting Bed...' : '✓ Confirm Bed Shift & Update Rent'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={styles.actionSectionSub}>
+                      Transfer this resident to another room or bed and adjust their monthly rent.
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* ACTION SECTION 4: EDIT RESIDENT DETAILS & RENT */}
               <View style={styles.actionSectionBox}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Text style={styles.actionSectionTitle}>✏️ Resident Profile</Text>
+                  <Text style={styles.actionSectionTitle}>✏️ Resident Profile & Rent</Text>
                   <TouchableOpacity onPress={() => setIsEditingTenant(!isEditingTenant)}>
                     <Text style={{ fontSize: 12, fontWeight: '800', color: '#4f46e5' }}>
                       {isEditingTenant ? '✕ Cancel Edit' : 'Edit Details'}
@@ -915,6 +1056,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       placeholder="9876543210"
                     />
 
+                    <Text style={styles.inputLabel}>Monthly Rent (₹)</Text>
+                    <TextInput
+                      style={styles.textInput}
+                      value={editMonthlyRent}
+                      onChangeText={setEditMonthlyRent}
+                      keyboardType="numeric"
+                      placeholder="8500"
+                    />
+
                     <Text style={styles.inputLabel}>Emergency Contact</Text>
                     <TextInput
                       style={styles.textInput}
@@ -936,19 +1086,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   </View>
                 ) : (
                   <Text style={styles.actionSectionSub}>
-                    Tap 'Edit Details' above to update resident's name, mobile number or emergency contact.
+                    Tap 'Edit Details' above to update resident's name, mobile number, monthly rent or emergency contact.
                   </Text>
                 )}
               </View>
 
-              {/* ACTION SECTION 4: CHECK OUT OR DELETE RESIDENT */}
+              {/* ACTION SECTION 5: CHECK OUT OR DELETE RESIDENT */}
               <View style={{ marginTop: 12, gap: 10 }}>
-                <TouchableOpacity
-                  style={styles.checkoutBtnPrimary}
-                  onPress={() => selectedTenantForAction && handleCheckoutTenant(selectedTenantForAction)}
-                >
-                  <Text style={styles.checkoutBtnPrimaryText}>🚪 Exit / Check Out from PG</Text>
-                </TouchableOpacity>
+                {selectedTenantForAction?.active !== false && selectedTenantForAction?.stayStatus !== 'TERMINATED' && (
+                  <TouchableOpacity
+                    style={styles.checkoutBtnPrimary}
+                    onPress={() => selectedTenantForAction && handleCheckoutTenant(selectedTenantForAction)}
+                  >
+                    <Text style={styles.checkoutBtnPrimaryText}>🚪 Exit / Check Out from PG</Text>
+                  </TouchableOpacity>
+                )}
 
                 <TouchableOpacity
                   style={styles.deleteBtnOutline}
@@ -1802,5 +1954,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#64748b',
+  },
+  shiftBedChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    marginRight: 8,
+  },
+  shiftBedChipActive: {
+    backgroundColor: '#059669',
+    borderColor: '#047857',
+  },
+  shiftBedChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  shiftBedChipTextActive: {
+    color: '#ffffff',
   },
 });

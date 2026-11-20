@@ -27,6 +27,7 @@ import com.staynest.room.repository.RoomRepository;
 import com.staynest.tenant.dto.CreateTenantRequest;
 import com.staynest.tenant.dto.RecordStayRequest;
 import com.staynest.tenant.dto.TenantResponse;
+import com.staynest.tenant.dto.TransferTenantRequest;
 import com.staynest.tenant.dto.UpdateTenantRequest;
 import com.staynest.tenant.entity.Tenant;
 import com.staynest.tenant.entity.TenantStay;
@@ -85,7 +86,7 @@ public class TenantFinanceService {
         TenantStay activeStay = stays.stream()
                 .filter(s -> "ACTIVE".equalsIgnoreCase(s.getStatus()))
                 .findFirst()
-                .orElse(stays.isEmpty() ? null : stays.get(stays.size() - 1));
+                .orElse(null);
 
         if (activeStay != null) {
             res.setPropertyId(activeStay.getPropertyId());
@@ -95,7 +96,8 @@ public class TenantFinanceService {
             res.setSecurityDepositPaise(activeStay.getSecurityDepositPaise());
             res.setCheckIn(activeStay.getCheckIn());
             res.setCheckOut(activeStay.getCheckOut());
-            res.setStayStatus(activeStay.getStatus());
+            res.setStayStatus("ACTIVE");
+            res.setActive(true);
 
             if (activeStay.getPropertyId() != null) {
                 propertyRepository.findById(activeStay.getPropertyId()).ifPresent(p -> res.setPropertyName(p.getName()));
@@ -111,6 +113,27 @@ public class TenantFinanceService {
 
             if (activeStay.getBedId() != null) {
                 bedRepository.findById(activeStay.getBedId()).ifPresent(b -> res.setBedLabel(b.getBedLabel()));
+            }
+        } else {
+            // Vacated / Exited resident: explicitly clear bed and room
+            res.setActive(false);
+            res.setStayStatus("TERMINATED");
+            res.setBedId(null);
+            res.setBedLabel(null);
+            res.setRoomId(null);
+            res.setRoomNumber(null);
+            res.setFloorNumber(null);
+            res.setSharingType(null);
+            res.setMonthlyRentPaise(null);
+
+            if (!stays.isEmpty()) {
+                TenantStay lastStay = stays.get(stays.size() - 1);
+                res.setCheckIn(lastStay.getCheckIn());
+                res.setCheckOut(lastStay.getCheckOut());
+                if (lastStay.getPropertyId() != null) {
+                    propertyRepository.findById(lastStay.getPropertyId())
+                            .ifPresent(p -> res.setPropertyName(p.getName() + " (Past)"));
+                }
             }
         }
 
@@ -174,7 +197,93 @@ public class TenantFinanceService {
         if (request.getIdProofNumber() != null) tenant.setIdProofNumber(request.getIdProofNumber());
         if (request.getActive() != null) tenant.setActive(request.getActive());
 
+        if (request.getMonthlyRentPaise() != null && request.getMonthlyRentPaise() > 0) {
+            List<TenantStay> stays = tenantStayRepository.findByTenantId(tenant.getId());
+            for (TenantStay stay : stays) {
+                if ("ACTIVE".equalsIgnoreCase(stay.getStatus())) {
+                    stay.setMonthlyRentPaise(request.getMonthlyRentPaise());
+                    tenantStayRepository.save(stay);
+                }
+            }
+        }
+
         tenant = tenantRepository.save(tenant);
+        return enrichTenantResponse(tenant);
+    }
+
+    @Transactional
+    public TenantResponse transferTenant(UUID ownerId, UUID tenantId, TransferTenantRequest request) {
+        Tenant tenant = tenantRepository.findByIdAndOwnerId(tenantId, ownerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Tenant", tenantId));
+
+        Bed newBed = bedRepository.findById(request.getNewBedId())
+                .orElseThrow(() -> new ResourceNotFoundException("Bed", request.getNewBedId()));
+
+        Room newRoom = roomRepository.findById(newBed.getRoomId())
+                .orElseThrow(() -> new ResourceNotFoundException("Room", newBed.getRoomId()));
+
+        Property newProperty = propertyRepository.findById(newRoom.getPropertyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Property", newRoom.getPropertyId()));
+
+        if (!newProperty.getOwnerId().equals(ownerId)) {
+            throw new ForbiddenException("You do not own this property");
+        }
+
+        // Check if new bed is already occupied by another active resident
+        List<TenantStay> activeStaysOnNewBed = tenantStayRepository.findByBedId(newBed.getId()).stream()
+                .filter(s -> "ACTIVE".equalsIgnoreCase(s.getStatus()) && !s.getTenantId().equals(tenant.getId()))
+                .collect(Collectors.toList());
+        if (!activeStaysOnNewBed.isEmpty()) {
+            throw new BadRequestException("Selected bed is already occupied by another resident");
+        }
+
+        // 1. Free any current active bed(s) assigned to this tenant
+        List<TenantStay> existingStays = tenantStayRepository.findByTenantId(tenant.getId());
+        Long prevRent = 850000L;
+        Long prevDeposit = 850000L;
+        for (TenantStay stay : existingStays) {
+            if ("ACTIVE".equalsIgnoreCase(stay.getStatus())) {
+                prevRent = stay.getMonthlyRentPaise();
+                prevDeposit = stay.getSecurityDepositPaise();
+                if (stay.getBedId() != null && !stay.getBedId().equals(newBed.getId())) {
+                    bedRepository.findById(stay.getBedId()).ifPresent(oldBed -> {
+                        oldBed.setStatus(BedStatus.AVAILABLE);
+                        bedRepository.save(oldBed);
+                    });
+                }
+                stay.setStatus("TRANSFERRED");
+                stay.setCheckOut(LocalDate.now());
+                tenantStayRepository.save(stay);
+            }
+        }
+
+        // 2. Mark the new bed as OCCUPIED
+        newBed.setStatus(BedStatus.OCCUPIED);
+        bedRepository.save(newBed);
+
+        // 3. Determine new monthly rent
+        Long effectiveRent = request.getMonthlyRentPaise() != null && request.getMonthlyRentPaise() > 0
+                ? request.getMonthlyRentPaise()
+                : (newRoom.getRentMonthlyPaise() != null ? newRoom.getRentMonthlyPaise() : prevRent);
+
+        Long effectiveDeposit = newRoom.getDepositPaise() != null ? newRoom.getDepositPaise() : prevDeposit;
+
+        // 4. Create new active stay for the tenant
+        TenantStay newStay = new TenantStay();
+        newStay.setTenantId(tenant.getId());
+        newStay.setPropertyId(newProperty.getId());
+        newStay.setRoomId(newRoom.getId());
+        newStay.setBedId(newBed.getId());
+        newStay.setCheckIn(LocalDate.now());
+        newStay.setMonthlyRentPaise(effectiveRent);
+        newStay.setSecurityDepositPaise(effectiveDeposit);
+        newStay.setStatus("ACTIVE");
+        tenantStayRepository.save(newStay);
+
+        // 5. Ensure tenant is active
+        tenant.setActive(true);
+        tenantRepository.save(tenant);
+
         return enrichTenantResponse(tenant);
     }
 

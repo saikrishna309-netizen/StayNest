@@ -8,6 +8,7 @@ public class UpdateTenantRequest {
     private String idProofType;
     private String idProofNumber;
     private Boolean active;
+    private Long monthlyRentPaise;
 
     public UpdateTenantRequest() {
     }
@@ -66,6 +67,14 @@ public class UpdateTenantRequest {
 
     public void setActive(Boolean active) {
         this.active = active;
+    }
+
+    public Long getMonthlyRentPaise() {
+        return monthlyRentPaise;
+    }
+
+    public void setMonthlyRentPaise(Long monthlyRentPaise) {
+        this.monthlyRentPaise = monthlyRentPaise;
     }
 }
 

@@ -15,6 +15,7 @@ import com.staynest.security.UserPrincipal;
 import com.staynest.tenant.dto.CreateTenantRequest;
 import com.staynest.tenant.dto.RecordStayRequest;
 import com.staynest.tenant.dto.TenantResponse;
+import com.staynest.tenant.dto.TransferTenantRequest;
 import com.staynest.tenant.dto.UpdateTenantRequest;
 import com.staynest.tenant.entity.TenantStay;
 import io.swagger.v3.oas.annotations.Operation;
@@ -115,6 +116,15 @@ public class OwnerTenantFinanceController {
             @AuthenticationPrincipal UserPrincipal user,
             @PathVariable UUID id) {
         return ResponseEntity.ok(tenantFinanceService.checkoutTenant(user.getId(), id));
+    }
+
+    @PostMapping("/tenants/{id}/transfer")
+    @Operation(summary = "Transfer or shift tenant to another room and bed, and update monthly rent")
+    public ResponseEntity<TenantResponse> transferTenant(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id,
+            @Valid @RequestBody TransferTenantRequest request) {
+        return ResponseEntity.ok(tenantFinanceService.transferTenant(user.getId(), id, request));
     }
 
     @PostMapping("/tenants/{id}/payments")

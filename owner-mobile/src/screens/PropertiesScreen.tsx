@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
-import { Property, Room, Bed } from '../types';
+import { Property, Room, Bed, Tenant } from '../types';
 
 interface PropertiesScreenProps {
   initialProperty?: Property | null;
@@ -64,6 +64,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const [expandedRoomIds, setExpandedRoomIds] = useState<Record<string, boolean>>({});
 
   // Property Floors & Structure State
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [floors, setFloors] = useState<FloorConfig[]>([
     {
       floorNumber: 1,
@@ -242,63 +243,90 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
       setActiveProperty(targetProp);
 
-      // Check local storage for persistent floor structure for this property
-      if (typeof window !== 'undefined' && window.localStorage && targetProp?.id) {
+      // 1. Fetch live tenants to get exact real-time bed occupancy
+      let loadedTenants: Tenant[] = [];
+      try {
+        const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
+        loadedTenants = tenantRes.content || [];
+        setTenants(loadedTenants);
+      } catch {
+        // ignore
+      }
+
+      const occupiedBedIds = new Set<string>();
+      loadedTenants.forEach((t) => {
+        if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
+          occupiedBedIds.add(t.bedId);
+        }
+      });
+
+      // 2. Fetch full property rooms from API
+      let loadedFromBackend = false;
+      if (targetProp && targetProp.id && !targetProp.id.startsWith('ramesh-pg-default')) {
+        try {
+          const propData = await apiClient<Property>(`/properties/${targetProp.id}`);
+          if (propData.rooms && propData.rooms.length > 0) {
+            const floorMap = new Map<number, RoomConfig[]>();
+            propData.rooms.forEach((r) => {
+              const flNum = r.floorNumber || 1;
+              const rConfig: RoomConfig = {
+                id: r.id,
+                roomNumber: r.roomNumber,
+                floorNumber: flNum,
+                sharingType: r.sharingType || getSharingEnum(r.beds?.length || 2),
+                rentRupees: (r.rentMonthlyPaise || 850000) / 100,
+                depositRupees: (r.depositPaise || 850000) / 100,
+                ac: true,
+                attachedBathroom: true,
+                beds: (r.beds || []).map((b, idx) => ({
+                  id: b.id,
+                  bedLabel: b.bedLabel || `Bed ${idx + 1}`,
+                  status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : ((b.status as any) || 'AVAILABLE'),
+                })),
+              };
+              if (!floorMap.has(flNum)) floorMap.set(flNum, []);
+              floorMap.get(flNum)!.push(rConfig);
+            });
+
+            const sortedFloors: FloorConfig[] = Array.from(floorMap.entries())
+              .sort(([a], [b]) => a - b)
+              .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
+
+            if (sortedFloors.length > 0) {
+              setFloors(sortedFloors);
+              setOriginalFloors(JSON.parse(JSON.stringify(sortedFloors)));
+              loadedFromBackend = true;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 3. Fallback to cached floors if backend has no rooms yet
+      if (!loadedFromBackend && typeof window !== 'undefined' && window.localStorage && targetProp?.id) {
         const cached = window.localStorage.getItem(`staynest_floors_${targetProp.id}`);
         if (cached) {
           try {
             const parsed = JSON.parse(cached);
             if (Array.isArray(parsed) && parsed.length > 0) {
-              setFloors(parsed);
-              setOriginalFloors(JSON.parse(JSON.stringify(parsed)));
-              setLoading(false);
-              return;
+              const synced = parsed.map((fl: FloorConfig) => ({
+                ...fl,
+                rooms: fl.rooms.map((rm: RoomConfig) => ({
+                  ...rm,
+                  beds: rm.beds.map((b) => ({
+                    ...b,
+                    status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : (b.status || 'AVAILABLE'),
+                  })),
+                })),
+              }));
+              setFloors(synced);
+              setOriginalFloors(JSON.parse(JSON.stringify(synced)));
             }
           } catch {
             // ignore
           }
         }
-      }
-
-      // 2. Fetch full property rooms from API
-      if (targetProp && targetProp.id && !targetProp.id.startsWith('ramesh-pg-default')) {
-        const propData = await apiClient<Property>(`/properties/${targetProp.id}`);
-        if (propData.rooms && propData.rooms.length > 0) {
-          const floorMap = new Map<number, RoomConfig[]>();
-          propData.rooms.forEach((r) => {
-            const flNum = r.floorNumber || 1;
-            const rConfig: RoomConfig = {
-              id: r.id,
-              roomNumber: r.roomNumber,
-              floorNumber: flNum,
-              sharingType: r.sharingType || getSharingEnum(r.beds?.length || 2),
-              rentRupees: (r.rentMonthlyPaise || 850000) / 100,
-              depositRupees: (r.depositPaise || 850000) / 100,
-              ac: true,
-              attachedBathroom: true,
-              beds: (r.beds || []).map((b, idx) => ({
-                id: b.id,
-                bedLabel: b.bedLabel || `Bed ${idx + 1}`,
-                status: (b.status as any) || 'AVAILABLE',
-              })),
-            };
-            if (!floorMap.has(flNum)) floorMap.set(flNum, []);
-            floorMap.get(flNum)!.push(rConfig);
-          });
-
-          const sortedFloors: FloorConfig[] = Array.from(floorMap.entries())
-            .sort(([a], [b]) => a - b)
-            .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
-
-          if (sortedFloors.length > 0) {
-            setFloors(sortedFloors);
-            setOriginalFloors(JSON.parse(JSON.stringify(sortedFloors)));
-          }
-        } else {
-          setOriginalFloors(JSON.parse(JSON.stringify(floors)));
-        }
-      } else {
-        setOriginalFloors(JSON.parse(JSON.stringify(floors)));
       }
     } catch (err: any) {
       console.warn('loadPropertiesAndRooms error:', err.message);
@@ -334,21 +362,25 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     setLoading(true);
 
     try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const cached = window.localStorage.getItem(`staynest_floors_${p.id}`);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setFloors(parsed);
-            setOriginalFloors(JSON.parse(JSON.stringify(parsed)));
-            setLoading(false);
-            return;
-          }
-        }
+      let loadedTenants: Tenant[] = [];
+      try {
+        const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
+        loadedTenants = tenantRes.content || [];
+        setTenants(loadedTenants);
+      } catch {
+        // ignore
       }
 
-      const propData = await apiClient<Property>(`/properties/${p.id}`);
-      if (propData.rooms && propData.rooms.length > 0) {
+      const occupiedBedIds = new Set<string>();
+      loadedTenants.forEach((t) => {
+        if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
+          occupiedBedIds.add(t.bedId);
+        }
+      });
+
+      let loadedFromBackend = false;
+      const propData = await apiClient<Property>(`/properties/${p.id}`).catch(() => null);
+      if (propData && propData.rooms && propData.rooms.length > 0) {
         const floorMap = new Map<number, RoomConfig[]>();
         propData.rooms.forEach((r) => {
           const flNum = r.floorNumber || 1;
@@ -364,7 +396,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             beds: (r.beds || []).map((b, idx) => ({
               id: b.id,
               bedLabel: b.bedLabel || `Bed ${idx + 1}`,
-              status: (b.status as any) || 'AVAILABLE',
+              status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : ((b.status as any) || 'AVAILABLE'),
             })),
           };
           if (!floorMap.has(flNum)) floorMap.set(flNum, []);
@@ -377,6 +409,28 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (sortedFloors.length > 0) {
           setFloors(sortedFloors);
           setOriginalFloors(JSON.parse(JSON.stringify(sortedFloors)));
+          loadedFromBackend = true;
+        }
+      }
+
+      if (!loadedFromBackend && typeof window !== 'undefined' && window.localStorage) {
+        const cached = window.localStorage.getItem(`staynest_floors_${p.id}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const synced = parsed.map((fl: FloorConfig) => ({
+              ...fl,
+              rooms: fl.rooms.map((rm: RoomConfig) => ({
+                ...rm,
+                beds: rm.beds.map((b) => ({
+                  ...b,
+                  status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : (b.status || 'AVAILABLE'),
+                })),
+              })),
+            }));
+            setFloors(synced);
+            setOriginalFloors(JSON.parse(JSON.stringify(synced)));
+          }
         }
       }
     } catch {
@@ -445,6 +499,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     }
   };
 
+  // Bed to Tenant map for live occupancy display
+  const bedOccupantMap = new Map<string, Tenant>();
+  tenants.forEach((t) => {
+    if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
+      bedOccupantMap.set(t.bedId, t);
+    }
+  });
+
   // --- Dynamic Summary Calculations ---
   const totalFloors = floors.length;
   let totalRooms = 0;
@@ -459,10 +521,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     f.rooms.forEach((r) => {
       totalBeds += r.beds.length;
       r.beds.forEach((b) => {
-        if (b.status === 'AVAILABLE') availableBeds++;
-        else if (b.status === 'OCCUPIED') occupiedBeds++;
+        const isOcc = b.status === 'OCCUPIED' || bedOccupantMap.has(b.id);
+        if (isOcc) occupiedBeds++;
         else if (b.status === 'RESERVED') reservedBeds++;
         else if (b.status === 'MAINTENANCE') maintenanceBeds++;
+        else availableBeds++;
       });
     });
   });
@@ -974,8 +1037,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
                     {/* Room Rows */}
                     {floor.rooms.map((room) => {
-                      const roomAvailable = room.beds.filter((b) => b.status === 'AVAILABLE').length;
-                      const roomOccupied = room.beds.filter((b) => b.status === 'OCCUPIED').length;
+                      const roomOccupied = room.beds.filter((b) => b.status === 'OCCUPIED' || bedOccupantMap.has(b.id)).length;
+                      const roomAvailable = Math.max(0, room.beds.length - roomOccupied);
                       const isExpanded = !!expandedRoomIds[room.id];
 
                       return (
@@ -1011,22 +1074,26 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                   {roomAvailable} Available
                                 </Text>
                                 {' / '}
-                                <Text style={{ color: roomOccupied > 0 ? '#dc2626' : '#64748b' }}>
+                                <Text style={{ color: roomOccupied > 0 ? '#dc2626' : '#64748b', fontWeight: '700' }}>
                                   {roomOccupied} Occupied
                                 </Text>
                               </Text>
 
                               {/* Bed Status Dots */}
                               <View style={styles.bedDotsRow}>
-                                {room.beds.map((b) => (
-                                  <View
-                                    key={b.id}
-                                    style={[
-                                      styles.bedDot,
-                                      { backgroundColor: getStatusColor(b.status) },
-                                    ]}
-                                  />
-                                ))}
+                                {room.beds.map((b) => {
+                                  const isOcc = b.status === 'OCCUPIED' || bedOccupantMap.has(b.id);
+                                  const dotStatus = isOcc ? 'OCCUPIED' : b.status;
+                                  return (
+                                    <View
+                                      key={b.id}
+                                      style={[
+                                        styles.bedDot,
+                                        { backgroundColor: getStatusColor(dotStatus) },
+                                      ]}
+                                    />
+                                  );
+                                })}
                               </View>
                             </View>
                           </TouchableOpacity>
@@ -1048,33 +1115,45 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
                               <Text style={styles.bedsListTitle}>Individual Beds:</Text>
                               <View style={styles.bedsGrid}>
-                                {room.beds.map((b) => (
-                                  <View
-                                    key={b.id}
-                                    style={[
-                                      styles.individualBedCard,
-                                      { backgroundColor: getStatusBgColor(b.status) },
-                                    ]}
-                                  >
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                      <View
-                                        style={[
-                                          styles.bedStatusDotSmall,
-                                          { backgroundColor: getStatusColor(b.status) },
-                                        ]}
-                                      />
-                                      <Text style={styles.bedCardLabel}>{b.bedLabel}</Text>
-                                    </View>
-                                    <Text
+                                {room.beds.map((b) => {
+                                  const occupant = bedOccupantMap.get(b.id);
+                                  const isOcc = b.status === 'OCCUPIED' || !!occupant;
+                                  const cardStatus = isOcc ? 'OCCUPIED' : b.status;
+                                  return (
+                                    <View
+                                      key={b.id}
                                       style={[
-                                        styles.bedCardStatus,
-                                        { color: getStatusColor(b.status) },
+                                        styles.individualBedCard,
+                                        { backgroundColor: getStatusBgColor(cardStatus) },
                                       ]}
                                     >
-                                      {b.status}
-                                    </Text>
-                                  </View>
-                                ))}
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                          <View
+                                            style={[
+                                              styles.bedStatusDotSmall,
+                                              { backgroundColor: getStatusColor(cardStatus) },
+                                            ]}
+                                          />
+                                          <Text style={styles.bedCardLabel}>{b.bedLabel}</Text>
+                                        </View>
+                                        <Text
+                                          style={[
+                                            styles.bedCardStatus,
+                                            { color: getStatusColor(cardStatus) },
+                                          ]}
+                                        >
+                                          {cardStatus}
+                                        </Text>
+                                      </View>
+                                      {occupant && (
+                                        <Text style={styles.bedOccupantText}>
+                                          👤 {occupant.fullName}
+                                        </Text>
+                                      )}
+                                    </View>
+                                  );
+                                })}
                               </View>
                             </View>
                           )}
@@ -2518,5 +2597,11 @@ const styles = StyleSheet.create({
   },
   choicePillTextActive: {
     color: '#4338ca',
+  },
+  bedOccupantText: {
+    fontSize: 10,
+    color: '#b91c1c',
+    fontWeight: '700',
+    marginTop: 4,
   },
 });
