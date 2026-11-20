@@ -142,22 +142,22 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f6f4ee',
   },
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f4ee',
   },
   bottomNav: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fdfcf9',
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: '#e8dec8',
     paddingVertical: 10,
     paddingBottom: 16,
     justifyContent: 'space-around',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowColor: '#0c2340',
+    shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 8,
   },
@@ -172,10 +172,10 @@ const styles = StyleSheet.create({
   navLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#94a3b8',
+    color: '#78716c',
   },
   navLabelActive: {
-    color: '#4f46e5',
+    color: '#0f2b5c',
     fontWeight: '900',
   },
 });

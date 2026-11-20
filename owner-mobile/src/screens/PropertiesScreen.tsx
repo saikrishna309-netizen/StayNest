@@ -1758,15 +1758,15 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f4ee',
   },
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fdfcf9',
     paddingTop: 50,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#e8dec8',
   },
   headerTop: {
     flexDirection: 'row',

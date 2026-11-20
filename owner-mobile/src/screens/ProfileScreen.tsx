@@ -215,17 +215,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f4ee',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fdfcf9',
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#e8dec8',
   },
   backBtn: {
     paddingVertical: 6,

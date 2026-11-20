@@ -591,8 +591,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       {/* ─── 1. TOP HEADER & PROFILE / LOGOUT ─── */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.welcomeGreeting}>Welcome back,</Text>
-          <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
+          <Text style={styles.brandTitle}>
+            Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
+          </Text>
+          <Text style={styles.welcomeText}>
+            Welcome back, <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
+          </Text>
         </View>
 
         <View style={styles.headerRightActions}>
@@ -614,51 +618,82 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── 2. DETAILED FINANCIAL METRICS DASHBOARD (REQUIREMENT 2) ─── */}
-        <View style={styles.financeSummaryCard}>
-          <Text style={styles.financeCardTitle}>MONTHLY FINANCIAL SUMMARY</Text>
-
-          <View style={styles.financeGrid}>
-            <View style={styles.financeItem}>
-              <Text style={styles.financeLabel}>EXPECTED RENT</Text>
-              <Text style={styles.financeValExpected}>
-                ₹{totalExpectedRent.toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.financeSub}>{activeTenants.length} Occupied Beds</Text>
+        {/* ─── 2. KRISHNA THEME (GOLD & PEACOCK BLUE) ROUND RING FINANCIAL SUMMARY ─── */}
+        <View style={styles.krishnaFinanceCard}>
+          <View style={styles.krishnaCardHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 16 }}>🦚</Text>
+              <Text style={styles.krishnaCardTitle}>MONTHLY FINANCIAL SUMMARY</Text>
             </View>
-
-            <View style={styles.financeItem}>
-              <Text style={styles.financeLabel}>RENT COLLECTED</Text>
-              <Text style={styles.financeValCollected}>
-                ₹{totalRentCollected.toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.financeSub}>Received from Tenants</Text>
-            </View>
-
-            <View style={styles.financeItem}>
-              <Text style={styles.financeLabel}>PENDING RENT</Text>
-              <Text style={[styles.financeValPending, { color: pendingRent > 0 ? '#dc2626' : '#059669' }]}>
-                ₹{pendingRent.toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.financeSub}>{pendingRent > 0 ? 'Awaiting Payment' : 'All Clear'}</Text>
-            </View>
-
-            <View style={styles.financeItem}>
-              <Text style={styles.financeLabel}>EXPENSES PAID</Text>
-              <Text style={styles.financeValExpense}>
-                ₹{totalExpense.toLocaleString('en-IN')}
-              </Text>
-              <Text style={styles.financeSub}>{expenses.length} Records</Text>
+            <View style={styles.krishnaPillBadge}>
+              <Text style={styles.krishnaPillBadgeText}>✨ Krishna Theme</Text>
             </View>
           </View>
 
-          {/* Bottom Net Operating Surplus Row */}
-          <View style={styles.netProfitRow}>
-            <Text style={styles.netProfitLabel}>NET PROFIT / CASH FLOW:</Text>
+          {/* Central Donut / Round Ring Gauge + Side Ring Metrics */}
+          <View style={styles.ringOverviewRow}>
+            {/* Center Circular Ring */}
+            <View style={styles.circularRingOuter}>
+              <View style={styles.circularRingInner}>
+                <Text style={styles.ringPercentText}>
+                  {totalExpectedRent > 0 ? Math.round((totalRentCollected / totalExpectedRent) * 100) : 0}%
+                </Text>
+                <Text style={styles.ringCenterLabel}>COLLECTED</Text>
+                <Text style={styles.ringCenterSub}>₹{(totalRentCollected / 1000).toFixed(1)}k</Text>
+              </View>
+            </View>
+
+            {/* Quick Metrics by the Ring */}
+            <View style={styles.ringSideMetrics}>
+              <View style={styles.ringSideItem}>
+                <View style={[styles.miniRingDot, { borderColor: '#f59e0b', backgroundColor: '#d97706' }]} />
+                <View>
+                  <Text style={styles.ringSideLabel}>Rent Collected</Text>
+                  <Text style={[styles.ringSideVal, { color: '#fbbf24' }]}>
+                    ₹{totalRentCollected.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.ringSideItem}>
+                <View style={[styles.miniRingDot, { borderColor: '#38bdf8', backgroundColor: '#0284c7' }]} />
+                <View>
+                  <Text style={styles.ringSideLabel}>Expected Rent</Text>
+                  <Text style={[styles.ringSideVal, { color: '#93c5fd' }]}>
+                    ₹{totalExpectedRent.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.ringSideItem}>
+                <View style={[styles.miniRingDot, { borderColor: '#f87171', backgroundColor: '#dc2626' }]} />
+                <View>
+                  <Text style={styles.ringSideLabel}>Pending Due</Text>
+                  <Text style={[styles.ringSideVal, { color: pendingRent > 0 ? '#fca5a5' : '#86efac' }]}>
+                    ₹{pendingRent.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.ringSideItem}>
+                <View style={[styles.miniRingDot, { borderColor: '#fb7185', backgroundColor: '#e11d48' }]} />
+                <View>
+                  <Text style={styles.ringSideLabel}>Expenses Paid</Text>
+                  <Text style={[styles.ringSideVal, { color: '#fda4af' }]}>
+                    ₹{totalExpense.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* Bottom Net Profit / Surplus Banner */}
+          <View style={styles.krishnaNetProfitBanner}>
+            <Text style={styles.krishnaNetProfitLabel}>🪙 NET CASH FLOW / PROFIT:</Text>
             <Text
               style={[
-                styles.netProfitValue,
-                { color: netOperatingProfit >= 0 ? '#10b981' : '#ef4444' },
+                styles.krishnaNetProfitVal,
+                { color: netOperatingProfit >= 0 ? '#fcd34d' : '#f87171' },
               ]}
             >
               {netOperatingProfit >= 0 ? '+' : '-'}₹{Math.abs(netOperatingProfit).toLocaleString('en-IN')}
@@ -666,25 +701,69 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </View>
 
-        {/* ─── 3. QUICK ACTION BUTTONS ─── */}
+        {/* ─── 3. QUICK ACTIONS (RED & GOLD SMALL ROUND RINGS) ─── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+          <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700' }}>⚡ Shortcuts</Text>
         </View>
-        <View style={styles.actionsRow}>
+
+        <View style={styles.roundRingActionsContainer}>
+          {/* Action 1: Onboard Tenant */}
           <TouchableOpacity
-            style={styles.actionBtn}
+            style={styles.roundRingActionItem}
             onPress={() => setShowOnboardModal(true)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.actionBtnTitle}>+ Onboard Tenant</Text>
-            <Text style={styles.actionBtnSub}>Assign vacant bed & KYC</Text>
+            <View style={styles.redGoldRing}>
+              <Text style={styles.redGoldRingIcon}>👤+</Text>
+            </View>
+            <Text style={styles.roundActionTitle}>Onboard</Text>
+            <Text style={styles.roundActionSub}>Tenant</Text>
           </TouchableOpacity>
 
+          {/* Action 2: Collect Rent */}
           <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => onNavigateTab('finance')}
+            style={styles.roundRingActionItem}
+            onPress={() => {
+              if (activeTenants.length > 0) {
+                handleOpenTenantModal(activeTenants[0]);
+              } else {
+                onNavigateTab('tenants');
+              }
+            }}
+            activeOpacity={0.8}
           >
-            <Text style={styles.actionBtnTitle}>Record Expense</Text>
-            <Text style={styles.actionBtnSub}>Power, maintenance, mess</Text>
+            <View style={styles.redGoldRing}>
+              <Text style={styles.redGoldRingIcon}>💰</Text>
+            </View>
+            <Text style={styles.roundActionTitle}>Record Rent</Text>
+            <Text style={styles.roundActionSub}>Payment</Text>
+          </TouchableOpacity>
+
+          {/* Action 3: Tenants (New requested button) */}
+          <TouchableOpacity
+            style={styles.roundRingActionItem}
+            onPress={() => onNavigateTab('tenants')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.redGoldRing}>
+              <Text style={styles.redGoldRingIcon}>👥</Text>
+            </View>
+            <Text style={styles.roundActionTitle}>Tenants</Text>
+            <Text style={styles.roundActionSub}>All Residents</Text>
+          </TouchableOpacity>
+
+          {/* Action 4: Expenses (New requested button) */}
+          <TouchableOpacity
+            style={styles.roundRingActionItem}
+            onPress={() => onNavigateTab('finance')}
+            activeOpacity={0.8}
+          >
+            <View style={styles.redGoldRing}>
+              <Text style={styles.redGoldRingIcon}>📉</Text>
+            </View>
+            <Text style={styles.roundActionTitle}>Expenses</Text>
+            <Text style={styles.roundActionSub}>Log Daily</Text>
           </TouchableOpacity>
         </View>
 
@@ -1428,10 +1507,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f4ee',
   },
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fdfcf9',
     paddingTop: 50,
     paddingBottom: 16,
     paddingHorizontal: 20,
@@ -1439,18 +1518,18 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#e8dec8',
   },
   brandTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#0f2b5c',
   },
   brandAccent: {
-    color: '#4f46e5',
+    color: '#d97706',
   },
   pgTag: {
-    color: '#f59e0b',
+    color: '#ea580c',
     fontWeight: '900',
   },
   welcomeText: {
@@ -1480,89 +1559,191 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // ─── Financial Summary Banner (Requirement 2) ───
-  financeSummaryCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+  // ─── Krishna Theme (Gold & Peacock Blue) Round Ring Financial Summary ───
+  krishnaFinanceCard: {
+    backgroundColor: '#0a1d37',
+    borderRadius: 20,
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 2,
+    borderColor: '#d4af37',
+    shadowColor: '#d4af37',
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  financeCardTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#64748b',
-    letterSpacing: 0.5,
-    marginBottom: 12,
-  },
-  financeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'space-between',
-  },
-  financeItem: {
-    width: '48%',
-    backgroundColor: '#f8fafc',
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    marginBottom: 6,
-  },
-  financeLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#64748b',
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  financeValExpected: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  financeValCollected: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#059669',
-  },
-  financeValPending: {
-    fontSize: 17,
-    fontWeight: '900',
-  },
-  financeValExpense: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: '#e11d48',
-  },
-  financeSub: {
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 2,
-  },
-  netProfitRow: {
+  krishnaCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 10,
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    marginBottom: 14,
   },
-  netProfitLabel: {
+  krishnaCardTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#fef3c7',
+    letterSpacing: 0.6,
+  },
+  krishnaPillBadge: {
+    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  krishnaPillBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fde68a',
+  },
+  ringOverviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginVertical: 4,
+  },
+  circularRingOuter: {
+    width: 130,
+    height: 130,
+    borderRadius: 65,
+    borderWidth: 8,
+    borderColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(2, 132, 199, 0.15)',
+    shadowColor: '#f59e0b',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  circularRingInner: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 5,
+    borderColor: '#38bdf8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#07162c',
+  },
+  ringPercentText: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#fbbf24',
+  },
+  ringCenterLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#93c5fd',
+    letterSpacing: 0.8,
+    marginTop: 1,
+  },
+  ringCenterSub: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#334155',
+    color: '#fef08a',
+    marginTop: 1,
   },
-  netProfitValue: {
-    fontSize: 15,
+  ringSideMetrics: {
+    flex: 1,
+    marginLeft: 14,
+    gap: 6,
+  },
+  ringSideItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  miniRingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    marginRight: 8,
+  },
+  ringSideLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#cbd5e1',
+  },
+  ringSideVal: {
+    fontSize: 13,
     fontWeight: '900',
+  },
+  krishnaNetProfitBanner: {
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(212, 175, 55, 0.35)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  krishnaNetProfitLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#fde68a',
+  },
+  krishnaNetProfitVal: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  // ─── Quick Actions (Red and Gold Small Round Rings) ───
+  roundRingActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#e8dec8',
+    shadowColor: '#0c2340',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  roundRingActionItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  redGoldRing: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#991b1b',
+    borderWidth: 2.5,
+    borderColor: '#f59e0b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#d97706',
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    elevation: 4,
+    marginBottom: 6,
+  },
+  redGoldRingIcon: {
+    fontSize: 20,
+  },
+  roundActionTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  roundActionSub: {
+    fontSize: 9,
+    color: '#78716c',
+    marginTop: 1,
+    textAlign: 'center',
   },
 
   sectionHeaderRow: {
