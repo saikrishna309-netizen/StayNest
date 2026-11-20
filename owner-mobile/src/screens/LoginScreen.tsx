@@ -133,9 +133,6 @@ export const LoginScreen: React.FC = () => {
               <Text style={styles.badge}>PG OWNER APP</Text>
               <Text style={styles.versionBadge}>v1.0.0</Text>
             </View>
-            <Text style={styles.title}>
-              Stay<Text style={styles.brandTitle}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-            </Text>
             <Text style={styles.subtitle}>
               {authMode === 'PHONE_OTP'
                 ? step === 'PHONE'

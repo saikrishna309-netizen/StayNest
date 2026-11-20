@@ -17,10 +17,8 @@ export const ManagementScreen: React.FC = () => {
             resizeMode="contain"
           />
           <View>
-            <Text style={styles.brandTitle}>
-              Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-            </Text>
-            <Text style={styles.pageTitle}>PG Operations & Management</Text>
+            <Text style={styles.pageTitleBold}>Operations & Management</Text>
+            <Text style={styles.pageTitleSub}>Expenses, Rent & Resident Records</Text>
           </View>
         </View>
       </View>
@@ -71,23 +69,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: '900',
+  pageTitleBold: {
+    fontSize: 16,
+    fontWeight: '800',
     color: '#0f172a',
   },
-  brandAccent: {
-    color: '#4f46e5',
-  },
-  pgTag: {
-    color: '#f59e0b',
-    fontWeight: '900',
-  },
-  pageTitle: {
-    fontSize: 12,
+  pageTitleSub: {
+    fontSize: 11,
     color: '#64748b',
-    fontWeight: '700',
-    marginTop: 2,
+    fontWeight: '600',
+    marginTop: 1,
   },
   segmentContainer: {
     flexDirection: 'row',

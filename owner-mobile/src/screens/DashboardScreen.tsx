@@ -20,7 +20,7 @@ import { Property, Tenant, RentInvoice, Expense, Room, Bed } from '../types';
 
 interface DashboardScreenProps {
   onSelectPropertyForRooms: (property: Property) => void;
-  onNavigateTab: (tab: 'rooms' | 'tenants' | 'finance') => void;
+  onNavigateTab: (tab: 'rooms' | 'tenants' | 'finance' | 'profile') => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
@@ -43,8 +43,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [onboardFullName, setOnboardFullName] = useState('');
   const [onboardPhone, setOnboardPhone] = useState('');
   const [onboardIdProof, setOnboardIdProof] = useState('');
-  const [onboardRent, setOnboardRent] = useState('8500');
-  const [onboardDeposit, setOnboardDeposit] = useState('8500');
+  const [fixedRentAmount, setFixedRentAmount] = useState(8500);
+  const [fixedDepositAmount, setFixedDepositAmount] = useState(2500);
+  const [onboardRentPayingNow, setOnboardRentPayingNow] = useState('8500');
+  const [onboardDepositPayingNow, setOnboardDepositPayingNow] = useState('2500');
+  const [onboardPayMode, setOnboardPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [selectedBedId, setSelectedBedId] = useState('');
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [submittingOnboard, setSubmittingOnboard] = useState(false);
@@ -443,6 +446,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
     setSubmittingOnboard(true);
     try {
+      const fixedRent = fixedRentAmount || 8500;
+      const rentPayingNow = Number(onboardRentPayingNow || 0);
+      const rentDue = Math.max(0, fixedRent - rentPayingNow);
+      const depositPaying = Number(onboardDepositPayingNow || fixedDepositAmount || 2500);
+
       // 1. Create tenant profile
       const newTenant = await apiClient<Tenant>('/owner/tenants', {
         method: 'POST',
@@ -454,7 +462,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }),
       });
 
-      // 2. Allocate stay with selected bed
+      // 2. Allocate stay with selected bed & the fixed monthly rent
       if (selectedBedId && selectedPropId) {
         await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
           method: 'POST',
@@ -462,20 +470,72 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             propertyId: selectedPropId,
             roomId: selectedRoomId || undefined,
             bedId: selectedBedId,
-            monthlyRentPaise: Number(onboardRent || 8500) * 100,
-            depositPaise: Number(onboardDeposit || 8500) * 100,
+            monthlyRentPaise: fixedRent * 100,
+            securityDepositPaise: depositPaying * 100,
             checkIn: new Date().toISOString().split('T')[0],
           }),
         }).catch(() => { });
       }
 
-      Alert.alert('✓ Success', `${onboardFullName} successfully onboarded!`);
+      // 3. Create monthly rent invoice with fixed rent
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const todayDate = new Date().toISOString().split('T')[0];
+      try {
+        const invoice = await apiClient<any>('/owner/rent-invoices', {
+          method: 'POST',
+          body: JSON.stringify({
+            tenantId: newTenant.id,
+            propertyId: selectedPropId,
+            billingMonth: currentMonth,
+            rentAmountPaise: fixedRent * 100,
+            dueDate: todayDate,
+          }),
+        });
+
+        // 4. Record initial rent payment if paid
+        if (rentPayingNow > 0 && invoice?.id) {
+          await apiClient(`/owner/rent-invoices/${invoice.id}/payments`, {
+            method: 'POST',
+            body: JSON.stringify({
+              amountPaidPaise: rentPayingNow * 100,
+              paymentMethod: onboardPayMode,
+              notes: rentDue > 0
+                ? `Partial onboarding rent paid ₹${rentPayingNow}. Remaining ₹${rentDue} due.`
+                : 'Full rent paid at onboarding.',
+            }),
+          });
+        }
+      } catch (invErr) {
+        // Direct payment fallback
+        if (rentPayingNow > 0) {
+          await apiClient(`/owner/tenants/${newTenant.id}/payments`, {
+            method: 'POST',
+            body: JSON.stringify({
+              amountPaidPaise: rentPayingNow * 100,
+              paymentMethod: onboardPayMode,
+            }),
+          }).catch(() => { });
+        }
+      }
+
+      const alertMsg = rentDue > 0
+        ? `${onboardFullName} onboarded! Rent received: ₹${rentPayingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
+        : `${onboardFullName} successfully onboarded with full rent paid!`;
+
+      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+        window.alert(`✓ ${alertMsg}`);
+      } else {
+        Alert.alert('✓ Success', alertMsg);
+      }
+
       setShowOnboardModal(false);
       setOnboardFullName('');
       setOnboardPhone('');
       setOnboardIdProof('');
       setSelectedBedId('');
       setSelectedRoomId('');
+      setOnboardRentPayingNow('8500');
+      setOnboardDepositPayingNow('2500');
       loadData();
     } catch (err: any) {
       Alert.alert('Notice', err.message || 'Tenant record saved.');
@@ -487,7 +547,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   };
 
   // Available beds across all loaded properties
-  const allAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; propertyId: string; rentPaise?: number }[] = [];
+  const allAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; propertyId: string; rentPaise?: number; depositPaise?: number; floorNumber?: number }[] = [];
   Object.entries(propertyRoomsMap).forEach(([pId, rooms]) => {
     rooms.forEach((r) => {
       (r.beds || []).forEach((b) => {
@@ -499,6 +559,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             roomId: r.id,
             propertyId: pId,
             rentPaise: r.rentMonthlyPaise,
+            depositPaise: r.depositPaise,
+            floorNumber: r.floorNumber,
           });
         }
       });
@@ -506,7 +568,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   });
 
   // Available beds for selected property (strictly 1 person = 1 bed; occupied beds are hidden)
-  const modalAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number }[] = [];
+  const modalAvailableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number; depositPaise?: number; floorNumber?: number }[] = [];
   const currentPropRooms = propertyRoomsMap[selectedPropId] || [];
   currentPropRooms.forEach((r) => {
     (r.beds || []).forEach((b) => {
@@ -517,6 +579,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           roomNumber: r.roomNumber,
           roomId: r.id,
           rentPaise: r.rentMonthlyPaise,
+          depositPaise: r.depositPaise,
+          floorNumber: r.floorNumber,
         });
       }
     });
@@ -524,26 +588,25 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. TOP HEADER & LOGOUT ─── */}
+      {/* ─── 1. TOP HEADER & PROFILE / LOGOUT ─── */}
       <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
-          <View>
-            <Text style={styles.brandTitle}>
-              Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-            </Text>
-            <Text style={styles.welcomeText}>
-              Welcome back, <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
-            </Text>
-          </View>
+        <View>
+          <Text style={styles.welcomeGreeting}>Welcome back,</Text>
+          <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
+
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            style={styles.profileBtn}
+            onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
+          >
+            <Text style={styles.profileBtnText}>👤 Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logoutButton} onPress={logout}>
+            <Text style={styles.logoutText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -827,7 +890,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         { color: rentPaid ? '#059669' : '#dc2626' },
                       ]}
                     >
-                      {rentPaid ? 'Paid' : 'Due'}
+                      {rentPaid
+                        ? 'Paid'
+                        : t.outstandingPaise
+                        ? `Due ₹${(t.outstandingPaise / 100).toLocaleString('en-IN')}`
+                        : 'Due'}
                     </Text>
                   </View>
 
@@ -1189,7 +1256,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </Text>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                  {modalAvailableBeds.map(({ bed, roomNumber, roomId, rentPaise }) => {
+                  {modalAvailableBeds.map(({ bed, roomNumber, roomId, rentPaise, depositPaise }) => {
                     const isSelected = selectedBedId === bed.id;
                     return (
                       <TouchableOpacity
@@ -1198,10 +1265,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         onPress={() => {
                           setSelectedBedId(bed.id);
                           setSelectedRoomId(roomId);
-                          if (rentPaise) {
-                            setOnboardRent(String(rentPaise / 100));
-                            setOnboardDeposit(String(rentPaise / 100));
-                          }
+                          const fixedRent = rentPaise ? rentPaise / 100 : 8500;
+                          const fixedDep = depositPaise ? depositPaise / 100 : 2500;
+                          setFixedRentAmount(fixedRent);
+                          setFixedDepositAmount(fixedDep);
+                          setOnboardRentPayingNow(String(fixedRent));
+                          setOnboardDepositPayingNow(String(fixedDep));
                         }}
                       >
                         <Text style={[styles.bedChipText, isSelected && styles.bedChipTextActive]}>
@@ -1238,25 +1307,92 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 placeholder="XXXX-XXXX-XXXX"
               />
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
+              {/* FIXED RENT BANNER & PAYMENT SECTION */}
+              <View style={styles.fixedRentInfoBox}>
+                <View style={styles.fixedRentRow}>
+                  <Text style={styles.fixedRentLabel}>🏢 FIXED MONTHLY RENT:</Text>
+                  <Text style={styles.fixedRentVal}>₹{fixedRentAmount.toLocaleString('en-IN')} / mo</Text>
+                </View>
+                <View style={styles.fixedRentRow}>
+                  <Text style={styles.fixedRentLabel}>🛡️ SECURITY DEPOSIT:</Text>
+                  <Text style={styles.fixedRentVal}>₹{fixedDepositAmount.toLocaleString('en-IN')}</Text>
+                </View>
+              </View>
+
+              <Text style={styles.inputLabel}>Rent Amount Paying Now (₹) *</Text>
+              <TextInput
+                style={styles.textInput}
+                value={onboardRentPayingNow}
+                onChangeText={setOnboardRentPayingNow}
+                keyboardType="numeric"
+                placeholder={String(fixedRentAmount)}
+              />
+
+              {/* Dynamic Rent Due Indicator */}
+              {(() => {
+                const paying = Number(onboardRentPayingNow || 0);
+                const due = Math.max(0, fixedRentAmount - paying);
+                if (due > 0) {
+                  return (
+                    <View style={styles.rentDueAlertBox}>
+                      <Text style={styles.rentDueAlertTitle}>
+                        ⚠️ RENT DUE: ₹{due.toLocaleString('en-IN')}
+                      </Text>
+                      <Text style={styles.rentDueAlertSub}>
+                        Resident pays ₹{paying.toLocaleString('en-IN')} today. Remaining ₹{due.toLocaleString('en-IN')} will be marked as DUE on dashboard.
+                      </Text>
+                    </View>
+                  );
+                } else if (paying >= fixedRentAmount && fixedRentAmount > 0) {
+                  return (
+                    <View style={styles.rentPaidAlertBox}>
+                      <Text style={styles.rentPaidAlertTitle}>
+                        ✓ FULL RENT PAID (₹0 Due)
+                      </Text>
+                      <Text style={styles.rentPaidAlertSub}>
+                        Complete monthly rent of ₹{fixedRentAmount.toLocaleString('en-IN')} received.
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Monthly Rent (₹)</Text>
+                  <Text style={styles.inputLabel}>Security Deposit Paid (₹)</Text>
                   <TextInput
                     style={styles.textInput}
-                    value={onboardRent}
-                    onChangeText={setOnboardRent}
+                    value={onboardDepositPayingNow}
+                    onChangeText={setOnboardDepositPayingNow}
                     keyboardType="numeric"
+                    placeholder={String(fixedDepositAmount)}
                   />
                 </View>
 
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Deposit (₹)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={onboardDeposit}
-                    onChangeText={setOnboardDeposit}
-                    keyboardType="numeric"
-                  />
+                  <Text style={styles.inputLabel}>Payment Mode</Text>
+                  <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
+                    {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          styles.modePillSmall,
+                          onboardPayMode === mode && styles.modePillSmallActive,
+                        ]}
+                        onPress={() => setOnboardPayMode(mode)}
+                      >
+                        <Text
+                          style={[
+                            styles.modePillSmallText,
+                            onboardPayMode === mode && styles.modePillSmallTextActive,
+                          ]}
+                        >
+                          {mode === 'BANK_TRANSFER' ? 'BANK' : mode}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
                 </View>
               </View>
             </ScrollView>
@@ -1997,5 +2133,109 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     marginRight: 10,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileBtn: {
+    backgroundColor: '#ede9fe',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  profileBtnText: {
+    color: '#6d28d9',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  welcomeGreeting: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  fixedRentInfoBox: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  fixedRentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 2,
+  },
+  fixedRentLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  fixedRentVal: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  rentDueAlertBox: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  rentDueAlertTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#dc2626',
+  },
+  rentDueAlertSub: {
+    fontSize: 11,
+    color: '#991b1b',
+    marginTop: 2,
+  },
+  rentPaidAlertBox: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    borderRadius: 8,
+    padding: 10,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  rentPaidAlertTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  rentPaidAlertSub: {
+    fontSize: 11,
+    color: '#065f46',
+    marginTop: 2,
+  },
+  modePillSmall: {
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  modePillSmallActive: {
+    backgroundColor: '#4f46e5',
+    borderColor: '#4338ca',
+  },
+  modePillSmallText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modePillSmallTextActive: {
+    color: '#ffffff',
   },
 });

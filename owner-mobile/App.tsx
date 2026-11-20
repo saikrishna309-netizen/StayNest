@@ -7,11 +7,12 @@ import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { PropertiesScreen } from './src/screens/PropertiesScreen';
 import { ManagementScreen } from './src/screens/ManagementScreen';
+import { ProfileScreen } from './src/screens/ProfileScreen';
 import { Property } from './src/types';
 
 const MainNavigator: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'properties' | 'management'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'properties' | 'management' | 'profile'>('dashboard');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [registrationSkipped, setRegistrationSkipped] = useState(false);
 
@@ -42,6 +43,7 @@ const MainNavigator: React.FC = () => {
             onNavigateTab={(tab) => {
               if (tab === 'rooms') setCurrentTab('properties');
               else if (tab === 'tenants' || tab === 'finance') setCurrentTab('management');
+              else if (tab === 'profile') setCurrentTab('profile');
             }}
           />
         )}
@@ -57,7 +59,12 @@ const MainNavigator: React.FC = () => {
         {/* Tab 3: Management (Tenants, Rent, Expenses & Reports) */}
         {currentTab === 'management' && <ManagementScreen />}
 
-        {/* Bottom Navigation Bar: Dashboard, Properties, Management */}
+        {/* Tab 4: Profile (PG Owner Account & Settings) */}
+        {currentTab === 'profile' && (
+          <ProfileScreen onBackToDashboard={() => setCurrentTab('dashboard')} />
+        )}
+
+        {/* Bottom Navigation Bar: Dashboard, Properties, Management, Profile */}
         <View style={styles.bottomNav}>
           <TouchableOpacity
             style={styles.navItem}
@@ -101,6 +108,21 @@ const MainNavigator: React.FC = () => {
               ]}
             >
               Management
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navItem}
+            onPress={() => setCurrentTab('profile')}
+          >
+            <Text style={styles.navIcon}>👤</Text>
+            <Text
+              style={[
+                styles.navLabel,
+                currentTab === 'profile' && styles.navLabelActive,
+              ]}
+            >
+              Profile
             </Text>
           </TouchableOpacity>
         </View>
