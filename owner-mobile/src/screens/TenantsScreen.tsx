@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
+  Platform,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -308,31 +310,35 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
 
   // Handle Checkout
   const handleCheckout = (tenant: Tenant) => {
-    Alert.alert(
-      'Confirm Check-Out',
-      `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Check Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
-                method: 'POST',
-              });
-              Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
-              setSelectedTenantForAction(null);
-              loadData();
-            } catch (err: any) {
-              Alert.alert('Notice', err.message || 'Tenant stay updated.');
-              setSelectedTenantForAction(null);
-              loadData();
-            }
-          },
-        },
-      ]
-    );
+    const doCheckout = async () => {
+      try {
+        await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
+          method: 'POST',
+        });
+        Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully and their bed is now free.`);
+        setSelectedTenantForAction(null);
+        loadData();
+      } catch (err: any) {
+        Alert.alert('Notice', err.message || 'Tenant stay updated.');
+        setSelectedTenantForAction(null);
+        loadData();
+      }
+    };
+
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (window.confirm(`Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`)) {
+        doCheckout();
+      }
+    } else {
+      Alert.alert(
+        'Confirm Check-Out',
+        `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Check Out', style: 'destructive', onPress: doCheckout },
+        ]
+      );
+    }
   };
 
   const handleSaveTenantEdit = async () => {
@@ -390,32 +396,36 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   };
 
   const handleDeleteTenant = (tenant: Tenant) => {
-    Alert.alert(
-      '⚠️ Delete Resident?',
-      `Are you sure you want to permanently delete ${tenant.fullName}? This will delete their records and immediately release their bed back to available.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingTenant(true);
-            try {
-              await apiClient(`/owner/tenants/${tenant.id}`, {
-                method: 'DELETE',
-              });
-              Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
-              setSelectedTenantForAction(null);
-              loadData();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Could not delete resident');
-            } finally {
-              setDeletingTenant(false);
-            }
-          },
-        },
-      ]
-    );
+    const doDelete = async () => {
+      setDeletingTenant(true);
+      try {
+        await apiClient(`/owner/tenants/${tenant.id}`, {
+          method: 'DELETE',
+        });
+        Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
+        setSelectedTenantForAction(null);
+        loadData();
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Could not delete resident');
+      } finally {
+        setDeletingTenant(false);
+      }
+    };
+
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (window.confirm(`⚠️ Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`)) {
+        doDelete();
+      }
+    } else {
+      Alert.alert(
+        '⚠️ Delete Resident?',
+        `Are you sure you want to permanently delete ${tenant.fullName}? This will delete their records and immediately release their bed back to available.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete Permanently', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
   };
 
   // Active occupied bed IDs to enforce 1 person = 1 bed rule
@@ -669,12 +679,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
               : 'TN';
 
             return (
-              <View key={t.id} style={styles.tenantCard}>
-                <TouchableOpacity
-                  style={styles.tenantHeader}
-                  onPress={() => handleOpenTenantModal(t)}
-                  activeOpacity={0.7}
-                >
+              <TouchableOpacity
+                key={t.id}
+                style={styles.tenantCard}
+                onPress={() => handleOpenTenantModal(t)}
+                activeOpacity={0.85}
+              >
+                <View style={styles.tenantHeader}>
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{initials}</Text>
                   </View>
@@ -702,7 +713,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                       {isAct ? 'ACTIVE' : 'VACATED'}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </View>
 
                 {/* Stay and Room Info */}
                 <View style={styles.detailGrid}>
@@ -745,28 +756,37 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                     <View style={{ flexDirection: 'row', gap: 6 }}>
                       <TouchableOpacity
                         style={styles.cardActionBtnPay}
-                        onPress={() => handleOpenTenantModal(t)}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          handleOpenTenantModal(t);
+                        }}
                       >
                         <Text style={styles.cardActionBtnPayText}>💰 Pay</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
                         style={styles.cardActionBtnRemind}
-                        onPress={() => handleSendReminder(t)}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          handleSendReminder(t);
+                        }}
                       >
                         <Text style={styles.cardActionBtnRemindText}>🔔 Remind</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
                         style={styles.cardCheckoutBtn}
-                        onPress={() => handleCheckout(t)}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          handleCheckout(t);
+                        }}
                       >
                         <Text style={styles.cardCheckoutText}>Exit</Text>
                       </TouchableOpacity>
                     </View>
                   )}
                 </View>
-              </View>
+              </TouchableOpacity>
             );
           })
         )}

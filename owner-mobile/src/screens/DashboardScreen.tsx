@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
+  Platform,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -301,31 +303,35 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Handle Checkout Tenant
   const handleCheckoutTenant = (tenant: Tenant) => {
-    Alert.alert(
-      'Confirm Check-Out',
-      `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Check Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
-                method: 'POST',
-              });
-              Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
-              setSelectedTenantForAction(null);
-              loadData();
-            } catch (err: any) {
-              Alert.alert('Notice', err.message || 'Tenant stay updated.');
-              setSelectedTenantForAction(null);
-              loadData();
-            }
-          },
-        },
-      ]
-    );
+    const doCheckout = async () => {
+      try {
+        await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
+          method: 'POST',
+        });
+        Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
+        setSelectedTenantForAction(null);
+        loadData();
+      } catch (err: any) {
+        Alert.alert('Notice', err.message || 'Tenant stay updated.');
+        setSelectedTenantForAction(null);
+        loadData();
+      }
+    };
+
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (window.confirm(`Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`)) {
+        doCheckout();
+      }
+    } else {
+      Alert.alert(
+        'Confirm Check-Out',
+        `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Check Out', style: 'destructive', onPress: doCheckout },
+        ]
+      );
+    }
   };
 
   // Handle Save Tenant Profile Edit
@@ -386,32 +392,36 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Handle Permanently Delete Tenant
   const handleDeleteTenant = (tenant: Tenant) => {
-    Alert.alert(
-      '⚠️ Delete Resident?',
-      `Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete Permanently',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingTenant(true);
-            try {
-              await apiClient(`/owner/tenants/${tenant.id}`, {
-                method: 'DELETE',
-              });
-              Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
-              setSelectedTenantForAction(null);
-              loadData();
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Could not delete resident');
-            } finally {
-              setDeletingTenant(false);
-            }
-          },
-        },
-      ]
-    );
+    const doDelete = async () => {
+      setDeletingTenant(true);
+      try {
+        await apiClient(`/owner/tenants/${tenant.id}`, {
+          method: 'DELETE',
+        });
+        Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
+        setSelectedTenantForAction(null);
+        loadData();
+      } catch (err: any) {
+        Alert.alert('Error', err.message || 'Could not delete resident');
+      } finally {
+        setDeletingTenant(false);
+      }
+    };
+
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (window.confirm(`⚠️ Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`)) {
+        doDelete();
+      }
+    } else {
+      Alert.alert(
+        '⚠️ Delete Resident?',
+        `Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete Permanently', style: 'destructive', onPress: doDelete },
+        ]
+      );
+    }
   };
 
   // Handle Onboard Modal Submit
@@ -516,13 +526,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     <View style={styles.container}>
       {/* ─── 1. TOP HEADER & LOGOUT ─── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.brandTitle}>
-            Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-          </Text>
-          <Text style={styles.welcomeText}>
-            Welcome back, <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
-          </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View>
+            <Text style={styles.brandTitle}>
+              Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
+            </Text>
+            <Text style={styles.welcomeText}>
+              Welcome back, <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
+            </Text>
+          </View>
         </View>
         <TouchableOpacity style={styles.logoutButton} onPress={logout}>
           <Text style={styles.logoutText}>Logout</Text>
@@ -1975,5 +1992,10 @@ const styles = StyleSheet.create({
   },
   shiftBedChipTextActive: {
     color: '#ffffff',
+  },
+  headerLogo: {
+    width: 44,
+    height: 44,
+    marginRight: 10,
   },
 });

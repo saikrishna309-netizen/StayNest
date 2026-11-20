@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
 import { TenantsScreen } from './TenantsScreen';
 import { FinanceScreen } from './FinanceScreen';
 
@@ -10,11 +10,18 @@ export const ManagementScreen: React.FC = () => {
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.brandTitle}>
-            Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-          </Text>
-          <Text style={styles.pageTitle}>PG Operations & Management</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <View>
+            <Text style={styles.brandTitle}>
+              Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
+            </Text>
+            <Text style={styles.pageTitle}>PG Operations & Management</Text>
+          </View>
         </View>
       </View>
 
@@ -113,5 +120,10 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  headerLogo: {
+    width: 44,
+    height: 44,
+    marginRight: 10,
   },
 });

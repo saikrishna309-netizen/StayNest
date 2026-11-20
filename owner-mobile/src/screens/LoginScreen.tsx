@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
   StyleSheet,
@@ -123,6 +124,11 @@ export const LoginScreen: React.FC = () => {
         <View style={styles.card}>
           {/* Header */}
           <View style={styles.header}>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <View style={styles.badgeRow}>
               <Text style={styles.badge}>PG OWNER APP</Text>
               <Text style={styles.versionBadge}>v1.0.0</Text>
@@ -540,5 +546,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#64748b',
+  },
+  logoImage: {
+    width: 220,
+    height: 100,
+    alignSelf: 'center',
+    marginBottom: 8,
   },
 });
