@@ -113,8 +113,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerLogo: {
-    width: 44,
-    height: 44,
+    width: 76,
+    height: 38,
     marginRight: 10,
   },
 });

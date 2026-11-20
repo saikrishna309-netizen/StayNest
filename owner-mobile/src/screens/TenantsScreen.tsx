@@ -345,7 +345,35 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     }
   };
 
-  // Send Rent Reminder
+  // Direct 1-Tap WhatsApp Reminder
+  const handleDirectWhatsAppReminder = (tenant: Tenant) => {
+    const rentDueStr = tenant.outstandingPaise
+      ? `₹${(tenant.outstandingPaise / 100).toLocaleString('en-IN')}`
+      : tenant.monthlyRentPaise
+      ? `₹${(tenant.monthlyRentPaise / 100).toLocaleString('en-IN')}`
+      : '₹8,500';
+    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const message = `Hello ${tenant.fullName}, your monthly PG rent of ${rentDueStr} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
+    const appUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+    const webUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && window.open) {
+        window.open(webUrl, '_blank');
+      } else {
+        Linking.openURL(webUrl).catch(() => Linking.openURL(appUrl));
+      }
+    } else {
+      Linking.canOpenURL(appUrl)
+        .then((supported) => {
+          if (supported) Linking.openURL(appUrl);
+          else Linking.openURL(webUrl).catch(() => Alert.alert('Notice', `WhatsApp message prepared for ${tenant.phone}`));
+        })
+        .catch(() => Linking.openURL(webUrl));
+    }
+  };
+
+  // Send Rent Reminder Modal / Prompt
   const handleSendReminder = (tenant: Tenant) => {
     const rentDue = tenant.monthlyRentPaise ? (tenant.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500';
     const message = `Hello ${tenant.fullName}, your monthly PG rent of ₹${rentDue} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
@@ -902,13 +930,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.cardActionBtnRemind}
+                        style={[styles.cardActionBtnRemind, { backgroundColor: '#25D366' }]}
                         onPress={(e: any) => {
                           e?.stopPropagation?.();
-                          handleSendReminder(t);
+                          handleDirectWhatsAppReminder(t);
                         }}
                       >
-                        <Text style={styles.cardActionBtnRemindText}>🔔 Remind</Text>
+                        <Text style={[styles.cardActionBtnRemindText, { color: '#ffffff' }]}>💬 WhatsApp</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity

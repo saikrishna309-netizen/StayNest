@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -884,9 +885,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.brandTitle}>
-              Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-            </Text>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
             <Text style={styles.brandSub}>Property & Room Management</Text>
           </View>
 
@@ -1774,17 +1777,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  brandTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  brandAccent: {
-    color: '#4f46e5',
-  },
-  pgTag: {
-    color: '#f59e0b',
-    fontWeight: '900',
+  headerLogo: {
+    width: 130,
+    height: 44,
+    marginBottom: 2,
   },
   brandSub: {
     fontSize: 12,

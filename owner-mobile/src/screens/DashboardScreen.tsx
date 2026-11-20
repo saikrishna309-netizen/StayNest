@@ -208,6 +208,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const totalRentCollected = totalInvoicePaid > 0 ? totalInvoicePaid : tenantPaidSum;
   const pendingRent = Math.max(0, totalExpectedRent - totalRentCollected);
   const netOperatingProfit = totalRentCollected - totalExpense;
+  const collectionRate = totalExpectedRent > 0 ? Math.round((totalRentCollected / totalExpectedRent) * 100) : 0;
+
+  // Due members in front (sorted so residents with pending rent show first)
+  const sortedActiveTenants = [...activeTenants].sort((a, b) => {
+    const aDue = a.rentStatus !== 'PAID' || (a.outstandingPaise && a.outstandingPaise > 0) ? 1 : 0;
+    const bDue = b.rentStatus !== 'PAID' || (b.outstandingPaise && b.outstandingPaise > 0) ? 1 : 0;
+    if (aDue !== bDue) return bDue - aDue;
+    return (b.outstandingPaise || 0) - (a.outstandingPaise || 0);
+  });
+  const dueTenantsCount = activeTenants.filter(
+    (t) => t.rentStatus !== 'PAID' || (t.outstandingPaise && t.outstandingPaise > 0)
+  ).length;
 
   // Open Tenant Action Modal
   const handleOpenTenantModal = (tenant: Tenant) => {
@@ -279,19 +291,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         {
           text: 'Send via WhatsApp',
           onPress: () => {
-            const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
-            const url = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
-            Linking.canOpenURL(url)
-              .then((supported) => {
-                if (supported) {
-                  Linking.openURL(url);
-                } else {
-                  Alert.alert('✓ Reminder Sent!', `Notification sent successfully to ${tenant.phone}.`);
-                }
-              })
-              .catch(() => {
-                Alert.alert('✓ Reminder Sent!', `Reminder queued for ${tenant.fullName} (${tenant.phone}).`);
-              });
+            handleDirectWhatsAppReminder(tenant);
           },
         },
         {
@@ -302,6 +302,39 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         },
       ]
     );
+  };
+
+  // Direct WhatsApp Reminder for 1-Tap Action
+  const handleDirectWhatsAppReminder = (tenant: Tenant) => {
+    const rentDueStr = tenant.outstandingPaise
+      ? `₹${(tenant.outstandingPaise / 100).toLocaleString('en-IN')}`
+      : tenant.monthlyRentPaise
+      ? `₹${(tenant.monthlyRentPaise / 100).toLocaleString('en-IN')}`
+      : '₹8,500';
+    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const message = `Hello ${tenant.fullName}, this is a gentle reminder regarding your monthly PG rent of ${rentDueStr} for Room ${tenant.roomNumber || '101'}, Ramesh PG. Please pay via UPI or Cash. Thank you!`;
+    const appUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+    const webUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (typeof window !== 'undefined' && window.open) {
+        window.open(webUrl, '_blank');
+      } else {
+        Linking.openURL(webUrl).catch(() => Linking.openURL(appUrl));
+      }
+    } else {
+      Linking.canOpenURL(appUrl)
+        .then((supported) => {
+          if (supported) {
+            Linking.openURL(appUrl);
+          } else {
+            Linking.openURL(webUrl).catch(() => {
+              Alert.alert('Notice', `WhatsApp message prepared for ${tenant.phone}:\n\n"${message}"`);
+            });
+          }
+        })
+        .catch(() => Linking.openURL(webUrl));
+    }
   };
 
   // Handle Checkout Tenant
@@ -590,10 +623,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     <View style={styles.container}>
       {/* ─── 1. TOP HEADER & PROFILE / LOGOUT ─── */}
       <View style={styles.header}>
-        <View>
-          <Text style={styles.brandTitle}>
-            Stay<Text style={styles.brandAccent}>Nest</Text><Text style={styles.pgTag}>-PG</Text>
-          </Text>
+        <View style={styles.headerLeftContainer}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.dashboardLogo}
+            resizeMode="contain"
+          />
           <Text style={styles.welcomeText}>
             Welcome back, <Text style={styles.ownerName}>{user?.fullName || 'PG Owner'}</Text>
           </Text>
@@ -618,35 +653,45 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── 2. KRISHNA THEME (GOLD & PEACOCK BLUE) ROUND RING FINANCIAL SUMMARY ─── */}
-        <View style={styles.krishnaFinanceCard}>
-          <View style={styles.krishnaCardHeader}>
+        {/* ─── 2. MONTHLY FINANCIAL SUMMARY (MEDIUM BLUE & GOLD RING - INCOMPLETE RING) ─── */}
+        <View style={styles.monthlyFinanceCard}>
+          <View style={styles.financeCardHeader}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 16 }}>🦚</Text>
-              <Text style={styles.krishnaCardTitle}>MONTHLY FINANCIAL SUMMARY</Text>
+              <Text style={{ fontSize: 16 }}>💰</Text>
+              <Text style={styles.financeCardHeaderTitle}>MONTHLY FINANCIAL SUMMARY</Text>
             </View>
-            <View style={styles.krishnaPillBadge}>
-              <Text style={styles.krishnaPillBadgeText}>✨ Krishna Theme</Text>
+            <View style={styles.financePillBadge}>
+              <Text style={styles.financePillBadgeText}>📅 Current Month</Text>
             </View>
           </View>
 
-          {/* Central Donut / Round Ring Gauge + Side Ring Metrics */}
+          {/* Central Donut / Round Ring Gauge (Incomplete Arc) + Side Ring Metrics */}
           <View style={styles.ringOverviewRow}>
-            {/* Center Circular Ring */}
-            <View style={styles.circularRingOuter}>
-              <View style={styles.circularRingInner}>
-                <Text style={styles.ringPercentText}>
-                  {totalExpectedRent > 0 ? Math.round((totalRentCollected / totalExpectedRent) * 100) : 0}%
-                </Text>
-                <Text style={styles.ringCenterLabel}>COLLECTED</Text>
-                <Text style={styles.ringCenterSub}>₹{(totalRentCollected / 1000).toFixed(1)}k</Text>
+            {/* Center Circular Incomplete Ring */}
+            <View style={styles.circularRingTrack}>
+              <View
+                style={[
+                  styles.circularRingArc,
+                  {
+                    borderTopColor: '#fbbf24',
+                    borderRightColor: '#fbbf24',
+                    borderBottomColor: collectionRate >= 70 ? '#fbbf24' : 'rgba(255, 255, 255, 0.2)',
+                    borderLeftColor: 'transparent', // Incomplete open circular arc!
+                  },
+                ]}
+              >
+                <View style={styles.circularRingInner}>
+                  <Text style={styles.ringPercentText}>{collectionRate}%</Text>
+                  <Text style={styles.ringCenterLabel}>COLLECTED</Text>
+                  <Text style={styles.ringCenterSub}>₹{(totalRentCollected / 1000).toFixed(1)}k</Text>
+                </View>
               </View>
             </View>
 
             {/* Quick Metrics by the Ring */}
             <View style={styles.ringSideMetrics}>
               <View style={styles.ringSideItem}>
-                <View style={[styles.miniRingDot, { borderColor: '#f59e0b', backgroundColor: '#d97706' }]} />
+                <View style={[styles.miniRingDot, { borderColor: '#fbbf24', backgroundColor: '#d97706' }]} />
                 <View>
                   <Text style={styles.ringSideLabel}>Rent Collected</Text>
                   <Text style={[styles.ringSideVal, { color: '#fbbf24' }]}>
@@ -676,7 +721,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
 
               <View style={styles.ringSideItem}>
-                <View style={[styles.miniRingDot, { borderColor: '#fb7185', backgroundColor: '#e11d48' }]} />
+                <View style={[styles.miniRingDot, { borderColor: '#fda4af', backgroundColor: '#e11d48' }]} />
                 <View>
                   <Text style={styles.ringSideLabel}>Expenses Paid</Text>
                   <Text style={[styles.ringSideVal, { color: '#fda4af' }]}>
@@ -688,11 +733,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
 
           {/* Bottom Net Profit / Surplus Banner */}
-          <View style={styles.krishnaNetProfitBanner}>
-            <Text style={styles.krishnaNetProfitLabel}>🪙 NET CASH FLOW / PROFIT:</Text>
+          <View style={styles.netProfitBanner}>
+            <Text style={styles.netProfitBannerLabel}>🪙 NET CASH FLOW / PROFIT:</Text>
             <Text
               style={[
-                styles.krishnaNetProfitVal,
+                styles.netProfitBannerVal,
                 { color: netOperatingProfit >= 0 ? '#fcd34d' : '#f87171' },
               ]}
             >
@@ -701,7 +746,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </View>
 
-        {/* ─── 3. QUICK ACTIONS (RED & GOLD SMALL ROUND RINGS) ─── */}
+        {/* ─── 3. QUICK ACTIONS (LIGHT THEME WITH RED & GOLD SMALL ROUND RINGS) ─── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
           <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700' }}>⚡ Shortcuts</Text>
@@ -740,7 +785,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <Text style={styles.roundActionSub}>Payment</Text>
           </TouchableOpacity>
 
-          {/* Action 3: Tenants (New requested button) */}
+          {/* Action 3: Tenants (Direct shortcut to manage all tenants) */}
           <TouchableOpacity
             style={styles.roundRingActionItem}
             onPress={() => onNavigateTab('tenants')}
@@ -750,10 +795,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <Text style={styles.redGoldRingIcon}>👥</Text>
             </View>
             <Text style={styles.roundActionTitle}>Tenants</Text>
-            <Text style={styles.roundActionSub}>All Residents</Text>
+            <Text style={styles.roundActionSub}>All Records</Text>
           </TouchableOpacity>
 
-          {/* Action 4: Expenses (New requested button) */}
+          {/* Action 4: Expenses (Direct shortcut to log expenses) */}
           <TouchableOpacity
             style={styles.roundRingActionItem}
             onPress={() => onNavigateTab('finance')}
@@ -897,10 +942,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           })
         )}
 
-        {/* ─── 5. MY ACTIVE TENANTS (COMPACT BOXES - TAP TO PAY OR REMIND) ─── */}
+        {/* ─── 5. MY ACTIVE TENANTS (DUE MEMBERS IN FRONT + DIRECT WHATSAPP) ─── */}
         <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={styles.sectionTitle}>MY ACTIVE TENANTS</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.sectionTitle}>MY RESIDENTS</Text>
+            {dueTenantsCount > 0 ? (
+              <View style={styles.dueCountAlertBadge}>
+                <Text style={styles.dueCountAlertBadgeText}>⚠️ {dueTenantsCount} Due</Text>
+              </View>
+            ) : (
+              <View style={styles.allPaidBadge}>
+                <Text style={styles.allPaidBadgeText}>✓ All Paid</Text>
+              </View>
+            )}
             <View style={styles.tenantCountPill}>
               <Text style={styles.tenantCountPillText}>{activeTenants.length}</Text>
             </View>
@@ -926,8 +980,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         ) : (
           <View style={styles.compactTenantsContainer}>
-            <Text style={styles.tapTipText}>💡 Tap any resident below to record rent payment or send reminder:</Text>
-            {activeTenants.map((t) => {
+            <Text style={styles.tapTipText}>💡 Due residents appear first. Tap 💬 WhatsApp to send instant rent reminder:</Text>
+            {sortedActiveTenants.map((t) => {
               const initials = t.fullName
                 ? t.fullName
                   .split(' ')
@@ -938,25 +992,33 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 : 'TN';
 
               const rentPaid = t.rentStatus === 'PAID';
+              const hasDue = Boolean(!rentPaid || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0));
 
               return (
                 <TouchableOpacity
                   key={t.id}
-                  style={styles.compactTenantBox}
+                  style={[
+                    styles.compactTenantBox,
+                    hasDue && styles.compactTenantBoxDue,
+                  ]}
                   onPress={() => handleOpenTenantModal(t)}
                   activeOpacity={0.7}
                 >
-                  <View style={styles.compactAvatar}>
+                  <View style={[styles.compactAvatar, hasDue && { backgroundColor: '#dc2626' }]}>
                     <Text style={styles.compactAvatarText}>{initials}</Text>
                   </View>
 
                   <View style={{ flex: 1, marginLeft: 10 }}>
-                    <Text style={styles.compactTenantName}>{t.fullName}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={styles.compactTenantName}>{t.fullName}</Text>
+                      {hasDue && <Text style={{ fontSize: 10 }}>🔴</Text>}
+                    </View>
                     <Text style={styles.compactTenantSub}>
                       Floor {t.floorNumber || 1} • Room {t.roomNumber || '101'} • {t.bedLabel || 'Bed 1'}
                     </Text>
                   </View>
 
+                  {/* Rent Due / Paid Badge */}
                   <View
                     style={[
                       styles.rentStatusSmallPill,
@@ -976,6 +1038,19 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         : 'Due'}
                     </Text>
                   </View>
+
+                  {/* Direct WhatsApp Reminder Button */}
+                  <TouchableOpacity
+                    style={styles.directWhatsAppBtn}
+                    onPress={(e: any) => {
+                      e?.stopPropagation?.();
+                      handleDirectWhatsAppReminder(t);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.directWhatsAppIcon}>💬</Text>
+                    <Text style={styles.directWhatsAppText}>WhatsApp</Text>
+                  </TouchableOpacity>
 
                   <Text style={styles.chevronSmall}>›</Text>
                 </TouchableOpacity>
@@ -1520,17 +1595,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e8dec8',
   },
-  brandTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#0f2b5c',
+  headerLeftContainer: {
+    justifyContent: 'center',
+    alignItems: 'flex-start',
   },
-  brandAccent: {
-    color: '#d97706',
-  },
-  pgTag: {
-    color: '#ea580c',
-    fontWeight: '900',
+  dashboardLogo: {
+    width: 140,
+    height: 46,
+    marginBottom: 2,
   },
   welcomeText: {
     fontSize: 12,
@@ -1559,43 +1631,43 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // ─── Krishna Theme (Gold & Peacock Blue) Round Ring Financial Summary ───
-  krishnaFinanceCard: {
-    backgroundColor: '#0a1d37',
+  // ─── Monthly Financial Summary (Medium Blue & Radiant Gold Incomplete Ring) ───
+  monthlyFinanceCard: {
+    backgroundColor: '#1e3a8a', // Medium blue - reduced darkness!
     borderRadius: 20,
     padding: 16,
     marginBottom: 16,
     borderWidth: 2,
-    borderColor: '#d4af37',
-    shadowColor: '#d4af37',
-    shadowOpacity: 0.18,
+    borderColor: '#f59e0b',
+    shadowColor: '#1e3a8a',
+    shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 4,
   },
-  krishnaCardHeader: {
+  financeCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 14,
   },
-  krishnaCardTitle: {
+  financeCardHeaderTitle: {
     fontSize: 12,
     fontWeight: '900',
     color: '#fef3c7',
     letterSpacing: 0.6,
   },
-  krishnaPillBadge: {
-    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+  financePillBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.25)',
     borderWidth: 1,
-    borderColor: '#f59e0b',
+    borderColor: '#fbbf24',
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 12,
   },
-  krishnaPillBadgeText: {
+  financePillBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#fde68a',
+    color: '#fef08a',
   },
   ringOverviewRow: {
     flexDirection: 'row',
@@ -1603,29 +1675,29 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginVertical: 4,
   },
-  circularRingOuter: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    borderWidth: 8,
-    borderColor: '#f59e0b',
+  circularRingTrack: {
+    width: 124,
+    height: 124,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(2, 132, 199, 0.15)',
-    shadowColor: '#f59e0b',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 3,
+  },
+  circularRingArc: {
+    width: 124,
+    height: 124,
+    borderRadius: 62,
+    borderWidth: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '-45deg' }],
   },
   circularRingInner: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    borderWidth: 5,
-    borderColor: '#38bdf8',
+    width: 98,
+    height: 98,
+    borderRadius: 49,
+    backgroundColor: '#172554',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#07162c',
+    transform: [{ rotate: '45deg' }], // Keeps text upright!
   },
   ringPercentText: {
     fontSize: 22,
@@ -1653,12 +1725,12 @@ const styles = StyleSheet.create({
   ringSideItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
   miniRingDot: {
     width: 12,
@@ -1670,27 +1742,27 @@ const styles = StyleSheet.create({
   ringSideLabel: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#cbd5e1',
+    color: '#e2e8f0',
   },
   ringSideVal: {
     fontSize: 13,
     fontWeight: '900',
   },
-  krishnaNetProfitBanner: {
+  netProfitBanner: {
     marginTop: 14,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(212, 175, 55, 0.35)',
+    borderTopColor: 'rgba(245, 158, 11, 0.4)',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  krishnaNetProfitLabel: {
+  netProfitBannerLabel: {
     fontSize: 11,
     fontWeight: '800',
     color: '#fde68a',
   },
-  krishnaNetProfitVal: {
+  netProfitBannerVal: {
     fontSize: 16,
     fontWeight: '900',
   },
@@ -1972,6 +2044,59 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.02,
     shadowRadius: 3,
     elevation: 1,
+  },
+  compactTenantBoxDue: {
+    backgroundColor: '#fffbeb',
+    borderColor: '#fcd34d',
+    borderWidth: 1.5,
+  },
+  dueCountAlertBadge: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  dueCountAlertBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#dc2626',
+  },
+  allPaidBadge: {
+    backgroundColor: '#ecfdf5',
+    borderWidth: 1,
+    borderColor: '#a7f3d0',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  allPaidBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  directWhatsAppBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#25D366',
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 4,
+    marginRight: 6,
+    shadowColor: '#16a34a',
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  directWhatsAppIcon: {
+    fontSize: 12,
+  },
+  directWhatsAppText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ffffff',
   },
   compactAvatar: {
     width: 32,
