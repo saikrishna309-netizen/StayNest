@@ -653,7 +653,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </View>
 
-      {/* ─── TOP NAVIGATION PILL TABS (IMAGE 1 STYLE) ─── */}
+      {/* ─── TOP NAVIGATION PILL TABS (IMAGE 2 STYLE) ─── */}
       <View style={styles.topNavPillContainer}>
         <ScrollView
           horizontal
@@ -661,16 +661,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           contentContainerStyle={styles.topNavPillRow}
         >
           <TouchableOpacity style={[styles.navPill, styles.navPillActive]}>
-            <Text style={styles.navPillIconActive}>📊</Text>
+            <Text style={styles.navPillIconActive}>⊞</Text>
             <Text style={styles.navPillTextActive}>Dashboard</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.navPill}
-            onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
-          >
-            <Text style={styles.navPillIcon}>🏢</Text>
-            <Text style={styles.navPillText}>Rooms Management</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -678,15 +670,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}
           >
             <Text style={styles.navPillIcon}>👥</Text>
-            <Text style={styles.navPillText}>Guest / Tenants</Text>
+            <Text style={styles.navPillText}>Tenants</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navPill}
+            onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
+          >
+            <Text style={styles.navPillIcon}>🏢</Text>
+            <Text style={styles.navPillText}>Rooms</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.navPill}
             onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
           >
-            <Text style={styles.navPillIcon}>💳</Text>
-            <Text style={styles.navPillText}>Payments</Text>
+            <Text style={styles.navPillIcon}>💵</Text>
+            <Text style={styles.navPillText}>Rent</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -694,7 +694,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
           >
             <Text style={styles.navPillIcon}>👤</Text>
-            <Text style={styles.navPillText}>Profile</Text>
+            <Text style={styles.navPillText}>Accounts</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -704,289 +704,128 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── 2. 4 TOP KPI METRIC CARDS (IMAGE 1 STYLE) ─── */}
+        {/* ─── 2. 4 TOP KPI METRIC CARDS (VERY LIGHT & SOFT COLORS) ─── */}
         <View style={styles.kpiGrid}>
-          {/* Card 1: Total Booking / Expected Rent */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiIconCircle}>
-              <Text style={{ fontSize: 13 }}>📦</Text>
+          {/* Card 1: Total Expected Rent (Soft Light Blue) */}
+          <View style={[styles.kpiCard, { backgroundColor: '#f0f7ff', borderColor: '#dbeafe' }]}>
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#e0f2fe' }]}>
+              <Text style={{ fontSize: 14 }}>💵</Text>
             </View>
             <Text style={styles.kpiValue}>
               ₹{totalExpectedRent > 0 ? totalExpectedRent.toLocaleString('en-IN') : '24,890'}
             </Text>
-            <Text style={styles.kpiLabel}>Total Booking</Text>
+            <Text style={styles.kpiLabel}>Total Expected</Text>
           </View>
 
-          {/* Card 2: New Booking / Rent Collected */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiIconCircle}>
-              <Text style={{ fontSize: 13 }}>📦</Text>
+          {/* Card 2: Rent Collected (Soft Light Green) */}
+          <View style={[styles.kpiCard, { backgroundColor: '#f0fdf4', borderColor: '#dcfce7' }]}>
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#dcfce7' }]}>
+              <Text style={{ fontSize: 14 }}>💰</Text>
             </View>
-            <Text style={styles.kpiValue}>
+            <Text style={[styles.kpiValue, { color: '#15803d' }]}>
               ₹{totalRentCollected > 0 ? totalRentCollected.toLocaleString('en-IN') : '12,890'}
             </Text>
-            <Text style={styles.kpiLabel}>New Booking</Text>
+            <Text style={styles.kpiLabel}>Rent Collected</Text>
           </View>
 
-          {/* Card 3: Check in / Occupied Beds */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiIconCircle}>
-              <Text style={{ fontSize: 13, color: '#f97316' }}>↘</Text>
+          {/* Card 3: Occupied Beds (Soft Light Amber) */}
+          <View style={[styles.kpiCard, { backgroundColor: '#fffbeb', borderColor: '#fef3c7' }]}>
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#fef3c7' }]}>
+              <Text style={{ fontSize: 14 }}>🛏️</Text>
             </View>
             <Text style={styles.kpiValue}>
-              {activeTenants.length > 0 ? activeTenants.length : '754'}
+              {activeTenants.length > 0 ? activeTenants.length : '18'}
             </Text>
-            <Text style={styles.kpiLabel}>Check in</Text>
+            <Text style={styles.kpiLabel}>Occupied Beds</Text>
           </View>
 
-          {/* Card 4: Check out / Available Beds */}
-          <View style={styles.kpiCard}>
-            <View style={styles.kpiIconCircle}>
-              <Text style={{ fontSize: 13, color: '#0ea5e9' }}>↙</Text>
+          {/* Card 4: Available Beds (Soft Light Purple) */}
+          <View style={[styles.kpiCard, { backgroundColor: '#faf5ff', borderColor: '#f3e8ff' }]}>
+            <View style={[styles.kpiIconCircle, { backgroundColor: '#f3e8ff' }]}>
+              <Text style={{ fontSize: 14 }}>🚪</Text>
             </View>
-            <Text style={styles.kpiValue}>
-              {availableBeds > 0 ? availableBeds : '1216'}
+            <Text style={[styles.kpiValue, { color: '#7c3aed' }]}>
+              {availableBeds > 0 ? availableBeds : '6'}
             </Text>
-            <Text style={styles.kpiLabel}>Check out</Text>
+            <Text style={styles.kpiLabel}>Available Beds</Text>
           </View>
         </View>
 
-        {/* ─── 3. MIDDLE ROW: RESERVATION STATS BAR CHART + REPORT SUMMARY ─── */}
-        <View style={styles.middleRow}>
-          {/* Left: Reservation Stats Chart */}
-          <View style={styles.reservationStatsCard}>
-            <View style={styles.cardHeaderRow}>
-              <View>
-                <Text style={styles.cardSectionTitle}>Reservation Stats</Text>
-                <View style={styles.statsLegendRow}>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#ff7337' }]} />
-                    <Text style={styles.legendText}>Check in {activeTenants.length || 1712}</Text>
-                  </View>
-                  <View style={styles.legendItem}>
-                    <View style={[styles.legendDot, { backgroundColor: '#fed7aa' }]} />
-                    <Text style={styles.legendText}>Check out {availableBeds || 1216}</Text>
-                  </View>
-                </View>
-              </View>
+        {/* ─── 3. RENT STATUS DONUT RING (IMAGE 1 STYLE) ─── */}
+        <View style={styles.rentStatusCard}>
+          <Text style={styles.rentStatusCardTitle}>Rent status</Text>
 
-              <View style={styles.dropdownPill}>
-                <Text style={styles.dropdownPillText}>Weekly ▾</Text>
+          {/* Donut Ring with Floating Percentage Badges */}
+          <View style={styles.donutRingWrapper}>
+            {/* Outer Donut Ring */}
+            <View style={styles.donutOuterRing}>
+              {/* Inner Center Circle */}
+              <View style={styles.donutInnerCircle}>
+                <Text style={styles.donutCenterValue}>
+                  ₹{totalRentCollected > 0 ? totalRentCollected.toLocaleString('en-IN') : '12,890'}
+                </Text>
+                <Text style={styles.donutCenterLabel}>COLLECTED</Text>
+                <Text style={styles.donutCenterSub}>
+                  {collectionRate > 0 ? collectionRate : 65}% Paid
+                </Text>
               </View>
             </View>
 
-            {/* 7 Vertical Bar Columns for Sun to Sat */}
-            <View style={styles.barChartContainer}>
-              {[
-                { day: 'Sun', inH: 50, outH: 30, capH: 15 },
-                { day: 'Mon', inH: 35, outH: 45, capH: 20 },
-                { day: 'Tue', inH: 40, outH: 25, capH: 35 },
-                { day: 'Wed', inH: 30, outH: 35, capH: 35 },
-                { day: 'Thu', inH: 55, outH: 35, capH: 10 },
-                { day: 'Fri', inH: 45, outH: 20, capH: 35 },
-                { day: 'Sat', inH: 50, outH: 30, capH: 20 },
-              ].map((bar, idx) => (
-                <View key={idx} style={styles.barColumn}>
-                  <View style={styles.barPillar}>
-                    {/* Top striped cap */}
-                    <View style={[styles.barSegmentCap, { height: bar.capH }]} />
-                    {/* Middle peach segment */}
-                    <View style={[styles.barSegmentPeach, { height: bar.outH }]} />
-                    {/* Bottom orange pillar */}
-                    <View style={[styles.barSegmentOrange, { height: bar.inH }]} />
-                  </View>
-                  <Text style={styles.barDayText}>{bar.day}</Text>
-                </View>
-              ))}
+            {/* Floating Badge 1: Unpaid (Purple, Top-Right) */}
+            <View style={styles.donutBadgeUnpaid}>
+              <Text style={styles.donutBadgeText}>
+                {collectionRate > 0 ? Math.max(0, 100 - collectionRate) : 35}%
+              </Text>
+            </View>
+
+            {/* Floating Badge 2: Paid (Green, Bottom-Left) */}
+            <View style={styles.donutBadgePaid}>
+              <Text style={styles.donutBadgeText}>
+                {collectionRate > 0 ? collectionRate : 65}%
+              </Text>
             </View>
           </View>
 
-          {/* Right: Let StayNest Generate Your Annual Report Easily */}
-          <View style={styles.reportSummaryCard}>
-            <View style={styles.reportHeaderRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={styles.reportTitle}>Let StayNest Generate Your Annual Report Easily</Text>
-                <Text style={styles.reportSub}>Live occupancy, revenue & expense tracking</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.blackCircleActionBtn}
-                onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
-              >
-                <Text style={styles.blackCircleActionIcon}>↗</Text>
-              </TouchableOpacity>
+          {/* Legend Below the Ring */}
+          <View style={styles.rentStatusLegendRow}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColorDot, { backgroundColor: '#bef264' }]} />
+              <Text style={styles.legendLabelText}>
+                Paid: ₹{totalRentCollected.toLocaleString('en-IN')}
+              </Text>
             </View>
-
-            {/* 2x2 Stats Grid */}
-            <View style={styles.reportStatsGrid}>
-              <View style={styles.reportStatItem}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 16 }}>🛎️</Text>
-                  <Text style={styles.reportStatVal}>569</Text>
-                </View>
-                <Text style={styles.reportStatLabel}>Total Concierge</Text>
-              </View>
-
-              <View style={styles.reportStatItem}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 16 }}>👤</Text>
-                  <Text style={styles.reportStatVal}>{activeTenants.length || '2342'}</Text>
-                </View>
-                <Text style={styles.reportStatLabel}>Total Customer</Text>
-              </View>
-
-              <View style={styles.reportStatItem}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 16 }}>🛏️</Text>
-                  <Text style={styles.reportStatVal}>{totalRoomsCount || '992'}</Text>
-                </View>
-                <Text style={styles.reportStatLabel}>Total Room</Text>
-              </View>
-
-              <View style={styles.reportStatItem}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 16 }}>🔄</Text>
-                  <Text style={styles.reportStatVal}>₹{(totalRentCollected / 1000).toFixed(0)}k</Text>
-                </View>
-                <Text style={styles.reportStatLabel}>Total Transition</Text>
-              </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendColorDot, { backgroundColor: '#c4b5fd' }]} />
+              <Text style={styles.legendLabelText}>
+                Unpaid: ₹{pendingRent.toLocaleString('en-IN')}
+              </Text>
             </View>
           </View>
         </View>
 
-        {/* ─── 4. BOTTOM ROW: CALENDAR + RECENT BOOKINGS + SEMI-CIRCULAR GAUGES ─── */}
-        <View style={styles.bottomRow}>
-          {/* 1. Mini Calendar Widget */}
-          <View style={styles.calendarCard}>
-            <View style={styles.calendarHeaderRow}>
-              <Text style={styles.calNavArrow}>‹</Text>
-              <Text style={styles.calendarMonthText}>November 2026</Text>
-              <Text style={styles.calNavArrow}>›</Text>
-            </View>
-            <View style={styles.calendarWeekRow}>
-              {['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'].map((d) => (
-                <Text key={d} style={styles.calendarWeekDay}>{d}</Text>
-              ))}
-            </View>
-            <View style={styles.calendarDaysGrid}>
-              {[
-                1, 2, 3, 4, 5, 6, 7,
-                8, 9, 10, 11, 12, 13, 14,
-                15, 16, 17, 18, 19, 20, 21,
-                22, 23, 24, 25, 26, 27, 28,
-              ].map((num, i) => {
-                const isSelected = num === 21 || num === 11;
-                return (
-                  <View key={i} style={[styles.calDayBox, isSelected && styles.calDayBoxSelected]}>
-                    <Text style={[styles.calDayText, isSelected && styles.calDayTextSelected]}>
-                      {num}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* 2. Recent Bookings / Resident Activity List */}
-          <View style={styles.recentBookingsCard}>
-            <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardSectionTitle}>Recent Bookings</Text>
-              <TouchableOpacity onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}>
-                <Text style={styles.viewAllOrangeText}>View All ›</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.bookingList}>
-              {sortedActiveTenants.length === 0 ? (
-                <View style={{ padding: 12, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 12, color: '#64748b' }}>No active bookings yet.</Text>
-                </View>
-              ) : (
-                sortedActiveTenants.slice(0, 3).map((t, idx) => {
-                  const rentPaid = t.rentStatus === 'PAID';
-                  const hasDue = Boolean(!rentPaid || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0));
-                  return (
-                    <TouchableOpacity
-                      key={t.id || idx}
-                      style={styles.bookingItemRow}
-                      onPress={() => handleOpenTenantModal(t)}
-                    >
-                      <View style={styles.roomThumbBox}>
-                        <Text style={{ fontSize: 18 }}>🛏️</Text>
-                      </View>
-                      <View style={{ flex: 1, marginLeft: 10 }}>
-                        <Text style={styles.bookingRoomTitle}>
-                          {t.bedLabel ? `${t.bedLabel} - Room ${t.roomNumber || '101'}` : `Queen Bed A-${t.roomNumber || '101'}`}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                          <Text style={styles.bookingGuestAvatar}>👤</Text>
-                          <Text style={styles.bookingGuestName}>{t.fullName}</Text>
-                          <Text style={styles.bookingTimeAgo}>• Active</Text>
-                        </View>
-                      </View>
-
-                      {/* WhatsApp Action Button */}
-                      <TouchableOpacity
-                        style={styles.whatsappMiniBtn}
-                        onPress={(e: any) => {
-                          e?.stopPropagation?.();
-                          handleDirectWhatsAppReminder(t);
-                        }}
-                      >
-                        <Text style={{ fontSize: 12 }}>💬</Text>
-                      </TouchableOpacity>
-
-                      {/* Due Badge */}
-                      <View style={[styles.dueMiniBadge, { backgroundColor: hasDue ? '#fee2e2' : '#dcfce7' }]}>
-                        <Text style={[styles.dueMiniText, { color: hasDue ? '#dc2626' : '#15803d' }]}>
-                          {hasDue ? `Due` : 'Paid'}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </View>
-          </View>
-
-          {/* 3. Semi-Circular Gauge Charts */}
-          <View style={styles.gaugeContainer}>
-            {/* Gauge 1: Available Room Today */}
-            <View style={styles.gaugeCard}>
-              <Text style={styles.gaugeTitle}>Available Room Today</Text>
-              <View style={styles.semiCircleWrapper}>
-                <View style={styles.semiCircleArcOrange}>
-                  <View style={styles.semiCircleInner}>
-                    <Text style={styles.gaugeCenterNum}>{availableBeds || '683'}</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Gauge 2: Sold Out Room Today */}
-            <View style={styles.gaugeCard}>
-              <Text style={styles.gaugeTitle}>Sold Out Room Today</Text>
-              <View style={styles.semiCircleWrapper}>
-                <View style={styles.semiCircleArcPeach}>
-                  <View style={styles.semiCircleInner}>
-                    <Text style={styles.gaugeCenterNum}>{occupancyRate || '85'}%</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-          </View>
+        {/* ─── 4. QUICK ACTIONS (REPLACED RECENT RESERVATION, IMAGE STYLE) ─── */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
+          <Text style={{ fontSize: 11, color: '#ff7337', fontWeight: '800' }}>⚡ Shortcuts</Text>
         </View>
 
-        {/* ─── 5. QUICK ACTIONS BAR ─── */}
-        <View style={styles.quickActionPillsRow}>
+        <View style={styles.quickActionsContainer}>
+          {/* Action 1: Onboard Tenant */}
           <TouchableOpacity
-            style={styles.quickActionOrangePill}
+            style={styles.quickActionItem}
             onPress={() => setShowOnboardModal(true)}
+            activeOpacity={0.8}
           >
-            <Text style={styles.quickActionOrangePillText}>+ Onboard Tenant</Text>
+            <View style={[styles.actionRingCircle, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
+              <Text style={{ fontSize: 20 }}>👤+</Text>
+            </View>
+            <Text style={styles.actionItemTitle}>Onboard</Text>
+            <Text style={styles.actionItemSub}>Tenant</Text>
           </TouchableOpacity>
 
+          {/* Action 2: Record Rent */}
           <TouchableOpacity
-            style={styles.quickActionWhitePill}
+            style={styles.quickActionItem}
             onPress={() => {
               if (activeTenants.length > 0) {
                 handleOpenTenantModal(activeTenants[0]);
@@ -994,24 +833,136 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 onNavigateTab ? onNavigateTab('tenants') : null;
               }
             }}
+            activeOpacity={0.8}
           >
-            <Text style={styles.quickActionWhitePillText}>💰 Record Rent</Text>
+            <View style={[styles.actionRingCircle, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
+              <Text style={{ fontSize: 20 }}>💰</Text>
+            </View>
+            <Text style={styles.actionItemTitle}>Record Rent</Text>
+            <Text style={styles.actionItemSub}>Payment</Text>
           </TouchableOpacity>
 
+          {/* Action 3: All Tenants */}
           <TouchableOpacity
-            style={styles.quickActionWhitePill}
-            onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
+            style={styles.quickActionItem}
+            onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}
+            activeOpacity={0.8}
           >
-            <Text style={styles.quickActionWhitePillText}>🏢 Rooms</Text>
+            <View style={[styles.actionRingCircle, { backgroundColor: '#faf5ff', borderColor: '#e9d5ff' }]}>
+              <Text style={{ fontSize: 20 }}>👥</Text>
+            </View>
+            <Text style={styles.actionItemTitle}>Tenants</Text>
+            <Text style={styles.actionItemSub}>Directory</Text>
           </TouchableOpacity>
 
+          {/* Action 4: Expenses */}
           <TouchableOpacity
-            style={styles.quickActionWhitePill}
+            style={styles.quickActionItem}
             onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
+            activeOpacity={0.8}
           >
-            <Text style={styles.quickActionWhitePillText}>📉 Expenses</Text>
+            <View style={[styles.actionRingCircle, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
+              <Text style={{ fontSize: 20 }}>📉</Text>
+            </View>
+            <Text style={styles.actionItemTitle}>Expenses</Text>
+            <Text style={styles.actionItemSub}>Log Daily</Text>
           </TouchableOpacity>
         </View>
+
+        {/* ─── 5. TENANTS DIRECTORY (SIMPLE BOX TYPE, REQUIREMENT 1) ─── */}
+        <View style={[styles.sectionHeaderRow, { marginTop: 16 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.sectionTitle}>MY RESIDENTS</Text>
+            {dueTenantsCount > 0 ? (
+              <View style={styles.dueCountAlertBadge}>
+                <Text style={styles.dueCountAlertBadgeText}>⚠️ {dueTenantsCount} Due</Text>
+              </View>
+            ) : (
+              <View style={styles.allPaidBadge}>
+                <Text style={styles.allPaidBadgeText}>✓ All Clear</Text>
+              </View>
+            )}
+          </View>
+
+          <TouchableOpacity onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}>
+            <Text style={styles.viewAllOrangeText}>View All ({activeTenants.length}) ›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Grid of Box-Type Tenant Cards (Classic Look) */}
+        {sortedActiveTenants.length === 0 ? (
+          <View style={styles.emptyTenantBox}>
+            <Text style={{ fontSize: 24, marginBottom: 4 }}>👥</Text>
+            <Text style={styles.emptyTenantBoxTitle}>No Residents Registered</Text>
+            <Text style={styles.emptyTenantBoxSub}>Tap '+ Onboard Tenant' above to assign a bed.</Text>
+          </View>
+        ) : (
+          <View style={styles.tenantBoxGrid}>
+            {sortedActiveTenants.map((t) => {
+              const rentPaid = t.rentStatus === 'PAID';
+              const hasDue = Boolean(!rentPaid || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0));
+              const dueAmount = t.outstandingPaise ? Math.round(t.outstandingPaise / 100) : 2500;
+
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={[
+                    styles.tenantBoxCard,
+                    hasDue && styles.tenantBoxCardDue,
+                  ]}
+                  onPress={() => handleOpenTenantModal(t)}
+                  activeOpacity={0.75}
+                >
+                  {/* Top Row: Avatar & Status Badge */}
+                  <View style={styles.tenantBoxTopRow}>
+                    <View style={[styles.tenantBoxAvatarCircle, hasDue && { backgroundColor: '#fee2e2' }]}>
+                      <Text style={{ fontSize: 13 }}>{hasDue ? '⚠️' : '👤'}</Text>
+                    </View>
+
+                    <View
+                      style={[
+                        styles.tenantBoxDueBadge,
+                        { backgroundColor: hasDue ? '#fee2e2' : '#dcfce7' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.tenantBoxDueText,
+                          { color: hasDue ? '#dc2626' : '#15803d' },
+                        ]}
+                      >
+                        {hasDue ? `₹${dueAmount.toLocaleString('en-IN')} Due` : 'Paid'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Tenant Name */}
+                  <Text style={styles.tenantBoxName} numberOfLines={1}>
+                    {t.fullName}
+                  </Text>
+
+                  {/* Room & Bed Details */}
+                  <Text style={styles.tenantBoxRoomSub} numberOfLines={1}>
+                    Room {t.roomNumber || '101'} • {t.bedLabel || 'Bed 1'}
+                  </Text>
+
+                  {/* One-Click Direct WhatsApp Reminder Button */}
+                  <TouchableOpacity
+                    style={styles.tenantBoxWhatsAppBtn}
+                    onPress={(e: any) => {
+                      e?.stopPropagation?.();
+                      handleDirectWhatsAppReminder(t);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 12 }}>💬</Text>
+                    <Text style={styles.tenantBoxWhatsAppText}>Remind</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       {/* ─── MODAL 1: TENANT DETAILS, RECORD PAYMENT & SEND REMINDER (REQUIREMENT 1) ─── */}
@@ -1696,406 +1647,278 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-  // ─── Middle Row: Reservation Stats & Annual Report ───
-  middleRow: {
-    gap: 14,
-    marginBottom: 16,
-  },
-  reservationStatsCard: {
+  // ─── Rent Status Donut Ring (Image 1 Style) ───
+  rentStatusCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1,
     borderColor: '#f1f5f9',
+    marginBottom: 16,
     shadowColor: '#000',
     shadowOpacity: 0.03,
     shadowRadius: 8,
     elevation: 2,
+    alignItems: 'center',
   },
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 14,
+  rentStatusCardTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+    alignSelf: 'flex-start',
+    marginBottom: 8,
   },
-  cardSectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+  donutRingWrapper: {
+    width: 180,
+    height: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginVertical: 10,
+  },
+  donutOuterRing: {
+    width: 154,
+    height: 154,
+    borderRadius: 77,
+    borderWidth: 24,
+    borderTopColor: '#c4b5fd',
+    borderRightColor: '#c4b5fd',
+    borderBottomColor: '#bef264',
+    borderLeftColor: '#bef264',
+    transform: [{ rotate: '-35deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  donutInnerCircle: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '35deg' }],
+  },
+  donutCenterValue: {
+    fontSize: 16,
+    fontWeight: '900',
     color: '#0f172a',
   },
-  statsLegendRow: {
+  donutCenterLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.8,
+    marginTop: 1,
+  },
+  donutCenterSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#15803d',
+    marginTop: 2,
+  },
+  donutBadgeUnpaid: {
+    position: 'absolute',
+    top: 14,
+    right: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  donutBadgePaid: {
+    position: 'absolute',
+    bottom: 14,
+    left: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  donutBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1e293b',
+  },
+  rentStatusLegendRow: {
     flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
+    justifyContent: 'center',
+    gap: 20,
+    marginTop: 10,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  dropdownPill: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  dropdownPillText: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '700',
-  },
-  barChartContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    height: 140,
-    paddingTop: 10,
-    paddingBottom: 4,
-  },
-  barColumn: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  barPillar: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  barSegmentCap: {
-    width: '100%',
-    backgroundColor: '#f1f5f9',
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  barSegmentPeach: {
-    width: '100%',
-    backgroundColor: '#fed7aa',
-  },
-  barSegmentOrange: {
-    width: '100%',
-    backgroundColor: '#ff7337',
-    borderBottomLeftRadius: 14,
-    borderBottomRightRadius: 14,
-  },
-  barDayText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94a3b8',
-    marginTop: 8,
-  },
-
-  reportSummaryCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
-  },
-  reportHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  reportTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  reportSub: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-  },
-  blackCircleActionBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#0f172a',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  blackCircleActionIcon: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  reportStatsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  reportStatItem: {
-    flex: 1,
-    minWidth: '45%',
-    backgroundColor: '#f8fafc',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  reportStatVal: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-  reportStatLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
-    marginTop: 2,
-  },
-
-  // ─── Bottom Row ───
-  bottomRow: {
-    gap: 14,
-    marginBottom: 16,
-  },
-  calendarCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-  },
-  calendarHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  calNavArrow: {
-    fontSize: 18,
-    color: '#64748b',
-    fontWeight: '800',
-    paddingHorizontal: 8,
-  },
-  calendarMonthText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  calendarWeekRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  calendarWeekDay: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#94a3b8',
-    width: 32,
-    textAlign: 'center',
-  },
-  calendarDaysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  calDayBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  calDayBoxSelected: {
-    backgroundColor: '#ff7337',
-    shadowColor: '#ff7337',
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  calDayText: {
-    fontSize: 11,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  calDayTextSelected: {
-    color: '#ffffff',
-    fontWeight: '800',
-  },
-
-  recentBookingsCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    gap: 6,
   },
   viewAllOrangeText: {
     fontSize: 12,
     fontWeight: '800',
     color: '#ff7337',
   },
-  bookingList: {
-    gap: 10,
-  },
-  bookingItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f8fafc',
-  },
-  roomThumbBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#fff7ed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-  },
-  bookingRoomTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  bookingGuestAvatar: {
-    fontSize: 12,
-  },
-  bookingGuestName: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-  },
-  bookingTimeAgo: {
-    fontSize: 10,
-    color: '#94a3b8',
-  },
-  whatsappMiniBtn: {
-    padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#25D366',
+  legendColorDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     marginRight: 6,
   },
-  dueMiniBadge: {
+  legendLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+
+  // ─── Quick Actions (Circular Rings) ───
+  quickActionsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    paddingVertical: 14,
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  quickActionItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  actionRingCircle: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  actionItemTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  actionItemSub: {
+    fontSize: 9,
+    color: '#64748b',
+    marginTop: 1,
+    textAlign: 'center',
+  },
+
+  // ─── Tenants Directory: Box Type Grid (Requirement 1) ───
+  tenantBoxGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  tenantBoxCard: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  tenantBoxCardDue: {
+    borderColor: '#fca5a5',
+    backgroundColor: '#fffbfb',
+  },
+  tenantBoxTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  tenantBoxAvatarCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tenantBoxDueBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  tenantBoxDueText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  tenantBoxName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  tenantBoxRoomSub: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  tenantBoxWhatsAppBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    backgroundColor: '#25D366',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderRadius: 8,
   },
-  dueMiniText: {
+  tenantBoxWhatsAppText: {
+    color: '#ffffff',
     fontSize: 11,
     fontWeight: '800',
   },
 
-  // ─── Semi-Circular Gauges ───
-  gaugeContainer: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  gaugeCard: {
-    flex: 1,
+  emptyTenantBox: {
     backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 14,
+    borderRadius: 16,
+    padding: 24,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#f1f5f9',
+    marginBottom: 20,
   },
-  gaugeTitle: {
-    fontSize: 12,
+  emptyTenantBoxTitle: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 10,
+    marginTop: 4,
   },
-  semiCircleWrapper: {
-    width: 100,
-    height: 55,
-    overflow: 'hidden',
-    alignItems: 'center',
-  },
-  semiCircleArcOrange: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 12,
-    borderTopColor: '#ff7337',
-    borderRightColor: '#ff7337',
-    borderBottomColor: 'transparent',
-    borderLeftColor: 'transparent',
-    transform: [{ rotate: '-45deg' }],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  semiCircleArcPeach: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 12,
-    borderTopColor: '#fed7aa',
-    borderRightColor: '#ff7337',
-    borderBottomColor: 'transparent',
-    borderLeftColor: 'transparent',
-    transform: [{ rotate: '-45deg' }],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  semiCircleInner: {
-    transform: [{ rotate: '45deg' }],
-    marginTop: -25,
-  },
-  gaugeCenterNum: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#0f172a',
-  },
-
-  // ─── Quick Actions Pills Bar ───
-  quickActionPillsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  quickActionOrangePill: {
-    flex: 1.2,
-    backgroundColor: '#ff7337',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#ff7337',
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  quickActionOrangePillText: {
-    color: '#ffffff',
-    fontWeight: '800',
-    fontSize: 12,
-  },
-  quickActionWhitePill: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  emptyTenantBoxSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    textAlign: 'center',
   },
   quickActionWhitePillText: {
     color: '#0f172a',
