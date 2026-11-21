@@ -12,6 +12,7 @@ import {
   Alert,
   Switch,
   Linking,
+  Platform,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
@@ -138,11 +139,48 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     { bg: '#eff6ff', border: '#bfdbfe', numColor: '#1d4ed8', textColor: '#1e3a8a' }, // Blue
   ];
 
-  // Delete Bed Handler (Red X mark on vacant bed)
+  // Cross-Platform Confirmation Dialog (Works on Web & Native Mobile)
+  const confirmAction = (title: string, message: string, onConfirm: () => void) => {
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      try {
+        if (typeof window.confirm === 'function') {
+          const ok = window.confirm(`${title}\n\n${message}`);
+          if (ok) {
+            onConfirm();
+          }
+          return;
+        }
+      } catch {}
+      onConfirm();
+      return;
+    }
+
+    Alert.alert(title, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Confirm', style: 'destructive', onPress: onConfirm },
+    ]);
+  };
+
+  // Cross-Platform Notification Dialog (Works on Web & Native Mobile)
+  const notifyUser = (title: string, message?: string) => {
+    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      try {
+        if (typeof window.alert === 'function') {
+          window.alert(message ? `${title}\n\n${message}` : title);
+          return;
+        }
+      } catch {}
+      return;
+    }
+    Alert.alert(title, message);
+  };
+
+  // Delete Bed Handler
   const handleDeleteBed = (floorNum: number, roomId: string, bedId: string, bedLabel: string) => {
     const doDelete = () => {
-      setFloors((prev) =>
-        prev.map((f) => {
+      setTenants((prev) => prev.filter((t) => t.bedId !== bedId));
+      setFloors((prev) => {
+        const nextFloors = prev.map((f) => {
           if (f.floorNumber !== floorNum) return f;
           return {
             ...f,
@@ -161,26 +199,29 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               };
             }),
           };
-        })
-      );
+        });
+
+        if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch {}
+        }
+
+        return nextFloors;
+      });
+
+      notifyUser('✓ Bed Removed', `${bedLabel} has been removed from this room.`);
     };
 
-    Alert.alert(
-      'Remove Bed',
-      `Remove ${bedLabel} from this room?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: doDelete },
-      ]
-    );
+    confirmAction('Remove Bed', `Remove ${bedLabel} from this room?`, doDelete);
   };
 
   // Check out resident from occupied bed
   const handleCheckOutBed = (floorNum: number, roomId: string, bedId: string, tenantName: string) => {
     const doCheckout = () => {
       setTenants((prev) => prev.filter((t) => t.bedId !== bedId));
-      setFloors((prev) =>
-        prev.map((f) => {
+      setFloors((prev) => {
+        const nextFloors = prev.map((f) => {
           if (f.floorNumber !== floorNum) return f;
           return {
             ...f,
@@ -188,23 +229,28 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               if (r.id !== roomId) return r;
               return {
                 ...r,
-                beds: r.beds.map((b) => (b.id === bedId ? { ...b, status: 'AVAILABLE' } : b)),
+                beds: r.beds.map((b) => (b.id === bedId ? { ...b, status: 'AVAILABLE' as const } : b)),
               };
             }),
           };
-        })
-      );
+        });
+
+        if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch {}
+        }
+
+        return nextFloors;
+      });
       setOccupiedBedAction(null);
-      Alert.alert('✓ Bed Available', `${tenantName} has been checked out. Bed is now available.`);
+      notifyUser('✓ Bed Available', `${tenantName} has been checked out. Bed is now available.`);
     };
 
-    Alert.alert(
+    confirmAction(
       'Check Out Resident',
       `Check out ${tenantName}? Their bed will immediately become vacant and available.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Check Out', style: 'destructive', onPress: doCheckout },
-      ]
+      doCheckout
     );
   };
 
@@ -871,11 +917,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   };
 
   const handleDecreaseRooms = (floorNum: number) => {
-    setFloors(
-      floors.map((f) => {
+    setFloors((prev) =>
+      prev.map((f) => {
         if (f.floorNumber !== floorNum) return f;
         if (f.rooms.length <= 1) {
-          Alert.alert('Minimum Limit', `Floor ${floorNum} must have at least 1 room.`);
+          notifyUser('Minimum Limit', `Floor ${floorNum} must have at least 1 room.`);
           return f;
         }
         const lastRoom = f.rooms[f.rooms.length - 1];
@@ -883,7 +929,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           (b) => b.status === 'OCCUPIED' || b.status === 'RESERVED'
         );
         if (hasOccupied) {
-          Alert.alert(
+          notifyUser(
             'Cannot Delete Room',
             `Room ${lastRoom.roomNumber} has active or reserved beds.`
           );
@@ -899,8 +945,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // 3. Bed Counter Controls for Room
   const handleIncreaseBeds = (floorNum: number, roomId: string) => {
-    setFloors(
-      floors.map((f) => {
+    setFloors((prev) => {
+      const nextFloors = prev.map((f) => {
         if (f.floorNumber !== floorNum) return f;
         return {
           ...f,
@@ -923,25 +969,33 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             };
           }),
         };
-      })
-    );
+      });
+
+      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+        try {
+          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+        } catch {}
+      }
+
+      return nextFloors;
+    });
   };
 
   const handleDecreaseBeds = (floorNum: number, roomId: string) => {
-    setFloors(
-      floors.map((f) => {
+    setFloors((prev) =>
+      prev.map((f) => {
         if (f.floorNumber !== floorNum) return f;
         return {
           ...f,
           rooms: f.rooms.map((r) => {
             if (r.id !== roomId) return r;
             if (r.beds.length <= 1) {
-              Alert.alert('Minimum Limit', 'Room must have at least 1 bed.');
+              notifyUser('Minimum Limit', 'Room must have at least 1 bed.');
               return r;
             }
             const lastBed = r.beds[r.beds.length - 1];
             if (lastBed.status === 'OCCUPIED' || lastBed.status === 'RESERVED') {
-              Alert.alert('Active Bed', `${lastBed.bedLabel} is currently ${lastBed.status.toLowerCase()}.`);
+              notifyUser('Active Bed', `${lastBed.bedLabel} is currently ${lastBed.status.toLowerCase()}.`);
               return r;
             }
             const updatedBeds = r.beds.slice(0, r.beds.length - 1);
@@ -962,8 +1016,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   ) => {
     if (!selectedBedForStatus) return;
     const { floorNum, roomId, bed } = selectedBedForStatus;
-    setFloors(
-      floors.map((f) => {
+    setFloors((prev) =>
+      prev.map((f) => {
         if (f.floorNumber !== floorNum) return f;
         return {
           ...f,
@@ -982,15 +1036,23 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // Save Room Details (Rent, AC, Bathroom, Room Number)
   const handleUpdateRoomDetails = (updated: RoomConfig) => {
-    setFloors(
-      floors.map((f) => {
+    setFloors((prev) => {
+      const nextFloors = prev.map((f) => {
         if (f.floorNumber !== updated.floorNumber) return f;
         return {
           ...f,
           rooms: f.rooms.map((r) => (r.id === updated.id ? updated : r)),
         };
-      })
-    );
+      });
+
+      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+        try {
+          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+        } catch {}
+      }
+
+      return nextFloors;
+    });
     setEditingRoomDetails(null);
   };
 
@@ -998,26 +1060,31 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const handleDeleteRoom = (floorNum: number, roomId: string, roomNumber: string) => {
     const doDelete = () => {
       setTenants((prev) => prev.filter((t) => t.roomId !== roomId));
-      setFloors((prev) =>
-        prev.map((f) => {
+      setFloors((prev) => {
+        const nextFloors = prev.map((f) => {
           if (f.floorNumber !== floorNum) return f;
           return {
             ...f,
             rooms: f.rooms.filter((r) => r.id !== roomId),
           };
-        })
-      );
+        });
+
+        if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch {}
+        }
+
+        return nextFloors;
+      });
       setEditingRoomDetails(null);
-      Alert.alert('Room Deleted', `Room ${roomNumber} has been removed.`);
+      notifyUser('Room Deleted', `Room ${roomNumber} has been removed.`);
     };
 
-    Alert.alert(
+    confirmAction(
       'Delete Room',
       `Are you sure you want to delete Room ${roomNumber}? All beds inside will also be removed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete Room', style: 'destructive', onPress: doDelete },
-      ]
+      doDelete
     );
   };
 
@@ -2358,33 +2425,52 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                     <View style={styles.bedManageActionsCol}>
                       {isOcc ? (
                         <>
-                          <TouchableOpacity
-                            style={styles.bedManageVacateBtn}
-                            onPress={() => {
-                              if (managingBedsRoom) {
-                                handleCheckOutBed(
-                                  managingBedsRoom.floorNum,
-                                  managingBedsRoom.roomId,
-                                  bed.id,
-                                  residentName
-                                );
-                              }
-                            }}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.bedManageVacateBtnText}>🚪 Vacate</Text>
-                          </TouchableOpacity>
+                          <View style={{ flexDirection: 'row', gap: 6 }}>
+                            <TouchableOpacity
+                              style={styles.bedManageVacateBtn}
+                              onPress={() => {
+                                if (managingBedsRoom) {
+                                  handleCheckOutBed(
+                                    managingBedsRoom.floorNum,
+                                    managingBedsRoom.roomId,
+                                    bed.id,
+                                    residentName
+                                  );
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.bedManageVacateBtnText}>🚪 Vacate</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.bedManageDeleteBtn}
+                              onPress={() => {
+                                if (managingBedsRoom) {
+                                  handleDeleteBed(
+                                    managingBedsRoom.floorNum,
+                                    managingBedsRoom.roomId,
+                                    bed.id,
+                                    `Bed ${bedNum}`
+                                  );
+                                }
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text style={styles.bedManageDeleteBtnText}>🗑️ Delete</Text>
+                            </TouchableOpacity>
+                          </View>
 
                           <TouchableOpacity
-                            style={styles.bedManageCallBtn}
+                            style={[styles.bedManageCallBtn, { width: '100%', alignItems: 'center' }]}
                             onPress={() => Linking.openURL(`tel:${residentPhone}`)}
                             activeOpacity={0.8}
                           >
-                            <Text style={styles.bedManageCallBtnText}>📞 Call</Text>
+                            <Text style={styles.bedManageCallBtnText}>📞 Call {residentName}</Text>
                           </TouchableOpacity>
                         </>
                       ) : (
-                        <>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
                           <TouchableOpacity
                             style={styles.bedManageAssignBtn}
                             onPress={() => {
@@ -2420,7 +2506,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                           >
                             <Text style={styles.bedManageDeleteBtnText}>🗑️ Delete</Text>
                           </TouchableOpacity>
-                        </>
+                        </View>
                       )}
                     </View>
                   </View>
@@ -4136,15 +4222,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   bedManageDeleteBtn: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#fef2f2',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#fecaca',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
   },
   bedManageDeleteBtnText: {
-    color: '#94a3b8',
+    color: '#dc2626',
     fontSize: 11,
     fontWeight: '800',
   },
