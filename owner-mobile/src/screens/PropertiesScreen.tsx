@@ -87,6 +87,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     return 'SUP';
   };
 
+  const formatSharingBadge = (bedsCount: number) => {
+    if (bedsCount === 1) return 'Single Sharing';
+    if (bedsCount === 2) return 'Double Sharing';
+    if (bedsCount === 3) return 'Triple Sharing';
+    if (bedsCount === 4) return 'Four Sharing';
+    return `${bedsCount} Sharing`;
+  };
+
   // Selected Floor Filter: 'ALL' displays all floors one by one, or a specific floor number
   const [selectedFloorFilter, setSelectedFloorFilter] = useState<number | 'ALL'>('ALL');
 
@@ -134,7 +142,12 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             ...f,
             rooms: f.rooms.map((r) => {
               if (r.id !== roomId) return r;
-              const updatedBeds = r.beds.filter((b) => b.id !== bedId);
+              const updatedBeds = r.beds
+                .filter((b) => b.id !== bedId)
+                .map((b, idx) => ({
+                  ...b,
+                  bedLabel: `Bed ${idx + 1}`,
+                }));
               return {
                 ...r,
                 beds: updatedBeds,
@@ -472,20 +485,29 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             const floorMap = new Map<number, RoomConfig[]>();
             propData.rooms.forEach((r) => {
               const flNum = r.floorNumber || 1;
+              const seenBeds = new Set<string>();
+              const uniqueBeds = (r.beds || [])
+                .filter((b) => {
+                  if (!b.id || seenBeds.has(b.id)) return false;
+                  seenBeds.add(b.id);
+                  return true;
+                })
+                .map((b, idx) => ({
+                  id: b.id,
+                  bedLabel: `Bed ${idx + 1}`,
+                  status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : ((b.status as any) || 'AVAILABLE'),
+                }));
+
               const rConfig: RoomConfig = {
                 id: r.id,
                 roomNumber: r.roomNumber,
                 floorNumber: flNum,
-                sharingType: r.sharingType || getSharingEnum(r.beds?.length || 2),
+                sharingType: getSharingEnum(uniqueBeds.length || 2),
                 rentRupees: (r.rentMonthlyPaise || 850000) / 100,
                 depositRupees: (r.depositPaise || 850000) / 100,
                 ac: true,
                 attachedBathroom: true,
-                beds: (r.beds || []).map((b, idx) => ({
-                  id: b.id,
-                  bedLabel: b.bedLabel || `Bed ${idx + 1}`,
-                  status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : ((b.status as any) || 'AVAILABLE'),
-                })),
+                beds: uniqueBeds,
               };
               if (!floorMap.has(flNum)) floorMap.set(flNum, []);
               floorMap.get(flNum)!.push(rConfig);
@@ -515,13 +537,25 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             if (Array.isArray(parsed) && parsed.length > 0) {
               const synced = parsed.map((fl: FloorConfig) => ({
                 ...fl,
-                rooms: fl.rooms.map((rm: RoomConfig) => ({
-                  ...rm,
-                  beds: rm.beds.map((b) => ({
-                    ...b,
-                    status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : (b.status || 'AVAILABLE'),
-                  })),
-                })),
+                rooms: fl.rooms.map((rm: RoomConfig) => {
+                  const seenBeds = new Set<string>();
+                  const uniqueBeds = (rm.beds || [])
+                    .filter((b) => {
+                      if (!b.id || seenBeds.has(b.id)) return false;
+                      seenBeds.add(b.id);
+                      return true;
+                    })
+                    .map((b, idx) => ({
+                      ...b,
+                      bedLabel: `Bed ${idx + 1}`,
+                      status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : (b.status || 'AVAILABLE'),
+                    }));
+                  return {
+                    ...rm,
+                    sharingType: getSharingEnum(uniqueBeds.length),
+                    beds: uniqueBeds,
+                  };
+                }),
               }));
               setFloors(synced);
               setOriginalFloors(JSON.parse(JSON.stringify(synced)));
@@ -868,7 +902,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               bedLabel: `Bed ${nextBedNum}`,
               status: 'AVAILABLE',
             };
-            const updatedBeds = [...r.beds, newBed];
+            const updatedBeds = [...r.beds, newBed].map((b, idx) => ({
+              ...b,
+              bedLabel: `Bed ${idx + 1}`,
+            }));
             return {
               ...r,
               beds: updatedBeds,
@@ -1221,6 +1258,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   : floors.filter((f) => f.floorNumber === selectedFloorFilter)
                 ).map((floor) => {
                   const floorBedsCount = floor.rooms.reduce((acc, r) => acc + r.beds.length, 0);
+                  const sharingTypesSummary = Array.from(
+                    new Set(floor.rooms.map((r) => formatSharingBadge(r.beds.length)))
+                  ).join(', ');
 
                   return (
                     <View key={`floor-sec-${floor.floorNumber}`} style={styles.floorSectionCard}>
@@ -1231,7 +1271,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                             🏢 Floor {floor.floorNumber}
                           </Text>
                           <Text style={styles.floorSectionSub}>
-                            {floor.rooms.length} {floor.rooms.length === 1 ? 'Room' : 'Rooms'} • {floorBedsCount} Beds
+                            {floor.rooms.length} {floor.rooms.length === 1 ? 'Room' : 'Rooms'} {sharingTypesSummary ? `(${sharingTypesSummary})` : ''} • {floorBedsCount} Beds
                           </Text>
                         </View>
 
@@ -1247,6 +1287,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                       {/* Rooms on this Floor (Room Wise) */}
                       <View style={{ gap: 16 }}>
                         {floor.rooms.map((room) => {
+                          const roomSharingLabel = formatSharingBadge(room.beds.length);
+
                           return (
                             <View key={room.id} style={styles.roomWiseCard}>
                               {/* Room Top Bar */}
@@ -1258,9 +1300,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                     </Text>
                                   </View>
 
+                                  {/* Clean Sharing Label: e.g. "Double Sharing", "Four Sharing" */}
                                   <View style={styles.roomWiseTypeBadge}>
                                     <Text style={styles.roomWiseTypeText}>
-                                      {room.sharingType}
+                                      {roomSharingLabel}
                                     </Text>
                                   </View>
 
@@ -1269,7 +1312,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                   </Text>
                                 </View>
 
-                                {/* Room Action Buttons: + Add Bed, + Add Room, Settings */}
+                                {/* Room Action Buttons: ONLY + Add Bed & Settings (Removed + Add Room from inside) */}
                                 <View style={styles.roomWiseActionButtons}>
                                   <TouchableOpacity
                                     style={styles.roomWiseAddBedBtn}
@@ -1277,14 +1320,6 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                     activeOpacity={0.8}
                                   >
                                     <Text style={styles.roomWiseAddBedBtnText}>+ Add Bed</Text>
-                                  </TouchableOpacity>
-
-                                  <TouchableOpacity
-                                    style={styles.roomWiseAddRoomBtn}
-                                    onPress={() => handleIncreaseRooms(floor.floorNumber)}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={styles.roomWiseAddRoomBtnText}>+ Add Room</Text>
                                   </TouchableOpacity>
 
                                   <TouchableOpacity
@@ -1297,15 +1332,16 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                 </View>
                               </View>
 
-                              {/* Beds Grid inside Room (Matching Screenshot) */}
+                              {/* Beds Grid inside Room (Matching Screenshot, Sequential Unique Numbers 1, 2, 3...) */}
                               <View style={styles.roomBedsGridRow}>
                                 {room.beds.map((bed, bedIdx) => {
                                   const occupant = bedOccupantMap.get(bed.id);
                                   const isOccupied = bed.status === 'OCCUPIED' || !!occupant;
-                                  const bedNumStr = bed.bedLabel.replace(/\D/g, '') || String(bedIdx + 1);
+                                  // Strictly unique sequential bed number 1, 2, 3, 4... per room
+                                  const bedNumStr = String(bedIdx + 1);
 
                                   if (isOccupied) {
-                                    const fallbackNames = ['Harsha', 'Suresh', 'Rohit', 'Kiran', 'Pooja', 'Anil', 'Vikram', 'Deepak'];
+                                    const fallbackNames = ['Harsha', 'Suresh', 'Rohit', 'Krishna', 'Siva Mani', 'Ramu', 'Phani', 'Kiran'];
                                     const tenantName = occupant?.fullName || fallbackNames[(bedIdx + Number(room.roomNumber || 101)) % fallbackNames.length];
                                     const styleIdx = bedIdx % BED_STYLES.length;
                                     const styleObj = BED_STYLES[styleIdx];
@@ -1351,7 +1387,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                               roomId: room.id,
                                               roomNumber: room.roomNumber,
                                               bedId: bed.id,
-                                              bedLabel: bed.bedLabel || `Bed ${bedNumStr}`,
+                                              bedLabel: `Bed ${bedNumStr}`,
                                               rentRupees: room.rentRupees,
                                             })
                                           }
@@ -1365,7 +1401,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                         {/* Red X Delete Bed Button */}
                                         <TouchableOpacity
                                           style={styles.deleteBedRedBadge}
-                                          onPress={() => handleDeleteBed(floor.floorNumber, room.id, bed.id, bed.bedLabel)}
+                                          onPress={() => handleDeleteBed(floor.floorNumber, room.id, bed.id, `Bed ${bedNumStr}`)}
                                           activeOpacity={0.8}
                                         >
                                           <Text style={styles.deleteBedRedBadgeText}>✕</Text>
