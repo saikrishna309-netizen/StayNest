@@ -6,13 +6,14 @@ import { LoginScreen } from './src/screens/LoginScreen';
 import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { PropertiesScreen } from './src/screens/PropertiesScreen';
+import { TenantsScreen } from './src/screens/TenantsScreen';
 import { ManagementScreen } from './src/screens/ManagementScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { Property } from './src/types';
 
 const MainNavigator: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'dashboard' | 'properties' | 'management' | 'profile'>('dashboard');
+  const [currentTab, setCurrentTab] = useState<'dashboard' | 'properties' | 'tenants' | 'management' | 'profile'>('dashboard');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [registrationSkipped, setRegistrationSkipped] = useState(false);
   const [webDeviceMode, setWebDeviceMode] = useState<'MOBILE' | 'DESKTOP'>('DESKTOP');
@@ -113,7 +114,8 @@ const MainNavigator: React.FC = () => {
               onSelectPropertyForRooms={handleOpenProperty}
               onNavigateTab={(tab) => {
                 if (tab === 'rooms') setCurrentTab('properties');
-                else if (tab === 'tenants' || tab === 'finance') setCurrentTab('management');
+                else if (tab === 'tenants') setCurrentTab('tenants');
+                else if (tab === 'finance') setCurrentTab('management');
                 else if (tab === 'profile') setCurrentTab('profile');
               }}
             />
@@ -127,21 +129,26 @@ const MainNavigator: React.FC = () => {
             />
           )}
 
-          {/* Tab 3: Management (Tenants, Rent, Expenses & Reports) */}
+          {/* Tab 3: Tenants (Dedicated Standalone Screen for all Resident actions) */}
+          {currentTab === 'tenants' && (
+            <TenantsScreen onBack={() => setCurrentTab('dashboard')} />
+          )}
+
+          {/* Tab 4: Management (Expenses, Finance & Reports) */}
           {currentTab === 'management' && <ManagementScreen />}
 
-          {/* Tab 4: Profile (PG Owner Account & Settings) */}
+          {/* Tab 5: Profile (PG Owner Account & Settings) */}
           {currentTab === 'profile' && (
             <ProfileScreen onBackToDashboard={() => setCurrentTab('dashboard')} />
           )}
 
-          {/* Bottom Navigation Bar */}
+          {/* Bottom Navigation Bar (5 Standalone Tabs with Vibrant Orange Active Highlight) */}
           <View style={styles.bottomNav}>
             <TouchableOpacity
-              style={styles.navItem}
+              style={[styles.navItem, currentTab === 'dashboard' && styles.navItemActive]}
               onPress={() => setCurrentTab('dashboard')}
             >
-              <Text style={styles.navIcon}>📊</Text>
+              <Text style={[styles.navIcon, currentTab === 'dashboard' && styles.navIconActive]}>📊</Text>
               <Text
                 style={[
                   styles.navLabel,
@@ -150,13 +157,14 @@ const MainNavigator: React.FC = () => {
               >
                 Dashboard
               </Text>
+              {currentTab === 'dashboard' && <View style={styles.activeIndicatorDot} />}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.navItem}
+              style={[styles.navItem, currentTab === 'properties' && styles.navItemActive]}
               onPress={() => setCurrentTab('properties')}
             >
-              <Text style={styles.navIcon}>🏢</Text>
+              <Text style={[styles.navIcon, currentTab === 'properties' && styles.navIconActive]}>🏢</Text>
               <Text
                 style={[
                   styles.navLabel,
@@ -165,13 +173,30 @@ const MainNavigator: React.FC = () => {
               >
                 Properties
               </Text>
+              {currentTab === 'properties' && <View style={styles.activeIndicatorDot} />}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.navItem}
+              style={[styles.navItem, currentTab === 'tenants' && styles.navItemActive]}
+              onPress={() => setCurrentTab('tenants')}
+            >
+              <Text style={[styles.navIcon, currentTab === 'tenants' && styles.navIconActive]}>👥</Text>
+              <Text
+                style={[
+                  styles.navLabel,
+                  currentTab === 'tenants' && styles.navLabelActive,
+                ]}
+              >
+                Tenants
+              </Text>
+              {currentTab === 'tenants' && <View style={styles.activeIndicatorDot} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.navItem, currentTab === 'management' && styles.navItemActive]}
               onPress={() => setCurrentTab('management')}
             >
-              <Text style={styles.navIcon}>📋</Text>
+              <Text style={[styles.navIcon, currentTab === 'management' && styles.navIconActive]}>📋</Text>
               <Text
                 style={[
                   styles.navLabel,
@@ -180,13 +205,14 @@ const MainNavigator: React.FC = () => {
               >
                 Management
               </Text>
+              {currentTab === 'management' && <View style={styles.activeIndicatorDot} />}
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.navItem}
+              style={[styles.navItem, currentTab === 'profile' && styles.navItemActive]}
               onPress={() => setCurrentTab('profile')}
             >
-              <Text style={styles.navIcon}>👤</Text>
+              <Text style={[styles.navIcon, currentTab === 'profile' && styles.navIconActive]}>👤</Text>
               <Text
                 style={[
                   styles.navLabel,
@@ -195,6 +221,7 @@ const MainNavigator: React.FC = () => {
               >
                 Profile
               </Text>
+              {currentTab === 'profile' && <View style={styles.activeIndicatorDot} />}
             </TouchableOpacity>
           </View>
         </View>
@@ -301,10 +328,18 @@ const styles = StyleSheet.create({
   navItem: {
     alignItems: 'center',
     flex: 1,
+    paddingVertical: 2,
+  },
+  navItemActive: {
+    transform: [{ scale: 1.05 }],
   },
   navIcon: {
     fontSize: 20,
     marginBottom: 3,
+    opacity: 0.7,
+  },
+  navIconActive: {
+    opacity: 1,
   },
   navLabel: {
     fontSize: 11,
@@ -314,5 +349,12 @@ const styles = StyleSheet.create({
   navLabelActive: {
     color: '#ff7337',
     fontWeight: '900',
+  },
+  activeIndicatorDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#ff7337',
+    marginTop: 3,
   },
 });
