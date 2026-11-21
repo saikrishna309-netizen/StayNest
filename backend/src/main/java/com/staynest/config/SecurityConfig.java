@@ -1,6 +1,7 @@
 package com.staynest.config;
 
 import com.staynest.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -48,6 +49,18 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setContentType("application/json");
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.getOutputStream().println("{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required. Please sign in with a valid token.\"}");
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setContentType("application/json");
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.getOutputStream().println("{\"code\":\"FORBIDDEN\",\"message\":\"Access denied. Requires ROLE_OWNER or ROLE_ADMIN permissions.\"}");
+                        })
+                )
                 .authorizeHttpRequests(auth -> auth
                         // Public discovery, auth and health
                         .requestMatchers("/", "/health", "/index.html", "/static/**", "/*.css", "/*.js", "/*.ico", "/favicon.ico").permitAll()

@@ -64,6 +64,28 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   // Expanded Room details in Overview Mode
   const [expandedRoomIds, setExpandedRoomIds] = useState<Record<string, boolean>>({});
 
+  // Floor and Category selection for Image 2 Room Management UI
+  const [selectedFloorByBuilding, setSelectedFloorByBuilding] = useState<Record<string, number>>({});
+  const [selectedCategoryByBuilding, setSelectedCategoryByBuilding] = useState<Record<string, string>>({});
+
+  const getSelectedFloor = (bId: string) => selectedFloorByBuilding[bId] || (floors[0]?.floorNumber || 1);
+  const setSelectedFloor = (bId: string, fl: number) => {
+    setSelectedFloorByBuilding((prev) => ({ ...prev, [bId]: fl }));
+  };
+  const getSelectedCat = (bId: string) => selectedCategoryByBuilding[bId] || 'HOSTEL_ROOM';
+  const setSelectedCat = (bId: string, cat: string) => {
+    setSelectedCategoryByBuilding((prev) => ({ ...prev, [bId]: cat }));
+  };
+  const getShortRoomType = (sharingType: string) => {
+    if (!sharingType) return 'STD';
+    const s = sharingType.toUpperCase();
+    if (s.includes('SINGLE')) return 'CLA';
+    if (s.includes('DOUBLE')) return 'DLX';
+    if (s.includes('TRIPLE')) return 'SUP';
+    if (s.includes('FOUR')) return 'DLX-S';
+    return 'SUP';
+  };
+
   // Property Floors & Structure State
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [floors, setFloors] = useState<FloorConfig[]>([
@@ -879,26 +901,39 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     }
   };
 
+  const buildingsToRender = propertiesList.length > 0
+    ? propertiesList.slice(0, 2)
+    : [activeProperty || { id: 'b1', name: 'Building 01', genderPolicy: 'BOYS' as any }];
+
   return (
     <View style={styles.container}>
-      {/* ─── TOP BRAND & ACTIONS HEADER ─── */}
+      {/* ─── TOP BRAND & ACTIONS HEADER (IMAGE 2 STYLE) ─── */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Image
               source={require('../../assets/logo.png')}
               style={styles.headerLogo}
               resizeMode="contain"
             />
-            <Text style={styles.brandSub}>Property & Room Management</Text>
+            <Text style={styles.pageTitleHeader}>Room Management</Text>
           </View>
 
           <View style={styles.headerRightActions}>
+            <TouchableOpacity style={styles.headerIconBtn}>
+              <Text style={{ fontSize: 16 }}>🔍</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerIconBtn}>
+              <Text style={{ fontSize: 16 }}>🔔</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.headerAvatarCircle}>
+              <Text style={{ fontSize: 14 }}>👤</Text>
+            </TouchableOpacity>
             <TouchableOpacity
-              style={styles.addPropBtn}
+              style={styles.createTaskCoralBtn}
               onPress={() => setShowAddPropertyModal(true)}
             >
-              <Text style={styles.addPropBtnText}>+ Add PG</Text>
+              <Text style={styles.createTaskCoralBtnText}>+ Create Task</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -939,239 +974,157 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           </View>
         ) : (
           <>
-            {/* ─── TOP AUTOMATIC SUMMARY BAR ─── */}
-            <View style={styles.summaryContainer}>
-              <View style={styles.summaryTopRow}>
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryValue}>{totalFloors}</Text>
-                  <Text style={styles.summaryLabel}>FLOORS</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryValue}>{totalRooms}</Text>
-                  <Text style={styles.summaryLabel}>ROOMS</Text>
-                </View>
-                <View style={styles.summaryDivider} />
-                <View style={styles.summaryBox}>
-                  <Text style={styles.summaryValue}>{totalBeds}</Text>
-                  <Text style={styles.summaryLabel}>TOTAL BEDS</Text>
-                </View>
-              </View>
-
-              <View style={styles.summaryStatusRow}>
-                <View style={[styles.statusPill, { backgroundColor: '#ecfdf5' }]}>
-                  <View style={[styles.statusDot, { backgroundColor: '#10b981' }]} />
-                  <Text style={[styles.statusPillText, { color: '#065f46' }]}>
-                    {availableBeds} Available
-                  </Text>
-                </View>
-
-                <View style={[styles.statusPill, { backgroundColor: '#fef2f2' }]}>
-                  <View style={[styles.statusDot, { backgroundColor: '#ef4444' }]} />
-                  <Text style={[styles.statusPillText, { color: '#991b1b' }]}>
-                    {occupiedBeds} Occupied
-                  </Text>
-                </View>
-
-                {reservedBeds > 0 && (
-                  <View style={[styles.statusPill, { backgroundColor: '#fffbeb' }]}>
-                    <View style={[styles.statusDot, { backgroundColor: '#f59e0b' }]} />
-                    <Text style={[styles.statusPillText, { color: '#92400e' }]}>
-                      {reservedBeds} Reserved
-                    </Text>
-                  </View>
-                )}
-
-                {maintenanceBeds > 0 && (
-                  <View style={[styles.statusPill, { backgroundColor: '#eff6ff' }]}>
-                    <View style={[styles.statusDot, { backgroundColor: '#3b82f6' }]} />
-                    <Text style={[styles.statusPillText, { color: '#1e40af' }]}>
-                      {maintenanceBeds} Maint.
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-
             {/* ════════════════════════════════════════════════════════════
-                MODE A: NORMAL SAVED VIEW (READ-ONLY, NO +/- CONTROLS)
+                MODE A: IMAGE 2 "ROOM MANAGEMENT" UI (BUILDING 01 / 02)
                ════════════════════════════════════════════════════════════ */}
             {viewMode === 'OVERVIEW' && (
-              <View>
-                {/* Overview Header with "Edit Property" Button */}
-                <View style={styles.sectionHeaderRow}>
-                  <View>
-                    <Text style={styles.sectionTitle}>FLOOR-WISE ROOM SUMMARY</Text>
-                    <Text style={styles.sectionSubtitle}>
-                      Tap any room to see bed details
-                    </Text>
-                  </View>
+              <View style={{ gap: 24 }}>
+                {buildingsToRender.map((bld, bldIdx) => {
+                  const bldId = bld.id;
+                  const bldTitle = `Building 0${bldIdx + 1}`;
+                  const curFloor = getSelectedFloor(bldId);
+                  const curCat = getSelectedCat(bldId);
+                  const activeFloorObj = floors.find((f) => f.floorNumber === curFloor) || floors[0] || { floorNumber: 1, rooms: [] };
 
+                  return (
+                    <View key={bldId} style={styles.buildingSectionCard}>
+                      {/* Building Name (e.g. Building 01) */}
+                      <Text style={styles.buildingTitleText}>{bldTitle}</Text>
+
+                      {/* Category Pills: Hostel Room (active navy), Apartment, Hostel */}
+                      <View style={styles.catPillRow}>
+                        <TouchableOpacity
+                          style={[styles.catPill, curCat === 'HOSTEL_ROOM' && styles.catPillActive]}
+                          onPress={() => setSelectedCat(bldId, 'HOSTEL_ROOM')}
+                        >
+                          <Text style={{ fontSize: 13 }}>🏢</Text>
+                          <Text style={[styles.catPillText, curCat === 'HOSTEL_ROOM' && styles.catPillTextActive]}>
+                            Hostel Room
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.catPill, curCat === 'APARTMENT' && styles.catPillActive]}
+                          onPress={() => setSelectedCat(bldId, 'APARTMENT')}
+                        >
+                          <Text style={{ fontSize: 13 }}>🏠</Text>
+                          <Text style={[styles.catPillText, curCat === 'APARTMENT' && styles.catPillTextActive]}>
+                            Apartment
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.catPill, curCat === 'HOSTEL' && styles.catPillActive]}
+                          onPress={() => setSelectedCat(bldId, 'HOSTEL')}
+                        >
+                          <Text style={{ fontSize: 13 }}>🛏️</Text>
+                          <Text style={[styles.catPillText, curCat === 'HOSTEL' && styles.catPillTextActive]}>
+                            Hostel
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Floor Navigation Row: Floor 1, Floor 2 (active underline), ... + Add Floor button */}
+                      <View style={styles.floorNavContainer}>
+                        <ScrollView
+                          horizontal
+                          showsHorizontalScrollIndicator={false}
+                          contentContainerStyle={styles.floorNavScroll}
+                        >
+                          {floors.map((fl) => {
+                            const isFloorActive = fl.floorNumber === curFloor;
+                            return (
+                              <TouchableOpacity
+                                key={`bld-${bldId}-fl-${fl.floorNumber}`}
+                                style={[styles.floorTabItem, isFloorActive && styles.floorTabItemActive]}
+                                onPress={() => setSelectedFloor(bldId, fl.floorNumber)}
+                              >
+                                <Text style={[styles.floorTabText, isFloorActive && styles.floorTabTextActive]}>
+                                  Floor {fl.floorNumber}
+                                </Text>
+                                {isFloorActive && <View style={styles.floorActiveUnderline} />}
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </ScrollView>
+
+                        {/* Dotted + Add Floor Button */}
+                        <TouchableOpacity
+                          style={styles.addFloorDottedBtn}
+                          onPress={handleIncreaseFloors}
+                        >
+                          <Text style={styles.addFloorDottedText}>+ Add Floor</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Rooms Grid for Selected Floor */}
+                      <View style={styles.roomsGridContainer}>
+                        {/* Card 0: + Add Room (Dotted border with door icon) */}
+                        <TouchableOpacity
+                          style={styles.addRoomDottedCard}
+                          onPress={() => handleIncreaseRooms(curFloor)}
+                        >
+                          <View style={styles.addRoomDoorIconBox}>
+                            <Text style={{ fontSize: 22 }}>🚪</Text>
+                          </View>
+                          <Text style={styles.addRoomDottedText}>+ Add Room</Text>
+                        </TouchableOpacity>
+
+                        {/* Room Cards: 103, 234, 202, 237 etc. */}
+                        {activeFloorObj.rooms.map((room) => {
+                          const occCount = room.beds.filter((b) => b.status === 'OCCUPIED' || bedOccupantMap.has(b.id)).length;
+                          const totalBedsInRoom = room.beds.length;
+                          const shortType = getShortRoomType(room.sharingType);
+                          const isFull = occCount >= totalBedsInRoom && totalBedsInRoom > 0;
+                          const isEmpty = occCount === 0;
+
+                          return (
+                            <TouchableOpacity
+                              key={room.id}
+                              style={styles.modernRoomCard}
+                              onPress={() => setEditingRoomDetails({ floorNum: curFloor, room })}
+                              activeOpacity={0.75}
+                            >
+                              {/* Top Label: Room no */}
+                              <Text style={styles.roomNoTopLabel}>Room no</Text>
+
+                              {/* Big Bold Room Number */}
+                              <Text style={styles.roomNoBoldNum}>{room.roomNumber}</Text>
+
+                              {/* Bottom Tag / Type */}
+                              <View style={styles.roomTagRow}>
+                                <Text style={styles.roomTypeTagText}>{shortType}</Text>
+                                <View
+                                  style={[
+                                    styles.roomStatusTinyDot,
+                                    { backgroundColor: isFull ? '#ef4444' : isEmpty ? '#10b981' : '#f59e0b' },
+                                  ]}
+                                />
+                              </View>
+
+                              {/* Beds count subtext */}
+                              <Text style={styles.roomBedsSubtext}>
+                                {occCount}/{totalBedsInRoom} Beds
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+
+                {/* Bottom Quick Switch to Builder Mode */}
+                <View style={styles.bottomSwitchBar}>
+                  <Text style={styles.bottomSwitchText}>
+                    💡 Tap any room card to edit rent, beds or AC.
+                  </Text>
                   <TouchableOpacity
-                    style={styles.editModeBtn}
+                    style={styles.editModeSwitchBtn}
                     onPress={handleEnterEditMode}
                   >
-                    <Text style={styles.editModeBtnText}>✏️ Edit Property</Text>
+                    <Text style={styles.editModeSwitchText}>✏️ Advanced Builder</Text>
                   </TouchableOpacity>
-                </View>
-
-                {/* Floors List */}
-                {floors.map((floor) => (
-                  <View key={`overview-floor-${floor.floorNumber}`} style={styles.overviewFloorCard}>
-                    {/* Floor Header */}
-                    <View style={styles.overviewFloorHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.floorIcon}>🏢</Text>
-                        <Text style={styles.overviewFloorTitle}>Floor {floor.floorNumber}</Text>
-                      </View>
-                      <Text style={styles.floorRoomCountBadge}>
-                        {floor.rooms.length} {floor.rooms.length === 1 ? 'Room' : 'Rooms'}
-                      </Text>
-                    </View>
-
-                    {/* Table Column Headers */}
-                    <View style={styles.tableHeaderRow}>
-                      <Text style={[styles.tableColHeader, { flex: 1.2 }]}>ROOM</Text>
-                      <Text style={[styles.tableColHeader, { flex: 1.5 }]}>SHARING TYPE</Text>
-                      <Text style={[styles.tableColHeader, { flex: 2, textAlign: 'right' }]}>
-                        BED AVAILABILITY
-                      </Text>
-                    </View>
-
-                    {/* Room Rows */}
-                    {floor.rooms.map((room) => {
-                      const roomOccupied = room.beds.filter((b) => b.status === 'OCCUPIED' || bedOccupantMap.has(b.id)).length;
-                      const roomAvailable = Math.max(0, room.beds.length - roomOccupied);
-                      const isExpanded = !!expandedRoomIds[room.id];
-
-                      return (
-                        <View key={room.id} style={styles.roomRowWrapper}>
-                          <TouchableOpacity
-                            style={[
-                              styles.roomTableRow,
-                              isExpanded && styles.roomTableRowExpanded,
-                            ]}
-                            onPress={() => toggleRoomExpand(room.id)}
-                            activeOpacity={0.7}
-                          >
-                            {/* Col 1: Room Number */}
-                            <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center' }}>
-                              <Text style={styles.roomNumText}>Room {room.roomNumber}</Text>
-                              <Text style={styles.expandChevron}>{isExpanded ? '▲' : '▼'}</Text>
-                            </View>
-
-                            {/* Col 2: Sharing Type */}
-                            <View style={{ flex: 1.5 }}>
-                              <Text style={styles.sharingTypeText}>
-                                {getSharingLabel(room.beds.length)}
-                              </Text>
-                              <Text style={styles.roomPriceSub}>
-                                ₹{room.rentRupees.toLocaleString('en-IN')}/mo
-                              </Text>
-                            </View>
-
-                            {/* Col 3: Bed Availability with status indicator dots */}
-                            <View style={{ flex: 2, alignItems: 'flex-end' }}>
-                              <Text style={styles.availabilitySummaryText}>
-                                <Text style={{ color: roomAvailable > 0 ? '#059669' : '#64748b', fontWeight: '700' }}>
-                                  {roomAvailable} Available
-                                </Text>
-                                {' / '}
-                                <Text style={{ color: roomOccupied > 0 ? '#dc2626' : '#64748b', fontWeight: '700' }}>
-                                  {roomOccupied} Occupied
-                                </Text>
-                              </Text>
-
-                              {/* Bed Status Dots */}
-                              <View style={styles.bedDotsRow}>
-                                {room.beds.map((b) => {
-                                  const isOcc = b.status === 'OCCUPIED' || bedOccupantMap.has(b.id);
-                                  const dotStatus = isOcc ? 'OCCUPIED' : b.status;
-                                  return (
-                                    <View
-                                      key={b.id}
-                                      style={[
-                                        styles.bedDot,
-                                        { backgroundColor: getStatusColor(dotStatus) },
-                                      ]}
-                                    />
-                                  );
-                                })}
-                              </View>
-                            </View>
-                          </TouchableOpacity>
-
-                          {/* Expanded Individual Bed Details */}
-                          {isExpanded && (
-                            <View style={styles.expandedBedDetails}>
-                              <View style={styles.expandedRoomMeta}>
-                                <Text style={styles.metaBadge}>
-                                  {room.ac ? '❄️ AC Room' : 'Non-AC'}
-                                </Text>
-                                <Text style={styles.metaBadge}>
-                                  {room.attachedBathroom ? '🚿 Attached Bath' : 'Common Bath'}
-                                </Text>
-                                <Text style={styles.metaBadge}>
-                                  Deposit: ₹{room.depositRupees.toLocaleString('en-IN')}
-                                </Text>
-                              </View>
-
-                              <Text style={styles.bedsListTitle}>Individual Beds:</Text>
-                              <View style={styles.bedsGrid}>
-                                {room.beds.map((b) => {
-                                  const occupant = bedOccupantMap.get(b.id);
-                                  const isOcc = b.status === 'OCCUPIED' || !!occupant;
-                                  const cardStatus = isOcc ? 'OCCUPIED' : b.status;
-                                  return (
-                                    <View
-                                      key={b.id}
-                                      style={[
-                                        styles.individualBedCard,
-                                        { backgroundColor: getStatusBgColor(cardStatus) },
-                                      ]}
-                                    >
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                          <View
-                                            style={[
-                                              styles.bedStatusDotSmall,
-                                              { backgroundColor: getStatusColor(cardStatus) },
-                                            ]}
-                                          />
-                                          <Text style={styles.bedCardLabel}>{b.bedLabel}</Text>
-                                        </View>
-                                        <Text
-                                          style={[
-                                            styles.bedCardStatus,
-                                            { color: getStatusColor(cardStatus) },
-                                          ]}
-                                        >
-                                          {cardStatus}
-                                        </Text>
-                                      </View>
-                                      {occupant && (
-                                        <Text style={styles.bedOccupantText}>
-                                          👤 {occupant.fullName}
-                                        </Text>
-                                      )}
-                                    </View>
-                                  );
-                                })}
-                              </View>
-                            </View>
-                          )}
-                        </View>
-                      );
-                    })}
-                  </View>
-                ))}
-
-                {/* Bottom Notice */}
-                <View style={styles.readOnlyNoticeBox}>
-                  <Text style={styles.readOnlyNoticeText}>
-                    💡 Viewing saved structure. To add or adjust floors, rooms, beds, or rent, tap{' '}
-                    <Text style={{ fontWeight: '700', color: '#4f46e5' }}>Edit Property</Text> above.
-                  </Text>
                 </View>
               </View>
             )}
@@ -1761,36 +1714,283 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f6f4ee',
+    backgroundColor: '#f8fafc',
   },
   header: {
-    backgroundColor: '#fdfcf9',
+    backgroundColor: '#ffffff',
     paddingTop: 50,
-    paddingBottom: 14,
+    paddingBottom: 12,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e8dec8',
+    borderBottomColor: '#f1f5f9',
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   headerLogo: {
-    width: 130,
-    height: 44,
+    width: 120,
+    height: 40,
+  },
+  pageTitleHeader: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerAvatarCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  createTaskCoralBtn: {
+    backgroundColor: '#f87171',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#f87171',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  createTaskCoralBtnText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+
+  // ─── Building Section (Image 2) ───
+  buildingSectionCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  buildingTitleText: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginBottom: 14,
+  },
+  catPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  catPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  catPillActive: {
+    backgroundColor: '#1e293b',
+    borderColor: '#1e293b',
+  },
+  catPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  catPillTextActive: {
+    color: '#ffffff',
+  },
+
+  // ─── Floor Nav Row (Image 2) ───
+  floorNavContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 8,
+    marginBottom: 16,
+  },
+  floorNavScroll: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+  },
+  floorTabItem: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    position: 'relative',
+  },
+  floorTabItemActive: {},
+  floorTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  floorTabTextActive: {
+    color: '#f43f5e',
+    fontWeight: '900',
+  },
+  floorActiveUnderline: {
+    position: 'absolute',
+    bottom: -8,
+    left: 0,
+    right: 0,
+    height: 3,
+    backgroundColor: '#f43f5e',
+    borderRadius: 2,
+  },
+  addFloorDottedBtn: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#94a3b8',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+  },
+  addFloorDottedText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+
+  // ─── Rooms Grid (Image 2) ───
+  roomsGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  addRoomDottedCard: {
+    width: 82,
+    height: 98,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#94a3b8',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+  },
+  addRoomDoorIconBox: {
+    marginBottom: 4,
+  },
+  addRoomDottedText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    textAlign: 'center',
+  },
+  modernRoomCard: {
+    width: 82,
+    height: 98,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  roomNoTopLabel: {
+    fontSize: 9,
+    color: '#94a3b8',
+    fontWeight: '600',
     marginBottom: 2,
+  },
+  roomNoBoldNum: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  roomTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 2,
+  },
+  roomTypeTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  roomStatusTinyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  roomBedsSubtext: {
+    fontSize: 9,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+
+  bottomSwitchBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginTop: 8,
+  },
+  bottomSwitchText: {
+    fontSize: 11,
+    color: '#64748b',
+    flex: 1,
+  },
+  editModeSwitchBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  editModeSwitchText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0f172a',
   },
   brandSub: {
     fontSize: 12,
     color: '#64748b',
     fontWeight: '500',
     marginTop: 2,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
   },
   addPropBtn: {
     backgroundColor: '#4f46e5',

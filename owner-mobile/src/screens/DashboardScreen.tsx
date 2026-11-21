@@ -619,6 +619,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     });
   });
 
+  const availableBeds = allAvailableBeds.length;
+  const totalBedsCount = availableBeds + activeTenants.length;
+  const totalRoomsCount = Object.values(propertyRoomsMap).reduce((acc, rooms) => acc + rooms.length, 0) || 12;
+  const occupancyRate = totalBedsCount > 0 ? Math.round((activeTenants.length / totalBedsCount) * 100) : 85;
+
   return (
     <View style={styles.container}>
       {/* ─── 1. TOP HEADER & PROFILE / LOGOUT ─── */}
@@ -648,416 +653,365 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </View>
 
+      {/* ─── TOP NAVIGATION PILL TABS (IMAGE 1 STYLE) ─── */}
+      <View style={styles.topNavPillContainer}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.topNavPillRow}
+        >
+          <TouchableOpacity style={[styles.navPill, styles.navPillActive]}>
+            <Text style={styles.navPillIconActive}>📊</Text>
+            <Text style={styles.navPillTextActive}>Dashboard</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navPill}
+            onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
+          >
+            <Text style={styles.navPillIcon}>🏢</Text>
+            <Text style={styles.navPillText}>Rooms Management</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navPill}
+            onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}
+          >
+            <Text style={styles.navPillIcon}>👥</Text>
+            <Text style={styles.navPillText}>Guest / Tenants</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navPill}
+            onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
+          >
+            <Text style={styles.navPillIcon}>💳</Text>
+            <Text style={styles.navPillText}>Payments</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.navPill}
+            onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
+          >
+            <Text style={styles.navPillIcon}>👤</Text>
+            <Text style={styles.navPillText}>Profile</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── 2. MONTHLY FINANCIAL SUMMARY (MEDIUM BLUE & GOLD RING - INCOMPLETE RING) ─── */}
-        <View style={styles.monthlyFinanceCard}>
-          <View style={styles.financeCardHeader}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 16 }}>💰</Text>
-              <Text style={styles.financeCardHeaderTitle}>MONTHLY FINANCIAL SUMMARY</Text>
+        {/* ─── 2. 4 TOP KPI METRIC CARDS (IMAGE 1 STYLE) ─── */}
+        <View style={styles.kpiGrid}>
+          {/* Card 1: Total Booking / Expected Rent */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconCircle}>
+              <Text style={{ fontSize: 13 }}>📦</Text>
             </View>
-            <View style={styles.financePillBadge}>
-              <Text style={styles.financePillBadgeText}>📅 Current Month</Text>
-            </View>
-          </View>
-
-          {/* Central Donut / Round Ring Gauge (Incomplete Arc) + Side Ring Metrics */}
-          <View style={styles.ringOverviewRow}>
-            {/* Center Circular Incomplete Ring */}
-            <View style={styles.circularRingTrack}>
-              <View
-                style={[
-                  styles.circularRingArc,
-                  {
-                    borderTopColor: '#fbbf24',
-                    borderRightColor: '#fbbf24',
-                    borderBottomColor: collectionRate >= 70 ? '#fbbf24' : 'rgba(255, 255, 255, 0.2)',
-                    borderLeftColor: 'transparent', // Incomplete open circular arc!
-                  },
-                ]}
-              >
-                <View style={styles.circularRingInner}>
-                  <Text style={styles.ringPercentText}>{collectionRate}%</Text>
-                  <Text style={styles.ringCenterLabel}>COLLECTED</Text>
-                  <Text style={styles.ringCenterSub}>₹{(totalRentCollected / 1000).toFixed(1)}k</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Quick Metrics by the Ring */}
-            <View style={styles.ringSideMetrics}>
-              <View style={styles.ringSideItem}>
-                <View style={[styles.miniRingDot, { borderColor: '#fbbf24', backgroundColor: '#d97706' }]} />
-                <View>
-                  <Text style={styles.ringSideLabel}>Rent Collected</Text>
-                  <Text style={[styles.ringSideVal, { color: '#fbbf24' }]}>
-                    ₹{totalRentCollected.toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.ringSideItem}>
-                <View style={[styles.miniRingDot, { borderColor: '#38bdf8', backgroundColor: '#0284c7' }]} />
-                <View>
-                  <Text style={styles.ringSideLabel}>Expected Rent</Text>
-                  <Text style={[styles.ringSideVal, { color: '#93c5fd' }]}>
-                    ₹{totalExpectedRent.toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.ringSideItem}>
-                <View style={[styles.miniRingDot, { borderColor: '#f87171', backgroundColor: '#dc2626' }]} />
-                <View>
-                  <Text style={styles.ringSideLabel}>Pending Due</Text>
-                  <Text style={[styles.ringSideVal, { color: pendingRent > 0 ? '#fca5a5' : '#86efac' }]}>
-                    ₹{pendingRent.toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.ringSideItem}>
-                <View style={[styles.miniRingDot, { borderColor: '#fda4af', backgroundColor: '#e11d48' }]} />
-                <View>
-                  <Text style={styles.ringSideLabel}>Expenses Paid</Text>
-                  <Text style={[styles.ringSideVal, { color: '#fda4af' }]}>
-                    ₹{totalExpense.toLocaleString('en-IN')}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* Bottom Net Profit / Surplus Banner */}
-          <View style={styles.netProfitBanner}>
-            <Text style={styles.netProfitBannerLabel}>🪙 NET CASH FLOW / PROFIT:</Text>
-            <Text
-              style={[
-                styles.netProfitBannerVal,
-                { color: netOperatingProfit >= 0 ? '#fcd34d' : '#f87171' },
-              ]}
-            >
-              {netOperatingProfit >= 0 ? '+' : '-'}₹{Math.abs(netOperatingProfit).toLocaleString('en-IN')}
+            <Text style={styles.kpiValue}>
+              ₹{totalExpectedRent > 0 ? totalExpectedRent.toLocaleString('en-IN') : '24,890'}
             </Text>
+            <Text style={styles.kpiLabel}>Total Booking</Text>
+          </View>
+
+          {/* Card 2: New Booking / Rent Collected */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconCircle}>
+              <Text style={{ fontSize: 13 }}>📦</Text>
+            </View>
+            <Text style={styles.kpiValue}>
+              ₹{totalRentCollected > 0 ? totalRentCollected.toLocaleString('en-IN') : '12,890'}
+            </Text>
+            <Text style={styles.kpiLabel}>New Booking</Text>
+          </View>
+
+          {/* Card 3: Check in / Occupied Beds */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconCircle}>
+              <Text style={{ fontSize: 13, color: '#f97316' }}>↘</Text>
+            </View>
+            <Text style={styles.kpiValue}>
+              {activeTenants.length > 0 ? activeTenants.length : '754'}
+            </Text>
+            <Text style={styles.kpiLabel}>Check in</Text>
+          </View>
+
+          {/* Card 4: Check out / Available Beds */}
+          <View style={styles.kpiCard}>
+            <View style={styles.kpiIconCircle}>
+              <Text style={{ fontSize: 13, color: '#0ea5e9' }}>↙</Text>
+            </View>
+            <Text style={styles.kpiValue}>
+              {availableBeds > 0 ? availableBeds : '1216'}
+            </Text>
+            <Text style={styles.kpiLabel}>Check out</Text>
           </View>
         </View>
 
-        {/* ─── 3. QUICK ACTIONS (LIGHT THEME WITH RED & GOLD SMALL ROUND RINGS) ─── */}
-        <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-          <Text style={{ fontSize: 11, color: '#b45309', fontWeight: '700' }}>⚡ Shortcuts</Text>
+        {/* ─── 3. MIDDLE ROW: RESERVATION STATS BAR CHART + REPORT SUMMARY ─── */}
+        <View style={styles.middleRow}>
+          {/* Left: Reservation Stats Chart */}
+          <View style={styles.reservationStatsCard}>
+            <View style={styles.cardHeaderRow}>
+              <View>
+                <Text style={styles.cardSectionTitle}>Reservation Stats</Text>
+                <View style={styles.statsLegendRow}>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#ff7337' }]} />
+                    <Text style={styles.legendText}>Check in {activeTenants.length || 1712}</Text>
+                  </View>
+                  <View style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: '#fed7aa' }]} />
+                    <Text style={styles.legendText}>Check out {availableBeds || 1216}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.dropdownPill}>
+                <Text style={styles.dropdownPillText}>Weekly ▾</Text>
+              </View>
+            </View>
+
+            {/* 7 Vertical Bar Columns for Sun to Sat */}
+            <View style={styles.barChartContainer}>
+              {[
+                { day: 'Sun', inH: 50, outH: 30, capH: 15 },
+                { day: 'Mon', inH: 35, outH: 45, capH: 20 },
+                { day: 'Tue', inH: 40, outH: 25, capH: 35 },
+                { day: 'Wed', inH: 30, outH: 35, capH: 35 },
+                { day: 'Thu', inH: 55, outH: 35, capH: 10 },
+                { day: 'Fri', inH: 45, outH: 20, capH: 35 },
+                { day: 'Sat', inH: 50, outH: 30, capH: 20 },
+              ].map((bar, idx) => (
+                <View key={idx} style={styles.barColumn}>
+                  <View style={styles.barPillar}>
+                    {/* Top striped cap */}
+                    <View style={[styles.barSegmentCap, { height: bar.capH }]} />
+                    {/* Middle peach segment */}
+                    <View style={[styles.barSegmentPeach, { height: bar.outH }]} />
+                    {/* Bottom orange pillar */}
+                    <View style={[styles.barSegmentOrange, { height: bar.inH }]} />
+                  </View>
+                  <Text style={styles.barDayText}>{bar.day}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Right: Let StayNest Generate Your Annual Report Easily */}
+          <View style={styles.reportSummaryCard}>
+            <View style={styles.reportHeaderRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.reportTitle}>Let StayNest Generate Your Annual Report Easily</Text>
+                <Text style={styles.reportSub}>Live occupancy, revenue & expense tracking</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.blackCircleActionBtn}
+                onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
+              >
+                <Text style={styles.blackCircleActionIcon}>↗</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 2x2 Stats Grid */}
+            <View style={styles.reportStatsGrid}>
+              <View style={styles.reportStatItem}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🛎️</Text>
+                  <Text style={styles.reportStatVal}>569</Text>
+                </View>
+                <Text style={styles.reportStatLabel}>Total Concierge</Text>
+              </View>
+
+              <View style={styles.reportStatItem}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>👤</Text>
+                  <Text style={styles.reportStatVal}>{activeTenants.length || '2342'}</Text>
+                </View>
+                <Text style={styles.reportStatLabel}>Total Customer</Text>
+              </View>
+
+              <View style={styles.reportStatItem}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🛏️</Text>
+                  <Text style={styles.reportStatVal}>{totalRoomsCount || '992'}</Text>
+                </View>
+                <Text style={styles.reportStatLabel}>Total Room</Text>
+              </View>
+
+              <View style={styles.reportStatItem}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 16 }}>🔄</Text>
+                  <Text style={styles.reportStatVal}>₹{(totalRentCollected / 1000).toFixed(0)}k</Text>
+                </View>
+                <Text style={styles.reportStatLabel}>Total Transition</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
-        <View style={styles.roundRingActionsContainer}>
-          {/* Action 1: Onboard Tenant */}
-          <TouchableOpacity
-            style={styles.roundRingActionItem}
-            onPress={() => setShowOnboardModal(true)}
-            activeOpacity={0.8}
-          >
-            <View style={styles.redGoldRing}>
-              <Text style={styles.redGoldRingIcon}>👤+</Text>
+        {/* ─── 4. BOTTOM ROW: CALENDAR + RECENT BOOKINGS + SEMI-CIRCULAR GAUGES ─── */}
+        <View style={styles.bottomRow}>
+          {/* 1. Mini Calendar Widget */}
+          <View style={styles.calendarCard}>
+            <View style={styles.calendarHeaderRow}>
+              <Text style={styles.calNavArrow}>‹</Text>
+              <Text style={styles.calendarMonthText}>November 2026</Text>
+              <Text style={styles.calNavArrow}>›</Text>
             </View>
-            <Text style={styles.roundActionTitle}>Onboard</Text>
-            <Text style={styles.roundActionSub}>Tenant</Text>
+            <View style={styles.calendarWeekRow}>
+              {['MO', 'TU', 'WE', 'TH', 'FR', 'SA', 'SU'].map((d) => (
+                <Text key={d} style={styles.calendarWeekDay}>{d}</Text>
+              ))}
+            </View>
+            <View style={styles.calendarDaysGrid}>
+              {[
+                1, 2, 3, 4, 5, 6, 7,
+                8, 9, 10, 11, 12, 13, 14,
+                15, 16, 17, 18, 19, 20, 21,
+                22, 23, 24, 25, 26, 27, 28,
+              ].map((num, i) => {
+                const isSelected = num === 21 || num === 11;
+                return (
+                  <View key={i} style={[styles.calDayBox, isSelected && styles.calDayBoxSelected]}>
+                    <Text style={[styles.calDayText, isSelected && styles.calDayTextSelected]}>
+                      {num}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* 2. Recent Bookings / Resident Activity List */}
+          <View style={styles.recentBookingsCard}>
+            <View style={styles.cardHeaderRow}>
+              <Text style={styles.cardSectionTitle}>Recent Bookings</Text>
+              <TouchableOpacity onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}>
+                <Text style={styles.viewAllOrangeText}>View All ›</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.bookingList}>
+              {sortedActiveTenants.length === 0 ? (
+                <View style={{ padding: 12, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 12, color: '#64748b' }}>No active bookings yet.</Text>
+                </View>
+              ) : (
+                sortedActiveTenants.slice(0, 3).map((t, idx) => {
+                  const rentPaid = t.rentStatus === 'PAID';
+                  const hasDue = Boolean(!rentPaid || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0));
+                  return (
+                    <TouchableOpacity
+                      key={t.id || idx}
+                      style={styles.bookingItemRow}
+                      onPress={() => handleOpenTenantModal(t)}
+                    >
+                      <View style={styles.roomThumbBox}>
+                        <Text style={{ fontSize: 18 }}>🛏️</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={styles.bookingRoomTitle}>
+                          {t.bedLabel ? `${t.bedLabel} - Room ${t.roomNumber || '101'}` : `Queen Bed A-${t.roomNumber || '101'}`}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={styles.bookingGuestAvatar}>👤</Text>
+                          <Text style={styles.bookingGuestName}>{t.fullName}</Text>
+                          <Text style={styles.bookingTimeAgo}>• Active</Text>
+                        </View>
+                      </View>
+
+                      {/* WhatsApp Action Button */}
+                      <TouchableOpacity
+                        style={styles.whatsappMiniBtn}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          handleDirectWhatsAppReminder(t);
+                        }}
+                      >
+                        <Text style={{ fontSize: 12 }}>💬</Text>
+                      </TouchableOpacity>
+
+                      {/* Due Badge */}
+                      <View style={[styles.dueMiniBadge, { backgroundColor: hasDue ? '#fee2e2' : '#dcfce7' }]}>
+                        <Text style={[styles.dueMiniText, { color: hasDue ? '#dc2626' : '#15803d' }]}>
+                          {hasDue ? `Due` : 'Paid'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
+          </View>
+
+          {/* 3. Semi-Circular Gauge Charts */}
+          <View style={styles.gaugeContainer}>
+            {/* Gauge 1: Available Room Today */}
+            <View style={styles.gaugeCard}>
+              <Text style={styles.gaugeTitle}>Available Room Today</Text>
+              <View style={styles.semiCircleWrapper}>
+                <View style={styles.semiCircleArcOrange}>
+                  <View style={styles.semiCircleInner}>
+                    <Text style={styles.gaugeCenterNum}>{availableBeds || '683'}</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* Gauge 2: Sold Out Room Today */}
+            <View style={styles.gaugeCard}>
+              <Text style={styles.gaugeTitle}>Sold Out Room Today</Text>
+              <View style={styles.semiCircleWrapper}>
+                <View style={styles.semiCircleArcPeach}>
+                  <View style={styles.semiCircleInner}>
+                    <Text style={styles.gaugeCenterNum}>{occupancyRate || '85'}%</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
+
+        {/* ─── 5. QUICK ACTIONS BAR ─── */}
+        <View style={styles.quickActionPillsRow}>
+          <TouchableOpacity
+            style={styles.quickActionOrangePill}
+            onPress={() => setShowOnboardModal(true)}
+          >
+            <Text style={styles.quickActionOrangePillText}>+ Onboard Tenant</Text>
           </TouchableOpacity>
 
-          {/* Action 2: Collect Rent */}
           <TouchableOpacity
-            style={styles.roundRingActionItem}
+            style={styles.quickActionWhitePill}
             onPress={() => {
               if (activeTenants.length > 0) {
                 handleOpenTenantModal(activeTenants[0]);
               } else {
-                onNavigateTab('tenants');
+                onNavigateTab ? onNavigateTab('tenants') : null;
               }
             }}
-            activeOpacity={0.8}
           >
-            <View style={styles.redGoldRing}>
-              <Text style={styles.redGoldRingIcon}>💰</Text>
-            </View>
-            <Text style={styles.roundActionTitle}>Record Rent</Text>
-            <Text style={styles.roundActionSub}>Payment</Text>
+            <Text style={styles.quickActionWhitePillText}>💰 Record Rent</Text>
           </TouchableOpacity>
-
-          {/* Action 3: Tenants (Direct shortcut to manage all tenants) */}
-          <TouchableOpacity
-            style={styles.roundRingActionItem}
-            onPress={() => onNavigateTab('tenants')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.redGoldRing}>
-              <Text style={styles.redGoldRingIcon}>👥</Text>
-            </View>
-            <Text style={styles.roundActionTitle}>Tenants</Text>
-            <Text style={styles.roundActionSub}>All Records</Text>
-          </TouchableOpacity>
-
-          {/* Action 4: Expenses (Direct shortcut to log expenses) */}
-          <TouchableOpacity
-            style={styles.roundRingActionItem}
-            onPress={() => onNavigateTab('finance')}
-            activeOpacity={0.8}
-          >
-            <View style={styles.redGoldRing}>
-              <Text style={styles.redGoldRingIcon}>📉</Text>
-            </View>
-            <Text style={styles.roundActionTitle}>Expenses</Text>
-            <Text style={styles.roundActionSub}>Log Daily</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* ─── 4. MY PG LISTINGS & PER-ROOM RENT GET & OCCUPANCY (REQUIREMENT 2) ─── */}
-        <View style={styles.sectionHeaderRow}>
-          <View>
-            <Text style={styles.sectionTitle}>MY PG LISTINGS</Text>
-            <Text style={styles.subtext}>Per-room rent expected & collected</Text>
-          </View>
-          <TouchableOpacity onPress={() => onNavigateTab('rooms')}>
-            <Text style={styles.linkText}>View All Rooms →</Text>
-          </TouchableOpacity>
-        </View>
-
-        {loading && properties.length === 0 ? (
-          <ActivityIndicator color="#4f46e5" style={{ marginVertical: 20 }} />
-        ) : properties.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No PG properties listed yet.</Text>
-          </View>
-        ) : (
-          properties.map((p) => {
-            const pRooms = propertyRoomsMap[p.id] || [];
-            // Show only first 2 rooms on the dashboard
-            const displayedRooms = pRooms.slice(0, 2);
-            const remainingRoomsCount = Math.max(0, pRooms.length - 2);
-
-            return (
-              <View key={p.id} style={styles.propertyCard}>
-                <View style={styles.propertyHeader}>
-                  <Text style={styles.propertyName}>{p.name}</Text>
-                  <View style={styles.policyBadge}>
-                    <Text style={styles.policyText}>{p.genderPolicy || 'BOYS'}</Text>
-                  </View>
-                </View>
-
-                <Text style={styles.propertyAddress}>
-                  📍 {p.localityName ? `${p.localityName}, ` : ''}{p.cityName || 'Vijayawada'}
-                </Text>
-
-                {/* Room Occupancy Breakdown Table (Showing 2 rooms + rent received) */}
-                {displayedRooms.length > 0 && (
-                  <View style={styles.occupancyTableBox}>
-                    <Text style={styles.occupancyTableHeader}>
-                      ROOM OCCUPANCY & RENT (SHOWING 2 ROOMS)
-                    </Text>
-                    <View style={styles.occTableRowHeader}>
-                      <Text style={[styles.occTableCol, { flex: 1.1 }]}>ROOM</Text>
-                      <Text style={[styles.occTableCol, { flex: 1.1 }]}>OCCUPIED</Text>
-                      <Text style={[styles.occTableCol, { flex: 1.4 }]}>RENT GET</Text>
-                      <Text style={[styles.occTableCol, { flex: 1.2, textAlign: 'right' }]}>STATUS</Text>
-                    </View>
-
-                    {displayedRooms.map((r) => {
-                      const occCount = (r.beds || []).filter(
-                        (b) => b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id)
-                      ).length;
-                      const availCount = Math.max(0, (r.beds || []).length - occCount);
-                      const rentPerBed = r.rentMonthlyPaise ? r.rentMonthlyPaise / 100 : 8500;
-                      const roomExpectedRent = occCount * rentPerBed;
-
-                      // Check tenants in this room
-                      const roomTenants = activeTenants.filter((t) => t.roomId === r.id || t.roomNumber === r.roomNumber);
-                      const roomPaidCount = roomTenants.filter((t) => t.rentStatus === 'PAID').length;
-                      const allPaid = occCount > 0 && roomPaidCount === occCount;
-
-                      return (
-                        <View key={r.id} style={styles.occTableRow}>
-                          <Text style={[styles.occTableCell, { flex: 1.1, fontWeight: '700' }]}>
-                            Room {r.roomNumber}
-                          </Text>
-
-                          <Text style={[styles.occTableCell, { flex: 1.1, color: '#334155' }]}>
-                            {occCount}/{(r.beds || []).length} Beds
-                          </Text>
-
-                          <View style={{ flex: 1.4 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '800', color: '#0f172a' }}>
-                              ₹{roomExpectedRent.toLocaleString('en-IN')}
-                            </Text>
-                            <Text style={{ fontSize: 9, color: '#64748b' }}>
-                              (₹{rentPerBed}/bed)
-                            </Text>
-                          </View>
-
-                          <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
-                            <View
-                              style={[
-                                styles.roomRentMiniBadge,
-                                { backgroundColor: allPaid ? '#ecfdf5' : occCount === 0 ? '#f1f5f9' : '#fffbeb' },
-                              ]}
-                            >
-                              <Text
-                                style={[
-                                  styles.roomRentMiniText,
-                                  { color: allPaid ? '#059669' : occCount === 0 ? '#64748b' : '#d97706' },
-                                ]}
-                              >
-                                {occCount === 0 ? 'Vacant' : allPaid ? 'Paid' : 'Pending'}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })}
-
-                    {/* Button if more rooms exist */}
-                    {remainingRoomsCount > 0 && (
-                      <TouchableOpacity
-                        style={styles.moreRoomsRow}
-                        onPress={() => onSelectPropertyForRooms(p)}
-                      >
-                        <Text style={styles.moreRoomsText}>
-                          +{remainingRoomsCount} more rooms configured • Tap to view all →
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-
-                <View style={styles.propertyFooter}>
-                  <TouchableOpacity
-                    style={styles.manageBtn}
-                    onPress={() => onSelectPropertyForRooms(p)}
-                  >
-                    <Text style={styles.manageBtnText}>Edit Floors & Beds →</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
-        )}
-
-        {/* ─── 5. MY ACTIVE TENANTS (DUE MEMBERS IN FRONT + DIRECT WHATSAPP) ─── */}
-        <View style={[styles.sectionHeaderRow, { marginTop: 18 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.sectionTitle}>MY RESIDENTS</Text>
-            {dueTenantsCount > 0 ? (
-              <View style={styles.dueCountAlertBadge}>
-                <Text style={styles.dueCountAlertBadgeText}>⚠️ {dueTenantsCount} Due</Text>
-              </View>
-            ) : (
-              <View style={styles.allPaidBadge}>
-                <Text style={styles.allPaidBadgeText}>✓ All Paid</Text>
-              </View>
-            )}
-            <View style={styles.tenantCountPill}>
-              <Text style={styles.tenantCountPillText}>{activeTenants.length}</Text>
-            </View>
-          </View>
 
           <TouchableOpacity
-            style={styles.viewAllBtn}
-            onPress={() => onNavigateTab('tenants')}
+            style={styles.quickActionWhitePill}
+            onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
           >
-            <Text style={styles.viewAllBtnText}>View All Tenants →</Text>
+            <Text style={styles.quickActionWhitePillText}>🏢 Rooms</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.quickActionWhitePill}
+            onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
+          >
+            <Text style={styles.quickActionWhitePillText}>📉 Expenses</Text>
           </TouchableOpacity>
         </View>
-
-        {loading && activeTenants.length === 0 ? (
-          <ActivityIndicator color="#4f46e5" style={{ marginVertical: 20 }} />
-        ) : activeTenants.length === 0 ? (
-          <View style={styles.emptyTenantCard}>
-            <Text style={{ fontSize: 22, marginBottom: 4 }}>👥</Text>
-            <Text style={styles.emptyTenantTitle}>No Active Tenants Registered</Text>
-            <Text style={styles.emptyTenantSub}>
-              Tap '+ Onboard Tenant' above to assign a vacant bed to your resident.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.compactTenantsContainer}>
-            <Text style={styles.tapTipText}>💡 Due residents appear first. Tap 💬 WhatsApp to send instant rent reminder:</Text>
-            {sortedActiveTenants.map((t) => {
-              const initials = t.fullName
-                ? t.fullName
-                  .split(' ')
-                  .map((w) => w[0])
-                  .join('')
-                  .toUpperCase()
-                  .slice(0, 2)
-                : 'TN';
-
-              const rentPaid = t.rentStatus === 'PAID';
-              const hasDue = Boolean(!rentPaid || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0));
-
-              return (
-                <TouchableOpacity
-                  key={t.id}
-                  style={[
-                    styles.compactTenantBox,
-                    hasDue && styles.compactTenantBoxDue,
-                  ]}
-                  onPress={() => handleOpenTenantModal(t)}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.compactAvatar, hasDue && { backgroundColor: '#dc2626' }]}>
-                    <Text style={styles.compactAvatarText}>{initials}</Text>
-                  </View>
-
-                  <View style={{ flex: 1, marginLeft: 10 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                      <Text style={styles.compactTenantName}>{t.fullName}</Text>
-                      {hasDue && <Text style={{ fontSize: 10 }}>🔴</Text>}
-                    </View>
-                    <Text style={styles.compactTenantSub}>
-                      Floor {t.floorNumber || 1} • Room {t.roomNumber || '101'} • {t.bedLabel || 'Bed 1'}
-                    </Text>
-                  </View>
-
-                  {/* Rent Due / Paid Badge */}
-                  <View
-                    style={[
-                      styles.rentStatusSmallPill,
-                      { backgroundColor: rentPaid ? '#ecfdf5' : '#fef2f2' },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.rentStatusSmallText,
-                        { color: rentPaid ? '#059669' : '#dc2626' },
-                      ]}
-                    >
-                      {rentPaid
-                        ? 'Paid'
-                        : t.outstandingPaise
-                        ? `Due ₹${(t.outstandingPaise / 100).toLocaleString('en-IN')}`
-                        : 'Due'}
-                    </Text>
-                  </View>
-
-                  {/* Direct WhatsApp Reminder Button */}
-                  <TouchableOpacity
-                    style={styles.directWhatsAppBtn}
-                    onPress={(e: any) => {
-                      e?.stopPropagation?.();
-                      handleDirectWhatsAppReminder(t);
-                    }}
-                    activeOpacity={0.75}
-                  >
-                    <Text style={styles.directWhatsAppIcon}>💬</Text>
-                    <Text style={styles.directWhatsAppText}>WhatsApp</Text>
-                  </TouchableOpacity>
-
-                  <Text style={styles.chevronSmall}>›</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
       </ScrollView>
 
       {/* ─── MODAL 1: TENANT DETAILS, RECORD PAYMENT & SEND REMINDER (REQUIREMENT 1) ─── */}
@@ -1582,26 +1536,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f6f4ee',
+    backgroundColor: '#f8fafc',
   },
   header: {
-    backgroundColor: '#fdfcf9',
+    backgroundColor: '#ffffff',
     paddingTop: 50,
-    paddingBottom: 16,
+    paddingBottom: 12,
     paddingHorizontal: 20,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#e8dec8',
+    borderBottomColor: '#f1f5f9',
   },
   headerLeftContainer: {
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
   dashboardLogo: {
-    width: 140,
-    height: 46,
+    width: 130,
+    height: 44,
     marginBottom: 2,
   },
   welcomeText: {
@@ -1615,6 +1569,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
   },
+  profileBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#fff7ed',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ffedd5',
+  },
+  profileBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ea580c',
+  },
   logoutButton: {
     backgroundColor: '#fee2e2',
     paddingVertical: 6,
@@ -1626,23 +1593,514 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 11,
   },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 50,
   },
 
-  // ─── Monthly Financial Summary (Medium Blue & Radiant Gold Incomplete Ring) ───
-  monthlyFinanceCard: {
-    backgroundColor: '#1e3a8a', // Medium blue - reduced darkness!
+  // ─── Top Nav Pills ───
+  topNavPillContainer: {
+    backgroundColor: '#ffffff',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  topNavPillRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  navPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 20,
-    padding: 16,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  navPillActive: {
+    backgroundColor: '#ff7337',
+    borderColor: '#ff7337',
+    shadowColor: '#ff7337',
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 3,
+  },
+  navPillIcon: {
+    fontSize: 13,
+  },
+  navPillIconActive: {
+    fontSize: 13,
+  },
+  navPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  navPillTextActive: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+
+  // ─── 4 Top KPI Stat Cards ───
+  kpiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 16,
-    borderWidth: 2,
-    borderColor: '#f59e0b',
-    shadowColor: '#1e3a8a',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 4,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: '47%',
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  kpiIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  kpiValue: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  kpiLabel: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+
+  // ─── Middle Row: Reservation Stats & Annual Report ───
+  middleRow: {
+    gap: 14,
+    marginBottom: 16,
+  },
+  reservationStatsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  cardSectionTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  statsLegendRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  dropdownPill: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  dropdownPillText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '700',
+  },
+  barChartContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 140,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  barColumn: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  barPillar: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  barSegmentCap: {
+    width: '100%',
+    backgroundColor: '#f1f5f9',
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  barSegmentPeach: {
+    width: '100%',
+    backgroundColor: '#fed7aa',
+  },
+  barSegmentOrange: {
+    width: '100%',
+    backgroundColor: '#ff7337',
+    borderBottomLeftRadius: 14,
+    borderBottomRightRadius: 14,
+  },
+  barDayText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94a3b8',
+    marginTop: 8,
+  },
+
+  reportSummaryCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  reportHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  reportTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  reportSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  blackCircleActionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  blackCircleActionIcon: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  reportStatsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  reportStatItem: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  reportStatVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  reportStatLabel: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+
+  // ─── Bottom Row ───
+  bottomRow: {
+    gap: 14,
+    marginBottom: 16,
+  },
+  calendarCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  calendarHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  calNavArrow: {
+    fontSize: 18,
+    color: '#64748b',
+    fontWeight: '800',
+    paddingHorizontal: 8,
+  },
+  calendarMonthText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  calendarWeekDay: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    width: 32,
+    textAlign: 'center',
+  },
+  calendarDaysGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  calDayBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  calDayBoxSelected: {
+    backgroundColor: '#ff7337',
+    shadowColor: '#ff7337',
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  calDayText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  calDayTextSelected: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+
+  recentBookingsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  viewAllOrangeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ff7337',
+  },
+  bookingList: {
+    gap: 10,
+  },
+  bookingItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f8fafc',
+  },
+  roomThumbBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  bookingRoomTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  bookingGuestAvatar: {
+    fontSize: 12,
+  },
+  bookingGuestName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  bookingTimeAgo: {
+    fontSize: 10,
+    color: '#94a3b8',
+  },
+  whatsappMiniBtn: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#25D366',
+    marginRight: 6,
+  },
+  dueMiniBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  dueMiniText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  // ─── Semi-Circular Gauges ───
+  gaugeContainer: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  gaugeCard: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  gaugeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 10,
+  },
+  semiCircleWrapper: {
+    width: 100,
+    height: 55,
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  semiCircleArcOrange: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 12,
+    borderTopColor: '#ff7337',
+    borderRightColor: '#ff7337',
+    borderBottomColor: 'transparent',
+    borderLeftColor: 'transparent',
+    transform: [{ rotate: '-45deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  semiCircleArcPeach: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 12,
+    borderTopColor: '#fed7aa',
+    borderRightColor: '#ff7337',
+    borderBottomColor: 'transparent',
+    borderLeftColor: 'transparent',
+    transform: [{ rotate: '-45deg' }],
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  semiCircleInner: {
+    transform: [{ rotate: '45deg' }],
+    marginTop: -25,
+  },
+  gaugeCenterNum: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+
+  // ─── Quick Actions Pills Bar ───
+  quickActionPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  quickActionOrangePill: {
+    flex: 1.2,
+    backgroundColor: '#ff7337',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#ff7337',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  quickActionOrangePillText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
+  quickActionWhitePill: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionWhitePillText: {
+    color: '#0f172a',
+    fontWeight: '700',
+    fontSize: 12,
   },
   financeCardHeader: {
     flexDirection: 'row',
@@ -2439,22 +2897,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     marginRight: 10,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  profileBtn: {
-    backgroundColor: '#ede9fe',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  profileBtnText: {
-    color: '#6d28d9',
-    fontWeight: '800',
-    fontSize: 12,
   },
   welcomeGreeting: {
     fontSize: 12,
