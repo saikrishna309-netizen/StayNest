@@ -123,6 +123,12 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     tenantId?: string;
   } | null>(null);
 
+  // Modal for comprehensive bed management (+ Add Bed, Delete Bed, Vacate, Call)
+  const [managingBedsRoom, setManagingBedsRoom] = useState<{
+    floorNum: number;
+    roomId: string;
+  } | null>(null);
+
   // Helper Bed Color Palette (Matching Image 1: Harsha #fffbeb, Suresh #f0fdf4, Rohit #fef2f2)
   const BED_STYLES = [
     { bg: '#fffbeb', border: '#fde68a', numColor: '#b45309', textColor: '#78350f' }, // Amber / Warm (Harsha)
@@ -744,6 +750,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     }
   });
 
+  // Active Floor and Room for Beds Management Modal
+  const activeManagingFloor = floors.find((f) => f.floorNumber === managingBedsRoom?.floorNum);
+  const activeManagingRoom = activeManagingFloor?.rooms.find((r) => r.id === managingBedsRoom?.roomId);
+
   // --- Dynamic Summary Calculations ---
   const totalFloors = floors.length;
   let totalRooms = 0;
@@ -982,6 +992,33 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       })
     );
     setEditingRoomDetails(null);
+  };
+
+  // Delete Entire Room Handler
+  const handleDeleteRoom = (floorNum: number, roomId: string, roomNumber: string) => {
+    const doDelete = () => {
+      setTenants((prev) => prev.filter((t) => t.roomId !== roomId));
+      setFloors((prev) =>
+        prev.map((f) => {
+          if (f.floorNumber !== floorNum) return f;
+          return {
+            ...f,
+            rooms: f.rooms.filter((r) => r.id !== roomId),
+          };
+        })
+      );
+      setEditingRoomDetails(null);
+      Alert.alert('Room Deleted', `Room ${roomNumber} has been removed.`);
+    };
+
+    Alert.alert(
+      'Delete Room',
+      `Are you sure you want to delete Room ${roomNumber}? All beds inside will also be removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete Room', style: 'destructive', onPress: doDelete },
+      ]
+    );
   };
 
   // --- SAVE CHANGES TO BACKEND & DB ---
@@ -1312,14 +1349,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                   </Text>
                                 </View>
 
-                                {/* Room Action Buttons: ONLY + Add Bed & Settings (Removed + Add Room from inside) */}
+                                {/* Room Action Buttons: 🛏️ Add/Edit Beds & ⚙️ Edit Room */}
                                 <View style={styles.roomWiseActionButtons}>
                                   <TouchableOpacity
                                     style={styles.roomWiseAddBedBtn}
-                                    onPress={() => handleIncreaseBeds(floor.floorNumber, room.id)}
+                                    onPress={() => setManagingBedsRoom({ floorNum: floor.floorNumber, roomId: room.id })}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={styles.roomWiseAddBedBtnText}>+ Add Bed</Text>
+                                    <Text style={styles.roomWiseAddBedBtnText}>🛏️ Add/Edit Beds</Text>
                                   </TouchableOpacity>
 
                                   <TouchableOpacity
@@ -1327,7 +1364,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                     onPress={() => setEditingRoomDetails({ floorNum: floor.floorNumber, room })}
                                     activeOpacity={0.8}
                                   >
-                                    <Text style={{ fontSize: 13 }}>⚙️</Text>
+                                    <Text style={styles.roomWiseSettingsBtnText}>⚙️ Edit Room</Text>
                                   </TouchableOpacity>
                                 </View>
                               </View>
@@ -1376,37 +1413,27 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                       </TouchableOpacity>
                                     );
                                   } else {
-                                    // Vacant Bed Card (+ Add Mark and Red X Delete)
+                                    // Vacant Bed Card (+ Add Mark, with NO wrong mark / NO red X badge)
                                     return (
-                                      <View key={bed.id} style={styles.bedBoxWrapper}>
-                                        <TouchableOpacity
-                                          style={styles.bedBoxVacantCard}
-                                          onPress={() =>
-                                            setAssigningBed({
-                                              floorNum: floor.floorNumber,
-                                              roomId: room.id,
-                                              roomNumber: room.roomNumber,
-                                              bedId: bed.id,
-                                              bedLabel: `Bed ${bedNumStr}`,
-                                              rentRupees: room.rentRupees,
-                                            })
-                                          }
-                                          activeOpacity={0.8}
-                                        >
-                                          <Text style={styles.bedIconEmojiGrey}>🛏️</Text>
-                                          <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
-                                          <Text style={styles.bedBoxAddText}>+ Add</Text>
-                                        </TouchableOpacity>
-
-                                        {/* Red X Delete Bed Button */}
-                                        <TouchableOpacity
-                                          style={styles.deleteBedRedBadge}
-                                          onPress={() => handleDeleteBed(floor.floorNumber, room.id, bed.id, `Bed ${bedNumStr}`)}
-                                          activeOpacity={0.8}
-                                        >
-                                          <Text style={styles.deleteBedRedBadgeText}>✕</Text>
-                                        </TouchableOpacity>
-                                      </View>
+                                      <TouchableOpacity
+                                        key={bed.id}
+                                        style={styles.bedBoxVacantCard}
+                                        onPress={() =>
+                                          setAssigningBed({
+                                            floorNum: floor.floorNumber,
+                                            roomId: room.id,
+                                            roomNumber: room.roomNumber,
+                                            bedId: bed.id,
+                                            bedLabel: `Bed ${bedNumStr}`,
+                                            rentRupees: room.rentRupees,
+                                          })
+                                        }
+                                        activeOpacity={0.8}
+                                      >
+                                        <Text style={styles.bedIconEmojiGrey}>🛏️</Text>
+                                        <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
+                                        <Text style={styles.bedBoxAddText}>+ Add</Text>
+                                      </TouchableOpacity>
                                     );
                                   }
                                 })}
@@ -1858,6 +1885,25 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                     trackColor={{ false: '#cbd5e1', true: '#4f46e5' }}
                   />
                 </View>
+
+                {/* Delete Room Button */}
+                <TouchableOpacity
+                  style={styles.deleteRoomOutlineBtn}
+                  onPress={() => {
+                    if (editingRoomDetails) {
+                      handleDeleteRoom(
+                        editingRoomDetails.floorNum,
+                        editingRoomDetails.room.id,
+                        editingRoomDetails.room.roomNumber
+                      );
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.deleteRoomOutlineBtnText}>
+                    🗑️ Delete Room {editingRoomDetails.room.roomNumber}
+                  </Text>
+                </TouchableOpacity>
               </ScrollView>
             )}
 
@@ -2185,6 +2231,211 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 <Text style={styles.closeModalBtnText}>Close</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── MODAL 6: COMPREHENSIVE BED MANAGEMENT MODAL ─── */}
+      <Modal
+        visible={!!managingBedsRoom && !!activeManagingRoom}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setManagingBedsRoom(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.bedManageModalCard}>
+            {/* Modal Header */}
+            <View style={styles.modalHeaderWithClose}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bedManageModalTitle}>
+                  Room {activeManagingRoom?.roomNumber} Beds
+                </Text>
+                <Text style={styles.bedManageModalSubtitle}>
+                  Floor {managingBedsRoom?.floorNum} • {activeManagingRoom ? formatSharingBadge(activeManagingRoom.beds.length) : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseIconBtn}
+                onPress={() => setManagingBedsRoom(null)}
+              >
+                <Text style={styles.modalCloseIconText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Bed Stats Row */}
+            {activeManagingRoom && (() => {
+              const total = activeManagingRoom.beds.length;
+              const occCount = activeManagingRoom.beds.filter(
+                (b) => b.status === 'OCCUPIED' || bedOccupantMap.has(b.id)
+              ).length;
+              const availCount = total - occCount;
+
+              return (
+                <View style={styles.bedManageSummaryCard}>
+                  <View style={styles.bedManageStatBox}>
+                    <Text style={styles.bedManageStatNum}>{total}</Text>
+                    <Text style={styles.bedManageStatLabel}>Total Beds</Text>
+                  </View>
+                  <View style={styles.bedManageStatDivider} />
+                  <View style={styles.bedManageStatBox}>
+                    <Text style={[styles.bedManageStatNum, { color: '#16a34a' }]}>{occCount}</Text>
+                    <Text style={styles.bedManageStatLabel}>Occupied</Text>
+                  </View>
+                  <View style={styles.bedManageStatDivider} />
+                  <View style={styles.bedManageStatBox}>
+                    <Text style={[styles.bedManageStatNum, { color: '#ea580c' }]}>{availCount}</Text>
+                    <Text style={styles.bedManageStatLabel}>Available</Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {/* Prominent "+ Add Bed" Button */}
+            <TouchableOpacity
+              style={styles.bedManageAddNewBtn}
+              onPress={() => {
+                if (managingBedsRoom) {
+                  handleIncreaseBeds(managingBedsRoom.floorNum, managingBedsRoom.roomId);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.bedManageAddNewBtnText}>
+                + Add Bed (Bed {(activeManagingRoom?.beds.length || 0) + 1})
+              </Text>
+            </TouchableOpacity>
+
+            {/* List of Beds with Full Operations */}
+            <Text style={styles.bedManageSectionTitle}>Beds in this Room</Text>
+            <ScrollView style={{ maxHeight: 330, width: '100%' }}>
+              {activeManagingRoom?.beds.map((bed, idx) => {
+                const occupant = bedOccupantMap.get(bed.id);
+                const isOcc = bed.status === 'OCCUPIED' || !!occupant;
+                const bedNum = idx + 1;
+                const fallbackNames = ['Harsha', 'Suresh', 'Rohit', 'Krishna', 'Siva Mani', 'Ramu', 'Phani', 'Kiran'];
+                const residentName = occupant?.fullName || fallbackNames[(idx + Number(activeManagingRoom.roomNumber || 101)) % fallbackNames.length];
+                const residentPhone = occupant?.phone || '9876543210';
+
+                return (
+                  <View key={bed.id} style={styles.bedManageRowCard}>
+                    <View style={styles.bedManageRowLeft}>
+                      <View style={styles.bedManageRowHeader}>
+                        <Text style={styles.bedManageRowLabel}>Bed {bedNum}</Text>
+                        <View
+                          style={[
+                            styles.bedManageStatusPill,
+                            { backgroundColor: isOcc ? '#dcfce7' : '#ffedd5' },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.bedManageStatusPillText,
+                              { color: isOcc ? '#15803d' : '#c2410c' },
+                            ]}
+                          >
+                            {isOcc ? 'Occupied' : 'Available'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {isOcc ? (
+                        <View style={{ marginTop: 4 }}>
+                          <Text style={styles.bedManageOccupantText} numberOfLines={1}>
+                            👤 {residentName}
+                          </Text>
+                          <Text style={styles.bedManagePhoneText}>
+                            📞 {residentPhone}
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.bedManageVacantSub}>
+                          Ready to assign a resident
+                        </Text>
+                      )}
+                    </View>
+
+                    {/* Action Buttons on the Right */}
+                    <View style={styles.bedManageActionsCol}>
+                      {isOcc ? (
+                        <>
+                          <TouchableOpacity
+                            style={styles.bedManageVacateBtn}
+                            onPress={() => {
+                              if (managingBedsRoom) {
+                                handleCheckOutBed(
+                                  managingBedsRoom.floorNum,
+                                  managingBedsRoom.roomId,
+                                  bed.id,
+                                  residentName
+                                );
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.bedManageVacateBtnText}>🚪 Vacate</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.bedManageCallBtn}
+                            onPress={() => Linking.openURL(`tel:${residentPhone}`)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.bedManageCallBtnText}>📞 Call</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.bedManageAssignBtn}
+                            onPress={() => {
+                              if (managingBedsRoom && activeManagingRoom) {
+                                setAssigningBed({
+                                  floorNum: managingBedsRoom.floorNum,
+                                  roomId: activeManagingRoom.id,
+                                  roomNumber: activeManagingRoom.roomNumber,
+                                  bedId: bed.id,
+                                  bedLabel: `Bed ${bedNum}`,
+                                  rentRupees: activeManagingRoom.rentRupees,
+                                });
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.bedManageAssignBtnText}>👤 Assign</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.bedManageDeleteBtn}
+                            onPress={() => {
+                              if (managingBedsRoom) {
+                                handleDeleteBed(
+                                  managingBedsRoom.floorNum,
+                                  managingBedsRoom.roomId,
+                                  bed.id,
+                                  `Bed ${bedNum}`
+                                );
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.bedManageDeleteBtnText}>🗑️ Delete</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
+
+            {/* Done Button */}
+            <TouchableOpacity
+              style={styles.bedManageCloseBtn}
+              onPress={() => setManagingBedsRoom(null)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.bedManageCloseBtnText}>✓ Done</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -3456,14 +3707,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   roomWiseSettingsBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  roomWiseSettingsBtnText: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '800',
   },
   roomBedsGridRow: {
     flexDirection: 'row',
@@ -3674,5 +3930,235 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
     color: '#0f172a',
+  },
+  deleteRoomOutlineBtn: {
+    marginTop: 18,
+    borderWidth: 1.5,
+    borderColor: '#fecaca',
+    backgroundColor: '#fef2f2',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteRoomOutlineBtnText: {
+    color: '#dc2626',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  bedManageModalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 20,
+    width: '94%',
+    maxHeight: '88%',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeaderWithClose: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  bedManageModalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  bedManageModalSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  modalCloseIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseIconText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#64748b',
+  },
+  bedManageSummaryCard: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    alignItems: 'center',
+    justifyContent: 'space-around',
+  },
+  bedManageStatBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  bedManageStatNum: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  bedManageStatLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+    marginTop: 2,
+  },
+  bedManageStatDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e2e8f0',
+  },
+  bedManageAddNewBtn: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  bedManageAddNewBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#ea580c',
+  },
+  bedManageSectionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  bedManageRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    marginBottom: 8,
+  },
+  bedManageRowLeft: {
+    flex: 1,
+    marginRight: 10,
+  },
+  bedManageRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bedManageRowLabel: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#1e293b',
+  },
+  bedManageStatusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  bedManageStatusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  bedManageOccupantText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  bedManagePhoneText: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  bedManageVacantSub: {
+    fontSize: 12,
+    color: '#94a3b8',
+    marginTop: 4,
+  },
+  bedManageActionsCol: {
+    gap: 6,
+    alignItems: 'flex-end',
+  },
+  bedManageVacateBtn: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  bedManageVacateBtnText: {
+    color: '#dc2626',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  bedManageCallBtn: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  bedManageCallBtnText: {
+    color: '#16a34a',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  bedManageAssignBtn: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  bedManageAssignBtnText: {
+    color: '#ea580c',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  bedManageDeleteBtn: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  bedManageDeleteBtnText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  bedManageCloseBtn: {
+    backgroundColor: '#4f46e5',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  bedManageCloseBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
   },
 });
