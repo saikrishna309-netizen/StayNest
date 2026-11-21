@@ -306,13 +306,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Direct WhatsApp Reminder for 1-Tap Action
   const handleDirectWhatsAppReminder = (tenant: Tenant) => {
-    const rentDueStr = tenant.outstandingPaise
-      ? `₹${(tenant.outstandingPaise / 100).toLocaleString('en-IN')}`
-      : tenant.monthlyRentPaise
-      ? `₹${(tenant.monthlyRentPaise / 100).toLocaleString('en-IN')}`
-      : '₹8,500';
+    const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
+    const dueRent = typeof tenant.outstandingPaise === 'number'
+      ? Math.round(tenant.outstandingPaise / 100)
+      : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
+    const paidRent = Math.max(0, totalRent - dueRent);
+
     const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
-    const message = `Hello ${tenant.fullName}, this is a gentle reminder regarding your monthly PG rent of ${rentDueStr} for Room ${tenant.roomNumber || '101'}, Ramesh PG. Please pay via UPI or Cash. Thank you!`;
+    let message = '';
+    if (dueRent > 0 && paidRent > 0) {
+      message = `Hello ${tenant.fullName}, your monthly PG rent breakdown for Room ${tenant.roomNumber || '101'}:\n• Total Rent: ₹${totalRent.toLocaleString('en-IN')}\n• Paid so far: ₹${paidRent.toLocaleString('en-IN')}\n• Remaining Due: ₹${dueRent.toLocaleString('en-IN')}\nPlease clear the pending ₹${dueRent.toLocaleString('en-IN')} balance via UPI or Cash. Thank you!`;
+    } else if (dueRent > 0) {
+      message = `Hello ${tenant.fullName}, this is a gentle reminder regarding your monthly PG rent of ₹${dueRent.toLocaleString('en-IN')} for Room ${tenant.roomNumber || '101'}, Ramesh PG. Please pay via UPI or Cash. Thank you!`;
+    } else {
+      message = `Hello ${tenant.fullName}, your PG rent of ₹${totalRent.toLocaleString('en-IN')} for Room ${tenant.roomNumber || '101'} has been received in full. Thank you!`;
+    }
+
     const appUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
     const webUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
 
@@ -915,11 +924,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         ) : (
           <View style={styles.dueListCol}>
             {dueTenants.map((t) => {
-              const dueAmount = t.outstandingPaise
+              const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
+              const dueAmount = typeof t.outstandingPaise === 'number'
                 ? Math.round(t.outstandingPaise / 100)
-                : t.monthlyRentPaise
-                ? Math.round(t.monthlyRentPaise / 100)
-                : 5000;
+                : (t.rentStatus === 'PAID' ? 0 : totalRent);
+              const paidAmount = Math.max(0, totalRent - dueAmount);
+              const isPartial = dueAmount > 0 && paidAmount > 0;
+
               const rawDate = t.checkIn || t.rentDueDate || t.createdAt;
               const joinedDate = rawDate
                 ? new Date(rawDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -933,13 +944,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <Text style={styles.dueTenantDate}>{joinedDate}</Text>
                   </View>
 
-                  {/* Room Number */}
-                  <Text style={styles.dueTenantRoom}>Room no. - {t.roomNumber || '205'}</Text>
+                  {/* Room Number & Partial Paid info */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <Text style={styles.dueTenantRoom}>
+                      Room no. - {t.roomNumber || '205'}
+                      {isPartial ? ` • Paid ₹${paidAmount.toLocaleString('en-IN')}` : ''}
+                    </Text>
+                    {isPartial && (
+                      <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#b45309' }}>PARTIAL</Text>
+                      </View>
+                    )}
+                  </View>
 
                   {/* Bottom Row: Amount & Action Buttons */}
                   <View style={styles.dueCardBottomRow}>
                     <Text style={styles.dueTenantAmount}>
-                      ₹ {dueAmount.toLocaleString('en-IN')}
+                      ₹ {dueAmount.toLocaleString('en-IN')} <Text style={{ fontSize: 11, color: '#ef4444' }}>Due</Text>
                     </Text>
 
                     <View style={styles.dueActionBtnGroup}>

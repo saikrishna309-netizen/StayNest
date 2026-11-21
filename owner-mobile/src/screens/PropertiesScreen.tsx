@@ -800,8 +800,41 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const activeManagingFloor = floors.find((f) => f.floorNumber === managingBedsRoom?.floorNum);
   const activeManagingRoom = activeManagingFloor?.rooms.find((r) => r.id === managingBedsRoom?.roomId);
 
+  // Memoized deduplication of floors and rooms to prevent duplicate floor numbers or rooms showing twice
+  const displayFloors = React.useMemo(() => {
+    const floorMap = new Map<number, FloorConfig>();
+
+    floors.forEach((fl) => {
+      const existing = floorMap.get(fl.floorNumber);
+      const roomMap = new Map<string, RoomConfig>();
+
+      if (existing) {
+        existing.rooms.forEach((r) => roomMap.set(r.roomNumber, r));
+      }
+
+      fl.rooms.forEach((r) => {
+        if (!roomMap.has(r.roomNumber)) {
+          const seenBedIds = new Set<string>();
+          const uniqueBeds = (r.beds || []).filter((b) => {
+            if (seenBedIds.has(b.id)) return false;
+            seenBedIds.add(b.id);
+            return true;
+          });
+          roomMap.set(r.roomNumber, { ...r, beds: uniqueBeds });
+        }
+      });
+
+      floorMap.set(fl.floorNumber, {
+        floorNumber: fl.floorNumber,
+        rooms: Array.from(roomMap.values()),
+      });
+    });
+
+    return Array.from(floorMap.values()).sort((a, b) => a.floorNumber - b.floorNumber);
+  }, [floors]);
+
   // --- Dynamic Summary Calculations ---
-  const totalFloors = floors.length;
+  const totalFloors = displayFloors.length;
   let totalRooms = 0;
   let totalBeds = 0;
   let availableBeds = 0;
@@ -809,7 +842,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   let reservedBeds = 0;
   let maintenanceBeds = 0;
 
-  floors.forEach((f) => {
+  displayFloors.forEach((f) => {
     totalRooms += f.rooms.length;
     f.rooms.forEach((r) => {
       totalBeds += r.beds.length;
@@ -844,56 +877,77 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // 1. Floor Counter Controls
   const handleIncreaseFloors = () => {
-    const nextFloorNum = floors.length + 1;
-    const baseRoomNum = `${nextFloorNum}01`;
-    const newFloor: FloorConfig = {
-      floorNumber: nextFloorNum,
-      rooms: [
-        {
-          id: `room-${baseRoomNum}-${Date.now()}`,
-          roomNumber: baseRoomNum,
-          floorNumber: nextFloorNum,
-          sharingType: 'DOUBLE',
-          rentRupees: 8500,
-          depositRupees: 8500,
-          ac: true,
-          attachedBathroom: true,
-          beds: [
-            { id: `bed-${baseRoomNum}-1-${Date.now()}`, bedLabel: 'Bed 1', status: 'AVAILABLE' },
-            { id: `bed-${baseRoomNum}-2-${Date.now()}`, bedLabel: 'Bed 2', status: 'AVAILABLE' },
-          ],
-        },
-      ],
-    };
-    setFloors([...floors, newFloor]);
+    setFloors((prev) => {
+      const maxFloor = prev.reduce((max, f) => Math.max(max, f.floorNumber), 0);
+      const nextFloorNum = maxFloor + 1;
+      const baseRoomNum = `${nextFloorNum}01`;
+      const newFloor: FloorConfig = {
+        floorNumber: nextFloorNum,
+        rooms: [
+          {
+            id: `room-${baseRoomNum}-${Date.now()}`,
+            roomNumber: baseRoomNum,
+            floorNumber: nextFloorNum,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: `bed-${baseRoomNum}-1-${Date.now()}`, bedLabel: 'Bed 1', status: 'AVAILABLE' as const },
+              { id: `bed-${baseRoomNum}-2-${Date.now()}`, bedLabel: 'Bed 2', status: 'AVAILABLE' as const },
+            ],
+          },
+        ],
+      };
+      const nextFloors = [...prev, newFloor];
+      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+        try {
+          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+        } catch {}
+      }
+      return nextFloors;
+    });
   };
 
   const handleDecreaseFloors = () => {
-    if (floors.length <= 1) {
-      Alert.alert('Minimum Limit', 'A property must have at least 1 floor.');
-      return;
-    }
-    const lastFloor = floors[floors.length - 1];
-    const hasOccupiedBed = lastFloor.rooms.some((r) =>
-      r.beds.some((b) => b.status === 'OCCUPIED' || b.status === 'RESERVED')
-    );
-    if (hasOccupiedBed) {
-      Alert.alert(
-        'Occupied Beds Detected',
-        `Floor ${lastFloor.floorNumber} has occupied or reserved beds. Please reassign tenants before removing this floor.`
+    setFloors((prev) => {
+      if (prev.length <= 1) {
+        notifyUser('Minimum Limit', 'A property must have at least 1 floor.');
+        return prev;
+      }
+      const lastFloor = prev[prev.length - 1];
+      const hasOccupiedBed = lastFloor.rooms.some((r) =>
+        r.beds.some((b) => b.status === 'OCCUPIED' || b.status === 'RESERVED')
       );
-      return;
-    }
-    setFloors(floors.slice(0, floors.length - 1));
+      if (hasOccupiedBed) {
+        notifyUser(
+          'Occupied Beds Detected',
+          `Floor ${lastFloor.floorNumber} has occupied or reserved beds. Please reassign tenants before removing this floor.`
+        );
+        return prev;
+      }
+      const nextFloors = prev.slice(0, prev.length - 1);
+      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+        try {
+          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+        } catch {}
+      }
+      return nextFloors;
+    });
   };
 
   // 2. Room Counter Controls for Floor
   const handleIncreaseRooms = (floorNum: number) => {
-    setFloors(
-      floors.map((f) => {
+    setFloors((prev) => {
+      const nextFloors = prev.map((f) => {
         if (f.floorNumber !== floorNum) return f;
         const nextRoomIdx = f.rooms.length + 1;
         const roomNumStr = `${floorNum}${nextRoomIdx < 10 ? '0' + nextRoomIdx : nextRoomIdx}`;
+        // Ensure room number does not already exist
+        if (f.rooms.some((r) => r.roomNumber === roomNumStr)) {
+          return f;
+        }
         const newRoom: RoomConfig = {
           id: `room-${roomNumStr}-${Date.now()}`,
           roomNumber: roomNumStr,
@@ -904,16 +958,24 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           ac: true,
           attachedBathroom: true,
           beds: [
-            { id: `bed-${roomNumStr}-1-${Date.now()}`, bedLabel: 'Bed 1', status: 'AVAILABLE' },
-            { id: `bed-${roomNumStr}-2-${Date.now()}`, bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            { id: `bed-${roomNumStr}-1-${Date.now()}`, bedLabel: 'Bed 1', status: 'AVAILABLE' as const },
+            { id: `bed-${roomNumStr}-2-${Date.now()}`, bedLabel: 'Bed 2', status: 'AVAILABLE' as const },
           ],
         };
         return {
           ...f,
           rooms: [...f.rooms, newRoom],
         };
-      })
-    );
+      });
+
+      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+        try {
+          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+        } catch {}
+      }
+
+      return nextFloors;
+    });
   };
 
   const handleDecreaseRooms = (floorNum: number) => {
@@ -1320,11 +1382,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                           selectedFloorFilter === 'ALL' && styles.floorFilterTextActive,
                         ]}
                       >
-                        All Floors ({floors.length})
+                        All Floors ({displayFloors.length})
                       </Text>
                     </TouchableOpacity>
 
-                    {floors.map((fl) => {
+                    {displayFloors.map((fl) => {
                       const isActive = selectedFloorFilter === fl.floorNumber;
                       return (
                         <TouchableOpacity
@@ -1358,8 +1420,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
                 {/* ─── 2. FLOORS ONE BY ONE ─── */}
                 {(selectedFloorFilter === 'ALL'
-                  ? floors
-                  : floors.filter((f) => f.floorNumber === selectedFloorFilter)
+                  ? displayFloors
+                  : displayFloors.filter((f) => f.floorNumber === selectedFloorFilter)
                 ).map((floor) => {
                   const floorBedsCount = floor.rooms.reduce((acc, r) => acc + r.beds.length, 0);
                   const sharingTypesSummary = Array.from(

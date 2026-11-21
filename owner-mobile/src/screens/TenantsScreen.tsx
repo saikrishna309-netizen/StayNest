@@ -27,7 +27,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'VACATED'>('ACTIVE');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'DUE' | 'ACTIVE' | 'VACATED'>('ALL');
   const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
 
   // Onboard Form State
@@ -81,12 +81,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     setEditTenantName(tenant.fullName || '');
     setEditTenantPhone(tenant.phone || '');
     setEditEmergencyContact(tenant.emergencyContact || '');
-    const rentAmount = tenant.monthlyRentPaise
-      ? String(tenant.monthlyRentPaise / 100)
-      : '8500';
-    setEditMonthlyRent(rentAmount);
-    setShiftNewRent(rentAmount);
-    setManualPayAmount(rentAmount);
+    const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
+    const dueRent = typeof tenant.outstandingPaise === 'number'
+      ? Math.round(tenant.outstandingPaise / 100)
+      : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
+    const defaultPay = dueRent > 0 ? String(dueRent) : String(totalRent);
+    setEditMonthlyRent(String(totalRent));
+    setShiftNewRent(String(totalRent));
+    setManualPayAmount(defaultPay);
     setManualPayMode('UPI');
   };
 
@@ -221,20 +223,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
         }),
       });
 
-      // 2. Allocate Bed if selected with the fixed rent
-      if (selectedBedId && selectedPropId) {
-        let targetRoomId = selectedRoomId;
-
-        // Fallback: look up roomId if not set
-        if (!targetRoomId) {
-          for (const r of propRooms) {
-            if ((r.beds || []).some((b) => b.id === selectedBedId)) {
-              targetRoomId = r.id;
-              break;
-            }
+      let targetRoomId = selectedRoomId;
+      if (!targetRoomId && selectedBedId) {
+        for (const r of propRooms) {
+          if ((r.beds || []).some((b) => b.id === selectedBedId)) {
+            targetRoomId = r.id;
+            break;
           }
         }
+      }
 
+      // 2. Allocate Bed if selected with the fixed rent
+      if (selectedBedId && selectedPropId) {
         try {
           await apiClient(`/owner/tenants/${tenant.id}/stays`, {
             method: 'POST',
@@ -292,6 +292,27 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
         }
       }
 
+      const createdTenantId = tenant?.id || `t-${Date.now()}`;
+      const newTenantRecord: Tenant = {
+        id: createdTenantId,
+        fullName: fullName.trim(),
+        phone: phone.trim(),
+        email: email.trim() || undefined,
+        idProofType,
+        idProofNumber: idProofNumber.trim() || '--',
+        propertyId: selectedPropId,
+        propertyName: properties.find((p) => p.id === selectedPropId)?.name || 'Ramesh PG',
+        roomNumber: propRooms.find((r) => r.id === targetRoomId)?.roomNumber || '101',
+        bedId: selectedBedId,
+        bedLabel: propRooms.flatMap((r) => r.beds || []).find((b) => b.id === selectedBedId)?.bedLabel || 'Bed 1',
+        monthlyRentPaise: fixedRent * 100,
+        outstandingPaise: rentDue * 100,
+        rentStatus: rentDue === 0 ? 'PAID' : (payingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
+        active: true,
+        createdAt: new Date().toISOString(),
+      };
+      setTenants((prev) => [newTenantRecord, ...prev.filter((t) => t.id !== createdTenantId)]);
+
       const alertMsg = rentDue > 0
         ? `${fullName} onboarded! Rent received ₹${payingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
         : `${fullName} successfully onboarded as a resident!`;
@@ -324,36 +345,75 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   const handleRecordManualPayment = async () => {
     if (!selectedTenantForAction) return;
     setRecordingPayment(true);
+    const payAmount = Number(manualPayAmount || 0);
+    const totalRent = selectedTenantForAction.monthlyRentPaise
+      ? Math.round(selectedTenantForAction.monthlyRentPaise / 100)
+      : 8500;
+    const currentDue = typeof selectedTenantForAction.outstandingPaise === 'number'
+      ? Math.round(selectedTenantForAction.outstandingPaise / 100)
+      : (selectedTenantForAction.rentStatus === 'PAID' ? 0 : totalRent);
+    const newDue = Math.max(0, currentDue - payAmount);
+    const newStatus = newDue === 0 ? 'PAID' : (newDue < totalRent ? 'PARTIALLY_PAID' : 'DUE');
+
     try {
       await apiClient(`/owner/tenants/${selectedTenantForAction.id}/payments`, {
         method: 'POST',
         body: JSON.stringify({
-          amountPaidPaise: Number(manualPayAmount || 8500) * 100,
+          amountPaidPaise: payAmount * 100,
           paymentMethod: manualPayMode,
           paymentDate: new Date().toISOString().split('T')[0],
+          notes: newDue > 0 ? `Paid ₹${payAmount}. Remaining ₹${newDue} due.` : `Paid ₹${payAmount} in full.`,
         }),
-      });
-      Alert.alert('✓ Payment Recorded!', `Successfully recorded payment for ${selectedTenantForAction.fullName}.`);
+      }).catch(() => {});
+
+      // Immediately update local state
+      setTenants((prev) =>
+        prev.map((t) => {
+          if (t.id !== selectedTenantForAction.id) return t;
+          return {
+            ...t,
+            outstandingPaise: newDue * 100,
+            rentStatus: newStatus,
+          };
+        })
+      );
+
+      const msg = newDue === 0
+        ? `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded! Rent for ${selectedTenantForAction.fullName} is fully paid.`
+        : `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded! Remaining due for ${selectedTenantForAction.fullName} is ₹${newDue.toLocaleString('en-IN')}.`;
+
+      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+        window.alert(`✓ ${msg}`);
+      } else {
+        Alert.alert('✓ Payment Recorded!', msg);
+      }
+
       setSelectedTenantForAction(null);
-      loadData();
     } catch {
-      Alert.alert('✓ Payment Recorded!', `Recorded payment for ${selectedTenantForAction.fullName}.`);
       setSelectedTenantForAction(null);
-      loadData();
     } finally {
       setRecordingPayment(false);
     }
   };
 
-  // Direct 1-Tap WhatsApp Reminder
+  // Direct 1-Tap WhatsApp Reminder with exact Total, Paid, and Due breakdown
   const handleDirectWhatsAppReminder = (tenant: Tenant) => {
-    const rentDueStr = tenant.outstandingPaise
-      ? `₹${(tenant.outstandingPaise / 100).toLocaleString('en-IN')}`
-      : tenant.monthlyRentPaise
-      ? `₹${(tenant.monthlyRentPaise / 100).toLocaleString('en-IN')}`
-      : '₹8,500';
+    const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
+    const dueRent = typeof tenant.outstandingPaise === 'number'
+      ? Math.round(tenant.outstandingPaise / 100)
+      : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
+    const paidRent = Math.max(0, totalRent - dueRent);
+
     const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
-    const message = `Hello ${tenant.fullName}, your monthly PG rent of ${rentDueStr} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
+    let message = '';
+    if (dueRent > 0 && paidRent > 0) {
+      message = `Hello ${tenant.fullName}, your monthly PG rent breakdown for Room ${tenant.roomNumber || '101'}:\n• Total Rent: ₹${totalRent.toLocaleString('en-IN')}\n• Paid so far: ₹${paidRent.toLocaleString('en-IN')}\n• Remaining Due: ₹${dueRent.toLocaleString('en-IN')}\nPlease clear the pending ₹${dueRent.toLocaleString('en-IN')} balance via UPI or Cash. Thank you!`;
+    } else if (dueRent > 0) {
+      message = `Hello ${tenant.fullName}, your monthly PG rent of ₹${dueRent.toLocaleString('en-IN')} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
+    } else {
+      message = `Hello ${tenant.fullName}, your PG rent of ₹${totalRent.toLocaleString('en-IN')} for Room ${tenant.roomNumber || '101'} has been received in full. Thank you for your timely payment!`;
+    }
+
     const appUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
     const webUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
 
@@ -551,8 +611,15 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   // Filtered tenants list
   const filteredTenants = tenants.filter((t) => {
     const isAct = t.active !== false && t.stayStatus !== 'TERMINATED';
+    const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
+    const dueRent = typeof t.outstandingPaise === 'number'
+      ? Math.round(t.outstandingPaise / 100)
+      : (t.rentStatus === 'PAID' ? 0 : totalRent);
+    const isDue = dueRent > 0;
+
     if (statusFilter === 'ACTIVE' && !isAct) return false;
     if (statusFilter === 'VACATED' && isAct) return false;
+    if (statusFilter === 'DUE' && (!isAct || !isDue)) return false;
 
     if (propertyFilter !== 'ALL' && t.propertyId && t.propertyId !== propertyFilter) {
       return false;
@@ -797,27 +864,52 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
           />
         </View>
 
-        {/* Segment Tabs: Active vs Vacated vs All */}
+        {/* Segment Tabs: All vs Due vs Active vs Vacated */}
         <View style={styles.statusFilterRow}>
-          {(['ACTIVE', 'VACATED', 'ALL'] as const).map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              style={[
-                styles.statusFilterBtn,
-                statusFilter === tab && styles.statusFilterBtnActive,
-              ]}
-              onPress={() => setStatusFilter(tab)}
-            >
-              <Text
+          {(['ALL', 'DUE', 'ACTIVE', 'VACATED'] as const).map((tab) => {
+            const count =
+              tab === 'ALL'
+                ? tenants.length
+                : tab === 'DUE'
+                ? tenants.filter((t) => (t.active !== false && t.stayStatus !== 'TERMINATED') && ((typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0) || t.rentStatus === 'DUE' || t.rentStatus === 'OVERDUE' || t.rentStatus === 'PARTIALLY_PAID')).length
+                : tab === 'ACTIVE'
+                ? tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED').length
+                : tenants.filter((t) => t.active === false || t.stayStatus === 'TERMINATED').length;
+
+            const label =
+              tab === 'ALL'
+                ? `All (${count})`
+                : tab === 'DUE'
+                ? `🔴 Rent Due (${count})`
+                : tab === 'ACTIVE'
+                ? `Active (${count})`
+                : `Vacated (${count})`;
+
+            const isDueTab = tab === 'DUE';
+            const isActiveTab = statusFilter === tab;
+
+            return (
+              <TouchableOpacity
+                key={tab}
                 style={[
-                  styles.statusFilterText,
-                  statusFilter === tab && styles.statusFilterTextActive,
+                  styles.statusFilterBtn,
+                  isActiveTab && styles.statusFilterBtnActive,
+                  isDueTab && isActiveTab && { backgroundColor: '#fee2e2', borderColor: '#fca5a5' },
                 ]}
+                onPress={() => setStatusFilter(tab)}
               >
-                {tab === 'ACTIVE' ? 'Active Residents' : tab === 'VACATED' ? 'Vacated' : 'All Records'}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.statusFilterText,
+                    isActiveTab && styles.statusFilterTextActive,
+                    isDueTab && isActiveTab && { color: '#dc2626' },
+                  ]}
+                >
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* List of Tenants */}
@@ -828,7 +920,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
             <Text style={{ fontSize: 26, marginBottom: 8 }}>📋</Text>
             <Text style={styles.emptyTitle}>No Matching Tenants Found</Text>
             <Text style={styles.emptySub}>
-              {statusFilter === 'ACTIVE'
+              {statusFilter === 'DUE'
+                ? 'All residents are up-to-date! No pending rent dues.'
+                : statusFilter === 'ACTIVE'
                 ? 'No active residents found. Tap "+ Onboard" to register a tenant.'
                 : 'No records matching your search/filter.'}
             </Text>
@@ -836,7 +930,15 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
         ) : (
           filteredTenants.map((t) => {
             const isAct = t.active !== false && t.stayStatus !== 'TERMINATED';
-            const rentPaid = t.rentStatus === 'PAID';
+            const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
+            const dueRent = typeof t.outstandingPaise === 'number'
+              ? Math.round(t.outstandingPaise / 100)
+              : (t.rentStatus === 'PAID' ? 0 : totalRent);
+            const paidRent = Math.max(0, totalRent - dueRent);
+            const isPartial = dueRent > 0 && paidRent > 0;
+            const isPaidFull = dueRent === 0;
+            const paidPercent = totalRent > 0 ? Math.min(100, Math.round((paidRent / totalRent) * 100)) : (isPaidFull ? 100 : 0);
+
             const initials = t.fullName
               ? t.fullName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
               : 'TN';
@@ -864,16 +966,16 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                   <View
                     style={[
                       styles.activeBadge,
-                      { backgroundColor: isAct ? '#ecfdf5' : '#f1f5f9' },
+                      { backgroundColor: isAct ? (isPaidFull ? '#ecfdf5' : isPartial ? '#fffbeb' : '#fef2f2') : '#f1f5f9' },
                     ]}
                   >
                     <Text
                       style={[
                         styles.activeBadgeText,
-                        { color: isAct ? '#059669' : '#64748b' },
+                        { color: isAct ? (isPaidFull ? '#059669' : isPartial ? '#b45309' : '#dc2626') : '#64748b' },
                       ]}
                     >
-                      {isAct ? 'ACTIVE' : 'VACATED'}
+                      {isAct ? (isPaidFull ? '🟢 PAID' : isPartial ? '🟠 PARTIAL' : '🔴 DUE') : 'VACATED'}
                     </Text>
                   </View>
                 </View>
@@ -893,21 +995,58 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                         : 'Not Assigned (Vacated)'}
                     </Text>
                   </View>
+                </View>
 
-                  <View style={styles.detailItem}>
-                    <Text style={styles.metaLabel}>MONTHLY RENT</Text>
-                    <Text style={[styles.metaVal, { color: '#4f46e5', fontWeight: '800' }]}>
-                      ₹{t.monthlyRentPaise ? (t.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500'}/mo
-                    </Text>
+                {/* ─── RENT FINANCIAL BREAKDOWN (TOTAL, PAID & DUE) ─── */}
+                <View style={styles.rentFinancialBox}>
+                  <View style={styles.rentFinRow}>
+                    <View style={styles.rentFinCol}>
+                      <Text style={styles.rentFinLabel}>TOTAL RENT</Text>
+                      <Text style={styles.rentFinValTotal}>₹{totalRent.toLocaleString('en-IN')}</Text>
+                    </View>
+
+                    <View style={styles.rentFinCol}>
+                      <Text style={styles.rentFinLabel}>PAID</Text>
+                      <Text style={styles.rentFinValPaid}>₹{paidRent.toLocaleString('en-IN')}</Text>
+                    </View>
+
+                    <View style={styles.rentFinCol}>
+                      <Text style={styles.rentFinLabel}>DUE PENDING</Text>
+                      <Text style={[styles.rentFinValDue, { color: isPaidFull ? '#059669' : '#dc2626' }]}>
+                        {isPaidFull ? '₹0 (Clear)' : `₹${dueRent.toLocaleString('en-IN')}`}
+                      </Text>
+                    </View>
                   </View>
 
-                  <View style={styles.detailItem}>
-                    <Text style={styles.metaLabel}>RENT STATUS</Text>
-                    <Text style={[styles.metaVal, { color: rentPaid ? '#059669' : '#dc2626', fontWeight: '800' }]}>
-                      {rentPaid
-                        ? '🟢 Paid'
-                        : `🔴 Due ₹${t.outstandingPaise ? (t.outstandingPaise / 100).toLocaleString('en-IN') : (t.monthlyRentPaise ? (t.monthlyRentPaise / 100).toLocaleString('en-IN') : '0')}`}
+                  {/* Visual Progress Bar */}
+                  <View style={styles.rentProgressBarBg}>
+                    <View
+                      style={[
+                        styles.rentProgressBarFill,
+                        {
+                          width: `${paidPercent}%`,
+                          backgroundColor: isPaidFull ? '#10b981' : isPartial ? '#f59e0b' : '#ef4444',
+                        },
+                      ]}
+                    />
+                  </View>
+
+                  <View style={styles.rentProgressSubRow}>
+                    <Text style={styles.rentProgressSubText}>
+                      {isPaidFull
+                        ? '✓ Fully Paid'
+                        : isPartial
+                        ? `Paid ${paidPercent}% • ₹${dueRent.toLocaleString('en-IN')} due`
+                        : `0% Paid • ₹${dueRent.toLocaleString('en-IN')} pending`}
                     </Text>
+
+                    {dueRent > 0 && (
+                      <View style={[styles.dueAlertMiniTag, { backgroundColor: isPartial ? '#fef3c7' : '#fee2e2' }]}>
+                        <Text style={[styles.dueAlertMiniTagText, { color: isPartial ? '#b45309' : '#dc2626' }]}>
+                          {isPartial ? 'PARTIAL' : 'PENDING'}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -919,15 +1058,17 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
 
                   {isAct && (
                     <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity
-                        style={styles.cardActionBtnPay}
-                        onPress={(e: any) => {
-                          e?.stopPropagation?.();
-                          handleOpenTenantModal(t);
-                        }}
-                      >
-                        <Text style={styles.cardActionBtnPayText}>💰 Pay</Text>
-                      </TouchableOpacity>
+                      {dueRent > 0 && (
+                        <TouchableOpacity
+                          style={styles.cardActionBtnPayDue}
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            handleOpenTenantModal(t);
+                          }}
+                        >
+                          <Text style={styles.cardActionBtnPayDueText}>💰 Pay ₹{dueRent.toLocaleString('en-IN')}</Text>
+                        </TouchableOpacity>
+                      )}
 
                       <TouchableOpacity
                         style={[styles.cardActionBtnRemind, { backgroundColor: '#25D366' }]}
@@ -1825,5 +1966,86 @@ const styles = StyleSheet.create({
   },
   modePillSmallTextActive: {
     color: '#ffffff',
+  },
+  rentFinancialBox: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 12,
+    marginBottom: 10,
+  },
+  rentFinRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rentFinCol: {
+    flex: 1,
+  },
+  rentFinLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  rentFinValTotal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#1e293b',
+  },
+  rentFinValPaid: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#16a34a',
+  },
+  rentFinValDue: {
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  rentProgressBarBg: {
+    height: 6,
+    backgroundColor: '#e2e8f0',
+    borderRadius: 3,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  rentProgressBarFill: {
+    height: 6,
+    borderRadius: 3,
+  },
+  rentProgressSubRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  rentProgressSubText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  dueAlertMiniTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  dueAlertMiniTagText: {
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  cardActionBtnPayDue: {
+    backgroundColor: '#fff1f2',
+    borderWidth: 1,
+    borderColor: '#fecdd3',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  cardActionBtnPayDueText: {
+    color: '#e11d48',
+    fontWeight: '800',
+    fontSize: 11,
   },
 });
