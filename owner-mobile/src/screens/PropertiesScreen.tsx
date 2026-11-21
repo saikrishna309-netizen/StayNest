@@ -110,8 +110,35 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   } | null>(null);
   const [assignTenantName, setAssignTenantName] = useState('');
   const [assignTenantPhone, setAssignTenantPhone] = useState('');
+  const [assignTenantEmail, setAssignTenantEmail] = useState('');
+  const [assignIdProofType, setAssignIdProofType] = useState<'AADHAAR' | 'PAN' | 'VOTER_ID'>('AADHAAR');
+  const [assignIdProofNumber, setAssignIdProofNumber] = useState('');
   const [assignRentAmount, setAssignRentAmount] = useState('8500');
+  const [assignRentPayingNow, setAssignRentPayingNow] = useState('8500');
+  const [assignDepositPayingNow, setAssignDepositPayingNow] = useState('2500');
+  const [assignPayMode, setAssignPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [submittingAssign, setSubmittingAssign] = useState(false);
+
+  const openAssignModalForBed = (bedData: {
+    floorNum: number;
+    roomId: string;
+    roomNumber: string;
+    bedId: string;
+    bedLabel: string;
+    rentRupees: number;
+  }) => {
+    setAssigningBed(bedData);
+    setAssignTenantName('');
+    setAssignTenantPhone('');
+    setAssignTenantEmail('');
+    setAssignIdProofType('AADHAAR');
+    setAssignIdProofNumber('');
+    const rentStr = String(bedData.rentRupees || 8500);
+    setAssignRentAmount(rentStr);
+    setAssignRentPayingNow(rentStr);
+    setAssignDepositPayingNow('2500');
+    setAssignPayMode('UPI');
+  };
 
   // Modal for managing occupied bed
   const [occupiedBedAction, setOccupiedBedAction] = useState<{
@@ -254,7 +281,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     );
   };
 
-  // Assign resident to empty bed (+ Add Mark)
+  // Assign resident to empty bed (+ Add Mark) with full onboarding
   const handleAssignTenantToBed = async () => {
     if (!assigningBed) return;
     if (!assignTenantName.trim() || !assignTenantPhone.trim()) {
@@ -263,7 +290,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     }
     setSubmittingAssign(true);
     try {
-      const rentPaise = Number(assignRentAmount || assigningBed.rentRupees || 8500) * 100;
+      const fixedRent = Number(assignRentAmount || assigningBed.rentRupees || 8500);
+      const payingNow = Number(assignRentPayingNow || 0);
+      const rentDue = Math.max(0, fixedRent - payingNow);
+      const depositPaying = Number(assignDepositPayingNow || 2500);
+      const todayDate = new Date().toISOString().split('T')[0];
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
       let newTenant: Tenant;
       try {
         newTenant = await apiClient<Tenant>('/owner/tenants', {
@@ -271,60 +304,143 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           body: JSON.stringify({
             fullName: assignTenantName.trim(),
             phone: assignTenantPhone.trim(),
+            email: assignTenantEmail.trim() || undefined,
+            idProofType: assignIdProofType,
+            idProofNumber: assignIdProofNumber.trim() || 'NOT_PROVIDED',
           }),
         });
+
         if (activeProperty?.id && assigningBed.bedId) {
-          await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
-            method: 'POST',
-            body: JSON.stringify({
-              propertyId: activeProperty.id,
-              roomId: assigningBed.roomId,
-              bedId: assigningBed.bedId,
-              monthlyRentPaise: rentPaise,
-            }),
-          });
+          // 1. Allocate Stay with REQUIRED checkIn date
+          try {
+            await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
+              method: 'POST',
+              body: JSON.stringify({
+                propertyId: activeProperty.id,
+                roomId: assigningBed.roomId,
+                bedId: assigningBed.bedId,
+                monthlyRentPaise: fixedRent * 100,
+                securityDepositPaise: depositPaying * 100,
+                checkIn: todayDate,
+              }),
+            });
+          } catch (stayErr: any) {
+            console.warn('Stay allocation warning:', stayErr.message);
+          }
+
+          // 2. Generate monthly rent invoice
+          try {
+            const invoice = await apiClient<any>('/owner/rent-invoices', {
+              method: 'POST',
+              body: JSON.stringify({
+                tenantId: newTenant.id,
+                propertyId: activeProperty.id,
+                billingMonth: currentMonth,
+                rentAmountPaise: fixedRent * 100,
+                dueDate: todayDate,
+              }),
+            });
+
+            // 3. Record payment if resident paid any rent amount
+            if (payingNow > 0 && invoice?.id) {
+              await apiClient(`/owner/rent-invoices/${invoice.id}/payments`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  amountPaidPaise: payingNow * 100,
+                  paymentMethod: assignPayMode,
+                  notes: rentDue > 0
+                    ? `Partial onboarding rent paid ₹${payingNow}. Remaining ₹${rentDue} due.`
+                    : 'Full rent paid at onboarding via Properties.',
+                }),
+              });
+            }
+          } catch {
+            if (payingNow > 0) {
+              await apiClient(`/owner/tenants/${newTenant.id}/payments`, {
+                method: 'POST',
+                body: JSON.stringify({
+                  amountPaidPaise: payingNow * 100,
+                  paymentMethod: assignPayMode,
+                }),
+              }).catch(() => {});
+            }
+          }
         }
       } catch {
         newTenant = {
           id: `tenant-${Date.now()}`,
           fullName: assignTenantName.trim(),
           phone: assignTenantPhone.trim(),
+          email: assignTenantEmail.trim() || undefined,
+          idProofType: assignIdProofType,
+          idProofNumber: assignIdProofNumber.trim() || '--',
           propertyId: activeProperty?.id,
+          propertyName: activeProperty?.name || 'StayNest PG',
           roomId: assigningBed.roomId,
           roomNumber: assigningBed.roomNumber,
           bedId: assigningBed.bedId,
           bedLabel: assigningBed.bedLabel,
-          monthlyRentPaise: rentPaise,
-          rentStatus: 'PAID',
+          monthlyRentPaise: fixedRent * 100,
+          outstandingPaise: rentDue * 100,
+          rentStatus: rentDue === 0 ? 'PAID' : (payingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
           active: true,
+          stayStatus: 'ACTIVE',
         };
       }
 
-      setTenants((prev) => [...prev.filter((t) => t.bedId !== assigningBed.bedId), newTenant]);
+      const fullTenant: Tenant = {
+        ...newTenant,
+        fullName: assignTenantName.trim(),
+        phone: assignTenantPhone.trim(),
+        propertyId: activeProperty?.id,
+        propertyName: activeProperty?.name || 'StayNest PG',
+        roomId: assigningBed.roomId,
+        roomNumber: assigningBed.roomNumber,
+        bedId: assigningBed.bedId,
+        bedLabel: assigningBed.bedLabel,
+        monthlyRentPaise: fixedRent * 100,
+        outstandingPaise: rentDue * 100,
+        rentStatus: rentDue === 0 ? 'PAID' : (payingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
+        active: true,
+        stayStatus: 'ACTIVE',
+      };
 
-      setFloors((prev) =>
-        prev.map((f) => {
-          if (f.floorNumber !== assigningBed.floorNum) return f;
-          return {
-            ...f,
-            rooms: f.rooms.map((r) => {
-              if (r.id !== assigningBed.roomId) return r;
-              return {
-                ...r,
-                beds: r.beds.map((b) => (b.id === assigningBed.bedId ? { ...b, status: 'OCCUPIED' } : b)),
-              };
-            }),
-          };
-        })
-      );
+      setTenants((prev) => [...prev.filter((t) => t.bedId !== assigningBed.bedId && t.id !== fullTenant.id), fullTenant]);
 
-      Alert.alert(
-        '✓ Resident Assigned!',
-        `${assignTenantName} assigned to ${assigningBed.bedLabel}, Room ${assigningBed.roomNumber}!`
-      );
+      const updatedFloors = floors.map((f) => {
+        if (f.floorNumber !== assigningBed.floorNum) return f;
+        return {
+          ...f,
+          rooms: f.rooms.map((r) => {
+            if (r.id !== assigningBed.roomId) return r;
+            return {
+              ...r,
+              beds: r.beds.map((b) => (b.id === assigningBed.bedId ? { ...b, status: 'OCCUPIED' as const } : b)),
+            };
+          }),
+        };
+      });
+      setFloors(updatedFloors);
+
+      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
+        window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(updatedFloors));
+      }
+
+      const alertMsg = rentDue > 0
+        ? `✓ ${assignTenantName} onboarded to ${assigningBed.bedLabel}! Received ₹${payingNow.toLocaleString('en-IN')}, Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
+        : `✓ ${assignTenantName} onboarded to ${assigningBed.bedLabel}, Room ${assigningBed.roomNumber}! Full rent received.`;
+
+      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+        window.alert(alertMsg);
+      } else {
+        Alert.alert('✓ Resident Assigned', alertMsg);
+      }
+
       setAssigningBed(null);
       setAssignTenantName('');
       setAssignTenantPhone('');
+      setAssignTenantEmail('');
+      setAssignIdProofNumber('');
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not assign resident');
     } finally {
@@ -1548,7 +1664,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                         key={bed.id}
                                         style={styles.bedBoxVacantCard}
                                         onPress={() =>
-                                          setAssigningBed({
+                                          openAssignModalForBed({
                                             floorNum: floor.floorNumber,
                                             roomId: room.id,
                                             roomNumber: room.roomNumber,
@@ -2228,10 +2344,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         onRequestClose={() => setAssigningBed(null)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <View style={[styles.modalCard, { maxHeight: '90%', paddingBottom: 16 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <View>
-                <Text style={styles.modalTitle}>Assign Bed to Resident</Text>
+                <Text style={styles.modalTitle}>Onboard Resident to Bed</Text>
                 <Text style={styles.modalSubtitle}>
                   Room {assigningBed?.roomNumber} • {assigningBed?.bedLabel} • Floor {assigningBed?.floorNum}
                 </Text>
@@ -2241,33 +2357,163 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.modalInputLabel}>Resident Full Name *</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              value={assignTenantName}
-              onChangeText={setAssignTenantName}
-              placeholder="e.g. Harsha Vardhan"
-            />
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+              <Text style={styles.modalInputLabel}>Resident Full Name *</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignTenantName}
+                onChangeText={setAssignTenantName}
+                placeholder="e.g. Harsha Vardhan"
+              />
 
-            <Text style={styles.modalInputLabel}>Phone Number *</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              value={assignTenantPhone}
-              onChangeText={setAssignTenantPhone}
-              keyboardType="phone-pad"
-              placeholder="9876543210"
-            />
+              <Text style={styles.modalInputLabel}>Phone Number *</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignTenantPhone}
+                onChangeText={setAssignTenantPhone}
+                keyboardType="phone-pad"
+                placeholder="9876543210"
+              />
 
-            <Text style={styles.modalInputLabel}>Monthly Rent (₹)</Text>
-            <TextInput
-              style={styles.modalTextInput}
-              value={assignRentAmount}
-              onChangeText={setAssignRentAmount}
-              keyboardType="numeric"
-              placeholder={String(assigningBed?.rentRupees || 8500)}
-            />
+              <Text style={styles.modalInputLabel}>Email Address (Optional)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignTenantEmail}
+                onChangeText={setAssignTenantEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="resident@gmail.com"
+              />
 
-            <View style={{ flexDirection: 'row', marginTop: 18, gap: 10 }}>
+              {/* ID Proof Selection */}
+              <Text style={styles.modalInputLabel}>Government ID Proof</Text>
+              <View style={styles.assignProofRow}>
+                {(['AADHAAR', 'PAN', 'VOTER_ID'] as const).map((type) => (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.assignProofBtn,
+                      assignIdProofType === type && styles.assignProofBtnActive,
+                    ]}
+                    onPress={() => setAssignIdProofType(type)}
+                  >
+                    <Text
+                      style={[
+                        styles.assignProofBtnText,
+                        assignIdProofType === type && styles.assignProofBtnTextActive,
+                      ]}
+                    >
+                      {type === 'AADHAAR' ? 'Aadhaar' : type === 'PAN' ? 'PAN Card' : 'Voter ID'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.modalInputLabel}>ID Proof Number</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignIdProofNumber}
+                onChangeText={setAssignIdProofNumber}
+                placeholder="e.g. 5432-8765-1098"
+              />
+
+              {/* Fixed Monthly Rent & Security Deposit Banner */}
+              <View style={styles.assignRentBanner}>
+                <View style={styles.assignRentBannerCol}>
+                  <Text style={styles.assignRentBannerLabel}>MONTHLY RENT</Text>
+                  <Text style={styles.assignRentBannerVal}>₹{Number(assignRentAmount || 8500).toLocaleString('en-IN')}</Text>
+                </View>
+                <View style={[styles.assignRentBannerCol, { borderLeftWidth: 1, borderLeftColor: '#f1f5f9' }]}>
+                  <Text style={styles.assignRentBannerLabel}>SECURITY DEPOSIT</Text>
+                  <Text style={styles.assignRentBannerVal}>₹{Number(assignDepositPayingNow || 2500).toLocaleString('en-IN')}</Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>Monthly Rent (₹)</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={assignRentAmount}
+                    onChangeText={setAssignRentAmount}
+                    keyboardType="numeric"
+                    placeholder="8500"
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalInputLabel}>Deposit (₹)</Text>
+                  <TextInput
+                    style={styles.modalTextInput}
+                    value={assignDepositPayingNow}
+                    onChangeText={setAssignDepositPayingNow}
+                    keyboardType="numeric"
+                    placeholder="2500"
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.modalInputLabel}>Rent Amount Paying Now (₹) *</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignRentPayingNow}
+                onChangeText={setAssignRentPayingNow}
+                keyboardType="numeric"
+                placeholder={assignRentAmount || '8500'}
+              />
+
+              {/* Dynamic Rent Due Indicator */}
+              {(() => {
+                const fixedRent = Number(assignRentAmount || assigningBed?.rentRupees || 8500);
+                const paying = Number(assignRentPayingNow || 0);
+                const due = Math.max(0, fixedRent - paying);
+                if (due > 0) {
+                  return (
+                    <View style={styles.assignDueAlertBox}>
+                      <Text style={styles.assignDueAlertTitle}>⚠️ RENT DUE: ₹{due.toLocaleString('en-IN')}</Text>
+                      <Text style={styles.assignDueAlertSub}>
+                        Resident pays ₹{paying.toLocaleString('en-IN')} now. Remaining ₹{due.toLocaleString('en-IN')} marked as DUE.
+                      </Text>
+                    </View>
+                  );
+                } else if (paying >= fixedRent && fixedRent > 0) {
+                  return (
+                    <View style={styles.assignPaidAlertBox}>
+                      <Text style={styles.assignPaidAlertTitle}>✓ FULL RENT PAID (₹0 Due)</Text>
+                      <Text style={styles.assignPaidAlertSub}>
+                        Full monthly rent of ₹{fixedRent.toLocaleString('en-IN')} collected at check-in.
+                      </Text>
+                    </View>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Payment Mode Selector */}
+              <Text style={styles.modalInputLabel}>Payment Mode</Text>
+              <View style={styles.assignProofRow}>
+                {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[
+                      styles.assignProofBtn,
+                      assignPayMode === mode && styles.assignProofBtnActive,
+                    ]}
+                    onPress={() => setAssignPayMode(mode)}
+                  >
+                    <Text
+                      style={[
+                        styles.assignProofBtnText,
+                        assignPayMode === mode && styles.assignProofBtnTextActive,
+                      ]}
+                    >
+                      {mode === 'UPI' ? '📱 UPI' : mode === 'CASH' ? '💵 Cash' : '🏦 Bank'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', marginTop: 14, gap: 10 }}>
               <TouchableOpacity
                 style={[styles.closeModalBtn, { flex: 1 }]}
                 onPress={() => setAssigningBed(null)}
@@ -2276,14 +2522,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.saveModalBtn, { flex: 1.5 }, submittingAssign && { opacity: 0.6 }]}
+                style={[styles.saveModalBtn, { flex: 1.8 }, submittingAssign && { opacity: 0.6 }]}
                 onPress={handleAssignTenantToBed}
                 disabled={submittingAssign}
               >
                 {submittingAssign ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.saveModalBtnText}>✓ Assign Bed</Text>
+                  <Text style={styles.saveModalBtnText}>✓ Confirm & Onboard</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -2537,7 +2783,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                             style={styles.bedManageAssignBtn}
                             onPress={() => {
                               if (managingBedsRoom && activeManagingRoom) {
-                                setAssigningBed({
+                                openAssignModalForBed({
                                   floorNum: managingBedsRoom.floorNum,
                                   roomId: activeManagingRoom.id,
                                   roomNumber: activeManagingRoom.roomNumber,
@@ -4308,5 +4554,96 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '800',
+  },
+  assignProofRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  assignProofBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc',
+    alignItems: 'center',
+  },
+  assignProofBtnActive: {
+    borderColor: '#4f46e5',
+    backgroundColor: '#eef2ff',
+  },
+  assignProofBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  assignProofBtnTextActive: {
+    color: '#4f46e5',
+    fontWeight: '800',
+  },
+  assignRentBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginVertical: 10,
+  },
+  assignRentBannerCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  assignRentBannerLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  assignRentBannerVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  assignDueAlertBox: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+    padding: 10,
+    marginBottom: 10,
+  },
+  assignDueAlertTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#b45309',
+    marginBottom: 2,
+  },
+  assignDueAlertSub: {
+    fontSize: 11,
+    color: '#92400e',
+    lineHeight: 15,
+  },
+  assignPaidAlertBox: {
+    backgroundColor: '#f0fdf4',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    padding: 10,
+    marginBottom: 10,
+  },
+  assignPaidAlertTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#16a34a',
+    marginBottom: 2,
+  },
+  assignPaidAlertSub: {
+    fontSize: 11,
+    color: '#15803d',
+    lineHeight: 15,
   },
 });

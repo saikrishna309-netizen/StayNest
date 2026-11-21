@@ -705,9 +705,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </View>
           </View>
 
-          {/* 2 Hero Cards (Total Collection with Progress Ring & Dues till Date) */}
+          {/* 4 Hero Financial Cards in 2x2 Grid (Total Collection, Need to Collect, Total Spent, Net Profit/Loss) */}
           <View style={styles.heroCardsRow}>
-            {/* Card 1: Total Collection with Embedded Donut Ring (Requirements 1 & 2) */}
+            {/* Card 1: Total Collection with Embedded Donut Ring */}
             <View style={styles.heroCard}>
               <View style={styles.heroCardHeaderRow}>
                 <View style={styles.heroCashIconCircle}>
@@ -730,18 +730,97 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <Text style={styles.heroCardSub}>Total Collection</Text>
             </View>
 
-            {/* Card 2: Dues till Date */}
+            {/* Card 2: Need to Collect (How much need to be collect) */}
             <View style={styles.heroCard}>
               <View style={styles.heroCardHeaderRow}>
                 <View style={styles.heroCalendarIconCircle}>
-                  <Text style={{ fontSize: 16 }}>🗓️</Text>
+                  <Text style={{ fontSize: 16 }}>⏳</Text>
+                </View>
+                {dueTenantsCount > 0 && (
+                  <View style={styles.heroDueCountBadge}>
+                    <Text style={styles.heroDueCountText}>{dueTenantsCount} Due</Text>
+                  </View>
+                )}
+              </View>
+
+              <Text style={styles.heroCardAmount} numberOfLines={1}>
+                ₹{pendingRent > 0 ? pendingRent.toLocaleString('en-IN') : '0'}
+              </Text>
+              <Text style={styles.heroCardSub}>Need to Collect</Text>
+            </View>
+          </View>
+
+          {/* Row 2: Total Spent & Profit or Loss */}
+          <View style={[styles.heroCardsRow, { marginTop: 10 }]}>
+            {/* Card 3: Total Spent */}
+            <View style={styles.heroCard}>
+              <View style={styles.heroCardHeaderRow}>
+                <View style={styles.heroSpentIconCircle}>
+                  <Text style={{ fontSize: 16 }}>🧾</Text>
+                </View>
+                <View style={styles.heroExpenseTagBadge}>
+                  <Text style={styles.heroExpenseTagText}>Spent</Text>
                 </View>
               </View>
 
               <Text style={styles.heroCardAmount} numberOfLines={1}>
-                ₹{pendingRent > 0 ? pendingRent.toLocaleString('en-IN') : '1,56,200'}
+                ₹{totalExpense > 0 ? totalExpense.toLocaleString('en-IN') : '0'}
               </Text>
-              <Text style={styles.heroCardSub}>Dues till Date</Text>
+              <Text style={styles.heroCardSub}>Total Spent</Text>
+            </View>
+
+            {/* Card 4: Profit or Loss (Green if profit, Red if loss) */}
+            <View
+              style={[
+                styles.heroCard,
+                netOperatingProfit >= 0 ? styles.heroProfitCardGreen : styles.heroProfitCardRed,
+              ]}
+            >
+              <View style={styles.heroCardHeaderRow}>
+                <View
+                  style={[
+                    styles.heroProfitIconCircle,
+                    netOperatingProfit >= 0 ? { backgroundColor: '#bbf7d0' } : { backgroundColor: '#fecaca' },
+                  ]}
+                >
+                  <Text style={{ fontSize: 16 }}>{netOperatingProfit >= 0 ? '📈' : '📉'}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.heroProfitTagBadge,
+                    netOperatingProfit >= 0 ? { backgroundColor: '#dcfce7' } : { backgroundColor: '#fee2e2' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.heroProfitTagText,
+                      netOperatingProfit >= 0 ? { color: '#16a34a' } : { color: '#dc2626' },
+                    ]}
+                  >
+                    {netOperatingProfit >= 0 ? 'Surplus' : 'Deficit'}
+                  </Text>
+                </View>
+              </View>
+
+              <Text
+                style={[
+                  styles.heroCardAmount,
+                  netOperatingProfit >= 0 ? styles.heroProfitAmountGreen : styles.heroProfitAmountRed,
+                ]}
+                numberOfLines={1}
+              >
+                {netOperatingProfit >= 0
+                  ? `+₹${netOperatingProfit.toLocaleString('en-IN')}`
+                  : `-₹${Math.abs(netOperatingProfit).toLocaleString('en-IN')}`}
+              </Text>
+              <Text
+                style={[
+                  styles.heroCardSub,
+                  netOperatingProfit >= 0 ? styles.heroProfitSubGreen : styles.heroProfitSubRed,
+                ]}
+              >
+                {netOperatingProfit >= 0 ? '✓ Net Profit' : '⚠️ Net Loss'}
+              </Text>
             </View>
           </View>
         </View>
@@ -1753,6 +1832,78 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.85)',
     fontWeight: '600',
     marginTop: 2,
+  },
+  heroDueCountBadge: {
+    backgroundColor: 'rgba(239, 68, 68, 0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(254, 202, 202, 0.5)',
+  },
+  heroDueCountText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fee2e2',
+  },
+  heroSpentIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#fed7aa',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroExpenseTagBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  heroExpenseTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  heroProfitCardGreen: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#86efac',
+    borderWidth: 1.5,
+  },
+  heroProfitCardRed: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
+    borderWidth: 1.5,
+  },
+  heroProfitIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroProfitTagBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  heroProfitTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  heroProfitAmountGreen: {
+    color: '#15803d',
+  },
+  heroProfitAmountRed: {
+    color: '#dc2626',
+  },
+  heroProfitSubGreen: {
+    color: '#166534',
+    fontWeight: '800',
+  },
+  heroProfitSubRed: {
+    color: '#991b1b',
+    fontWeight: '800',
   },
 
   // ─── Occupancy Pill Cards (Empty & Occupied Beds) ───

@@ -139,7 +139,10 @@ const MainNavigator: React.FC = () => {
 
           {/* Tab 5: Profile (PG Owner Account & Settings) */}
           {currentTab === 'profile' && (
-            <ProfileScreen onBackToDashboard={() => setCurrentTab('dashboard')} />
+            <ProfileScreen
+              onBackToDashboard={() => setCurrentTab('dashboard')}
+              onNavigateTab={(tab) => setCurrentTab(tab)}
+            />
           )}
 
           {/* Bottom Navigation Bar (5 Standalone Tabs with Vibrant Orange Active Highlight) */}
