@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Property, Room, Bed, Tenant } from '../types';
+import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 
 interface PropertiesScreenProps {
   initialProperty?: Property | null;
@@ -38,6 +39,7 @@ interface RoomConfig {
   ac: boolean;
   attachedBathroom: boolean;
   beds: BedConfig[];
+  photos?: string[];
 }
 
 interface BedConfig {
@@ -200,6 +202,101 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       return;
     }
     Alert.alert(title, message);
+  };
+
+  // Whole Building Photo State (Point 8)
+  const [buildingPhoto, setBuildingPhoto] = useState<string>('');
+
+  useEffect(() => {
+    if (activeProperty?.id) {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = window.localStorage.getItem(`staynest_building_photo_${activeProperty.id}`);
+        if (saved) {
+          setBuildingPhoto(saved);
+        } else {
+          setBuildingPhoto(activeProperty.primaryPhotoUrl || 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80');
+        }
+      }
+    }
+  }, [activeProperty?.id]);
+
+  const handleUpdateBuildingPhoto = async () => {
+    try {
+      const picked = await pickImageFromDevice();
+      if (picked && activeProperty?.id) {
+        setBuildingPhoto(picked);
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem(`staynest_building_photo_${activeProperty.id}`, picked);
+          window.dispatchEvent(new Event('storage'));
+        }
+        notifyUser('Building Photo Updated! 🏢', 'Exterior photo has been updated and will be displayed on the StayNest website.');
+      }
+    } catch (e) {
+      console.log('Error updating building photo:', e);
+    }
+  };
+
+  // Add Room Photo from local machine / camera (Point 7)
+  const handleAddRoomPhoto = async (floorNum: number, roomId: string) => {
+    try {
+      const picked = await pickImageFromDevice();
+      if (!picked) return;
+      setFloors((prev) => {
+        const nextFloors = prev.map((fl) => {
+          if (fl.floorNumber !== floorNum) return fl;
+          return {
+            ...fl,
+            rooms: fl.rooms.map((rm) => {
+              if (rm.id !== roomId) return rm;
+              const currentPhotos = rm.photos || [];
+              return {
+                ...rm,
+                photos: [...currentPhotos, picked],
+              };
+            }),
+          };
+        });
+        if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.dispatchEvent(new Event('storage'));
+          } catch {}
+        }
+        return nextFloors;
+      });
+      notifyUser('Room Photo Added! 📸', 'Room photo saved and synchronized with website.');
+    } catch (e) {
+      console.log('Error adding room photo:', e);
+    }
+  };
+
+  // Delete Room Photo (Point 7)
+  const handleDeleteRoomPhoto = (floorNum: number, roomId: string, photoIdx: number) => {
+    confirmAction('Delete Room Photo', 'Are you sure you want to remove this photo from the room?', () => {
+      setFloors((prev) => {
+        const nextFloors = prev.map((fl) => {
+          if (fl.floorNumber !== floorNum) return fl;
+          return {
+            ...fl,
+            rooms: fl.rooms.map((rm) => {
+              if (rm.id !== roomId) return rm;
+              const currentPhotos = rm.photos || [];
+              return {
+                ...rm,
+                photos: currentPhotos.filter((_, idx) => idx !== photoIdx),
+              };
+            }),
+          };
+        });
+        if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.dispatchEvent(new Event('storage'));
+          } catch {}
+        }
+        return nextFloors;
+      });
+    });
   };
 
   // Delete Bed Handler
@@ -1570,6 +1667,32 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                ════════════════════════════════════════════════════════════ */}
             {viewMode === 'OVERVIEW' && (
               <View style={{ gap: 20 }}>
+                {/* ─── BUILDING EXTERIOR PHOTO CARD (Point 8) ─── */}
+                <View style={styles.buildingPhotoCard}>
+                  <Image
+                    source={{
+                      uri:
+                        buildingPhoto ||
+                        activeProperty?.primaryPhotoUrl ||
+                        'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
+                    }}
+                    style={styles.buildingPhotoImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.buildingPhotoOverlay}>
+                    <View style={styles.buildingPhotoBadge}>
+                      <Text style={styles.buildingPhotoBadgeText}>🏢 Building Photo (Website & App)</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.buildingPhotoUploadBtn}
+                      onPress={handleUpdateBuildingPhoto}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.buildingPhotoUploadBtnText}>📷 Upload / Edit Photo</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 {/* ─── 1. TOP FLOOR TABS BAR ─── */}
                 <View style={styles.floorFilterBar}>
                   <ScrollView
@@ -1784,6 +1907,51 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                   <Text style={styles.inlineAddBedPlus}>+</Text>
                                   <Text style={styles.inlineAddBedText}>Add Bed</Text>
                                 </TouchableOpacity>
+                              </View>
+
+                              {/* Room Photos Gallery (Point 7) */}
+                              <View style={styles.roomPhotosSection}>
+                                <View style={styles.roomPhotosHeaderRow}>
+                                  <Text style={styles.roomPhotosTitle}>
+                                    📸 Room Photos ({room.photos?.length || 0})
+                                  </Text>
+                                  <TouchableOpacity
+                                    style={styles.addRoomPhotoBtn}
+                                    onPress={() => handleAddRoomPhoto(floor.floorNumber, room.id)}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.addRoomPhotoBtnText}>+ Add Photo</Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                {room.photos && room.photos.length > 0 ? (
+                                  <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.roomPhotosScroll}
+                                  >
+                                    {room.photos.map((photoUri, pIdx) => (
+                                      <View key={`photo-${room.id}-${pIdx}`} style={styles.roomPhotoThumbWrapper}>
+                                        <Image
+                                          source={{ uri: photoUri }}
+                                          style={styles.roomPhotoThumb}
+                                          resizeMode="cover"
+                                        />
+                                        <TouchableOpacity
+                                          style={styles.deletePhotoBadge}
+                                          onPress={() => handleDeleteRoomPhoto(floor.floorNumber, room.id, pIdx)}
+                                          activeOpacity={0.8}
+                                        >
+                                          <Text style={styles.deletePhotoBadgeText}>✕</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                    ))}
+                                  </ScrollView>
+                                ) : (
+                                  <Text style={styles.noRoomPhotosText}>
+                                    No room photos yet. Tap "+ Add Photo" to upload from device.
+                                  </Text>
+                                )}
                               </View>
                             </View>
                           );
@@ -4811,5 +4979,121 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#15803d',
     lineHeight: 15,
+  },
+  // Building Photo Card Styles
+  buildingPhotoCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    height: 140,
+    position: 'relative',
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 4,
+  },
+  buildingPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  buildingPhotoOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 10,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  buildingPhotoBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  buildingPhotoBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  buildingPhotoUploadBtn: {
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  buildingPhotoUploadBtnText: {
+    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  // Room Photos Section Styles
+  roomPhotosSection: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+  },
+  roomPhotosHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  roomPhotosTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  addRoomPhotoBtn: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  addRoomPhotoBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#2563eb',
+  },
+  roomPhotosScroll: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  roomPhotoThumbWrapper: {
+    position: 'relative',
+    width: 68,
+    height: 52,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#cbd5e1',
+  },
+  roomPhotoThumb: {
+    width: '100%',
+    height: '100%',
+  },
+  deletePhotoBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: 'rgba(239, 68, 68, 0.85)',
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deletePhotoBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  noRoomPhotosText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontStyle: 'italic',
   },
 });

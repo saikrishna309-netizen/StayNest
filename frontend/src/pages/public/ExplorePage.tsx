@@ -427,7 +427,10 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredProperties.map((p) => {
               const startingRent = (p.startingPricePaise / 100).toLocaleString('en-IN');
-              const coverPhoto = p.primaryPhotoUrl || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=700&q=80';
+              const customBuildingPhoto = (typeof window !== 'undefined' && window.localStorage)
+                ? window.localStorage.getItem(`staynest_building_photo_${p.id}`)
+                : null;
+              const coverPhoto = customBuildingPhoto || p.primaryPhotoUrl || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=700&q=80';
 
               return (
                 <div

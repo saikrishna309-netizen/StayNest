@@ -40,6 +40,8 @@ export interface Property {
   latitude?: number | null;
   longitude?: number | null;
   googleMapsUrl?: string;
+  primaryPhotoUrl?: string;
+  photos?: string[];
   startingPricePaise?: number;
   foodIncluded: boolean;
   approvalStatus?: string;
@@ -61,6 +63,9 @@ export interface Tenant {
   emergencyContact?: string;
   idProofType?: string;
   idProofNumber?: string;
+  idProof?: string;
+  aadhaarVerified?: boolean;
+  kycStatus?: 'VERIFIED' | 'PENDING' | 'REJECTED';
   active?: boolean;
   status?: string;
   propertyId?: string;
@@ -137,7 +142,7 @@ export interface ResidentEnquiry {
   monthlyRentPaise: number;
   depositPaise: number;
   checkInDate: string;
-  status: 'PENDING_HOLD' | 'CONFIRMED' | 'REJECTED' | 'EXPIRED';
+  status: 'PENDING_HOLD' | 'HOLD' | 'CONFIRMED' | 'REJECTED' | 'EXPIRED';
   holdExpiresAt: string;
   notes?: string;
   createdAt: string;

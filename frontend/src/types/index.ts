@@ -208,7 +208,7 @@ export interface ResidentEnquiry {
   monthlyRentPaise: number;
   depositPaise: number;
   checkInDate: string;
-  status: 'PENDING_HOLD' | 'CONFIRMED' | 'REJECTED' | 'EXPIRED';
+  status: 'PENDING_HOLD' | 'HOLD' | 'CONFIRMED' | 'REJECTED' | 'EXPIRED';
   holdExpiresAt: string;
   notes?: string;
   createdAt: string;

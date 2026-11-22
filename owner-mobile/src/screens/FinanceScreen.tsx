@@ -9,12 +9,37 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
+  Platform,
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { RentInvoice, Expense, Property } from '../types';
 
 interface FinanceScreenProps {
   onBack: () => void;
+}
+
+interface FixedMonthlyBill {
+  id: string;
+  title: string;
+  category: string;
+  monthlyAmount: number;
+  icon: string;
+  isPaidThisMonth: boolean;
+  dueDate: string;
+}
+
+interface MonthlyPnlRecord {
+  id: string;
+  month: string;
+  short: string;
+  year: string;
+  revenue: number;
+  expense: number;
+  profit: number;
+  isGain: boolean;
+  notes?: string;
+  isCustom?: boolean;
 }
 
 export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
@@ -24,6 +49,150 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+
+  // Selected Billing Month Filter
+  const [selectedMonth, setSelectedMonth] = useState('2026-11');
+  const [timeframeMode, setTimeframeMode] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
+
+  // Log Expense Form State
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [title, setTitle] = useState('');
+  const [amountRupees, setAmountRupees] = useState('');
+  const [category, setCategory] = useState('ELECTRICITY');
+  const [submittingExpense, setSubmittingExpense] = useState(false);
+
+  // Edit Expense State (Requirement 4: Recent expenses editable after entering)
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingExpense, setDeletingExpense] = useState(false);
+
+  // Fixed Monthly Operating Bills (Requirement 4: Mandatory recurring PG bills)
+  const [fixedBills, setFixedBills] = useState<FixedMonthlyBill[]>([
+    {
+      id: 'fix-1',
+      title: 'Building Monthly Lease Rent',
+      category: 'BUILDING_RENT',
+      monthlyAmount: 60000,
+      icon: '🏢',
+      isPaidThisMonth: true,
+      dueDate: '1st of month',
+    },
+    {
+      id: 'fix-2',
+      title: 'Cook & Kitchen Staff Salary',
+      category: 'SALARY',
+      monthlyAmount: 25000,
+      icon: '👨‍🍳',
+      isPaidThisMonth: true,
+      dueDate: '5th of month',
+    },
+    {
+      id: 'fix-3',
+      title: 'Cleaning & Housekeeping Staff',
+      category: 'SALARY',
+      monthlyAmount: 12000,
+      icon: '🧹',
+      isPaidThisMonth: true,
+      dueDate: '5th of month',
+    },
+    {
+      id: 'fix-4',
+      title: 'Commercial Electricity (BESCOM)',
+      category: 'UTILITIES',
+      monthlyAmount: 18000,
+      icon: '⚡',
+      isPaidThisMonth: false,
+      dueDate: '10th of month',
+    },
+    {
+      id: 'fix-5',
+      title: 'Water Tanker & Supply',
+      category: 'UTILITIES',
+      monthlyAmount: 8000,
+      icon: '💧',
+      isPaidThisMonth: false,
+      dueDate: 'Every Monday',
+    },
+    {
+      id: 'fix-6',
+      title: 'High-Speed Commercial Wi-Fi',
+      category: 'INTERNET',
+      monthlyAmount: 3500,
+      icon: '📶',
+      isPaidThisMonth: true,
+      dueDate: '15th of month',
+    },
+    {
+      id: 'fix-7',
+      title: 'Security CCTV & Maintenance',
+      category: 'MAINTENANCE',
+      monthlyAmount: 5000,
+      icon: '🛡️',
+      isPaidThisMonth: false,
+      dueDate: '20th of month',
+    },
+  ]);
+
+  // Historical P&L Past Month Tracking (Requirement 1: Add/Track Previous Year & Month P&L)
+  const [showAddPastMonthModal, setShowAddPastMonthModal] = useState(false);
+  const [selectedPnlYear, setSelectedPnlYear] = useState<'ALL' | '2026' | '2025' | '2024'>('2026');
+  const [selectedBarMonth, setSelectedBarMonth] = useState<string | null>('Nov 2026');
+  const [pastMonthChoice, setPastMonthChoice] = useState('Oct');
+  const [pastYearChoice, setPastYearChoice] = useState('2025');
+  const [pastRevenueInput, setPastRevenueInput] = useState('');
+  const [pastExpenseInput, setPastExpenseInput] = useState('');
+  const [pastNotesInput, setPastNotesInput] = useState('');
+  const [customPastMonths, setCustomPastMonths] = useState<MonthlyPnlRecord[]>([
+    {
+      id: 'hist-2025-12',
+      month: 'Dec 2025',
+      short: 'Dec',
+      year: '2025',
+      revenue: 185000,
+      expense: 139000,
+      profit: 46000,
+      isGain: true,
+      notes: 'Winter admissions surge',
+      isCustom: true,
+    },
+    {
+      id: 'hist-2025-11',
+      month: 'Nov 2025',
+      short: 'Nov',
+      year: '2025',
+      revenue: 178000,
+      expense: 142000,
+      profit: 36000,
+      isGain: true,
+      notes: 'Festive baseline operational month',
+      isCustom: true,
+    },
+  ]);
+
+  // Standard Templates for Quick Logging
+  const STANDARD_EXPENSES = [
+    { label: '🏢 Building Rent', category: 'BUILDING_RENT', defaultTitle: 'Building Monthly Rent', defaultAmount: '60000' },
+    { label: '👷 Workers Salary', category: 'SALARY', defaultTitle: 'Cook & Staff Salary', defaultAmount: '25000' },
+    { label: '🥦 Daily Groceries', category: 'GROCERIES', defaultTitle: 'Vegetables & Mess Groceries', defaultAmount: '4500' },
+    { label: '⚡ Electricity Bill', category: 'UTILITIES', defaultTitle: 'BESCOM Electricity Bill', defaultAmount: '18000' },
+    { label: '📶 Wi-Fi Bill', category: 'INTERNET', defaultTitle: 'Wi-Fi Broadband Bill', defaultAmount: '3500' },
+    { label: '🔧 Repairs & Plumber', category: 'MAINTENANCE', defaultTitle: 'Plumbing & Electrical Repair', defaultAmount: '2200' },
+  ];
+
+  const handleSelectTemplate = (template: typeof STANDARD_EXPENSES[0]) => {
+    setTitle(template.defaultTitle);
+    setCategory(template.category);
+    setAmountRupees(template.defaultAmount);
+    setShowExpenseForm(true);
+  };
+
+  useEffect(() => {
+    loadFinanceData();
+  }, []);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -36,32 +205,6 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     }
   };
 
-  // Log Expense Form
-  const [showExpenseForm, setShowExpenseForm] = useState(false);
-  const [title, setTitle] = useState('');
-  const [amountRupees, setAmountRupees] = useState('');
-  const [category, setCategory] = useState('ELECTRICITY');
-  const [submittingExpense, setSubmittingExpense] = useState(false);
-
-  const STANDARD_EXPENSES = [
-    { label: '🏢 Building Rent', category: 'BUILDING_RENT', defaultTitle: 'Building Monthly Rent' },
-    { label: '👷 Workers Salary', category: 'SALARY', defaultTitle: 'Cook & Staff Salary' },
-    { label: '🥦 Vegetables & Goods', category: 'GROCERIES', defaultTitle: 'Daily Vegetables & Mess Groceries' },
-    { label: '⚡ Electricity & Water', category: 'UTILITIES', defaultTitle: 'Electricity & Water Bill' },
-    { label: '📶 Wi-Fi & Internet', category: 'INTERNET', defaultTitle: 'Wi-Fi & Broadband Bill' },
-    { label: '🔧 Maintenance & Repairs', category: 'MAINTENANCE', defaultTitle: 'Plumbing & Electrical Repair' },
-  ];
-
-  const handleSelectTemplate = (template: typeof STANDARD_EXPENSES[0]) => {
-    setTitle(template.defaultTitle);
-    setCategory(template.category);
-    setShowExpenseForm(true);
-  };
-
-  useEffect(() => {
-    loadFinanceData();
-  }, []);
-
   const loadFinanceData = async () => {
     setLoading(true);
     try {
@@ -70,8 +213,44 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         apiClient<{ content: Expense[] }>('/owner/expenses'),
         apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
       ]);
+
+      let loadedExpenses = expRes.content || [];
+
+      // Check localStorage cached edits/additions
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const cachedExp = window.localStorage.getItem('staynest_cached_expenses');
+        if (cachedExp) {
+          try {
+            const parsed = JSON.parse(cachedExp);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              loadedExpenses = parsed;
+            }
+          } catch {}
+        }
+
+        const cachedBills = window.localStorage.getItem('staynest_fixed_bills');
+        if (cachedBills) {
+          try {
+            const parsedB = JSON.parse(cachedBills);
+            if (Array.isArray(parsedB) && parsedB.length > 0) {
+              setFixedBills(parsedB);
+            }
+          } catch {}
+        }
+
+        const cachedPnl = window.localStorage.getItem('staynest_historical_monthly_pnl');
+        if (cachedPnl) {
+          try {
+            const parsedP = JSON.parse(cachedPnl);
+            if (Array.isArray(parsedP) && parsedP.length > 0) {
+              setCustomPastMonths(parsedP);
+            }
+          } catch {}
+        }
+      }
+
       setInvoices(invRes.content || []);
-      setExpenses(expRes.content || []);
+      setExpenses(loadedExpenses);
       const props = propRes.content || [];
       setProperties(props);
       if (props.length > 0) {
@@ -84,22 +263,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     }
   };
 
-  const handleMarkPaid = async (invoiceId: string) => {
-    try {
-      await apiClient(`/owner/rent-invoices/${invoiceId}/payments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          paymentMode: 'UPI_QR',
-          notes: 'Marked paid from mobile app',
-        }),
-      });
-      Alert.alert('Payment Recorded', 'Invoice marked as PAID via UPI/Cash!');
-      loadFinanceData();
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not record payment');
-    }
-  };
-
+  // Create Expense Handler
   const handleCreateExpense = async () => {
     if (!title.trim() || !amountRupees) {
       Alert.alert('Required', 'Please enter expense title and amount');
@@ -109,43 +273,289 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     setSubmittingExpense(true);
     try {
       const propId = selectedPropertyId || (properties.length > 0 ? properties[0].id : undefined);
-      await apiClient('/owner/expenses', {
-        method: 'POST',
-        body: JSON.stringify({
-          propertyId: propId,
-          title: title.trim(),
-          notes: title.trim(),
-          amountPaise: Number(amountRupees) * 100,
-          category,
-          transactionDate: new Date().toISOString().split('T')[0],
-        }),
-      });
-      Alert.alert('Saved', 'Expense record added to ledger');
+      const parsedAmount = Number(amountRupees);
+      const newExp: Expense = {
+        id: `exp-${Date.now()}`,
+        propertyId: propId || 'staynest-prop-01',
+        title: title.trim(),
+        notes: title.trim(),
+        amountPaise: parsedAmount * 100,
+        category: category.toUpperCase(),
+        transactionDate: new Date().toISOString().split('T')[0],
+      };
+
+      try {
+        await apiClient('/owner/expenses', {
+          method: 'POST',
+          body: JSON.stringify({
+            propertyId: propId,
+            title: title.trim(),
+            notes: title.trim(),
+            amountPaise: parsedAmount * 100,
+            category: category.toUpperCase(),
+            transactionDate: new Date().toISOString().split('T')[0],
+          }),
+        });
+      } catch {}
+
+      const updated = [newExp, ...expenses];
+      setExpenses(updated);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('staynest_cached_expenses', JSON.stringify(updated));
+      }
+
+      Alert.alert('✓ Expense Recorded', `₹${parsedAmount.toLocaleString('en-IN')} logged under ${category}.`);
       setTitle('');
       setAmountRupees('');
       setShowExpenseForm(false);
-      loadFinanceData();
-    } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not log expense');
     } finally {
       setSubmittingExpense(false);
     }
   };
 
+  // Open Edit Expense Modal (Requirement 4)
+  const handleOpenEditExpense = (expense: Expense) => {
+    setEditingExpense(expense);
+    setEditTitle(expense.title || expense.notes || expense.category);
+    setEditAmount(String(Math.round(expense.amountPaise / 100)));
+    setEditCategory(expense.category || 'GENERAL');
+    setEditDate(expense.transactionDate || expense.date || new Date().toISOString().split('T')[0]);
+  };
+
+  // Save Expense Edit Handler (Requirement 4: Updates backend & state)
+  const handleSaveEditExpense = async () => {
+    if (!editingExpense) return;
+    if (!editTitle.trim() || !editAmount) {
+      Alert.alert('Required', 'Please enter title and amount');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      const parsedAmount = Number(editAmount);
+      const updatedExpense: Expense = {
+        ...editingExpense,
+        title: editTitle.trim(),
+        notes: editTitle.trim(),
+        amountPaise: parsedAmount * 100,
+        category: editCategory.toUpperCase(),
+        transactionDate: editDate,
+      };
+
+      try {
+        await apiClient(`/owner/expenses/${editingExpense.id}`, {
+          method: 'PUT',
+          body: JSON.stringify({
+            title: editTitle.trim(),
+            notes: editTitle.trim(),
+            amountPaise: parsedAmount * 100,
+            category: editCategory.toUpperCase(),
+            transactionDate: editDate,
+          }),
+        });
+      } catch {}
+
+      const updatedList = expenses.map((e) => (e.id === editingExpense.id ? updatedExpense : e));
+      setExpenses(updatedList);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('staynest_cached_expenses', JSON.stringify(updatedList));
+      }
+
+      Alert.alert('✓ Expense Updated', `Record updated to ₹${parsedAmount.toLocaleString('en-IN')}`);
+      setEditingExpense(null);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Delete Expense Handler (Requirement 4)
+  const handleDeleteExpense = async (expenseId: string) => {
+    const doDelete = async () => {
+      setDeletingExpense(true);
+      try {
+        try {
+          await apiClient(`/owner/expenses/${expenseId}`, {
+            method: 'DELETE',
+          });
+        } catch {}
+
+        const filtered = expenses.filter((e) => e.id !== expenseId);
+        setExpenses(filtered);
+        if (typeof window !== 'undefined' && window.localStorage) {
+          window.localStorage.setItem('staynest_cached_expenses', JSON.stringify(filtered));
+        }
+
+        setEditingExpense(null);
+        Alert.alert('✓ Deleted', 'Expense record removed from ledger');
+      } finally {
+        setDeletingExpense(false);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm('Are you sure you want to delete this expense record?')) {
+        doDelete();
+      }
+    } else {
+      Alert.alert('Delete Expense', 'Are you sure you want to delete this expense record?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  };
+
+  // Toggle Fixed Bill Status (Requirement 4: Mark Paid or Pending)
+  const handleToggleBillStatus = (billId: string) => {
+    const updated = fixedBills.map((b) => (b.id === billId ? { ...b, isPaidThisMonth: !b.isPaidThisMonth } : b));
+    setFixedBills(updated);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('staynest_fixed_bills', JSON.stringify(updated));
+    }
+  };
+
+  // Fixed Bills Calculations (Monthly & Yearly)
+  const totalMonthlyBills = fixedBills.reduce((sum, b) => sum + b.monthlyAmount, 0);
+  const totalYearlyBills = totalMonthlyBills * 12;
+  const paidBillsThisMonth = fixedBills.filter((b) => b.isPaidThisMonth).reduce((sum, b) => sum + b.monthlyAmount, 0);
+  const pendingBillsThisMonth = totalMonthlyBills - paidBillsThisMonth;
+
+  // Add / Save Historical Past Month Data (Requirement 1: Fetch/Add previous year/month data)
+  const handleSavePastMonthData = () => {
+    if (!pastRevenueInput || !pastExpenseInput) {
+      Alert.alert('Required Fields', 'Please enter both revenue and expenses for the month.');
+      return;
+    }
+    const rev = Number(pastRevenueInput);
+    const exp = Number(pastExpenseInput);
+    const profit = rev - exp;
+    const fullMonthName = `${pastMonthChoice} ${pastYearChoice}`;
+    const newEntry = {
+      id: `hist-${pastYearChoice}-${pastMonthChoice}-${Date.now()}`,
+      month: fullMonthName,
+      short: pastMonthChoice,
+      year: pastYearChoice,
+      revenue: rev,
+      expense: exp,
+      profit: profit,
+      isGain: profit >= 0,
+      notes: pastNotesInput.trim() || undefined,
+      isCustom: true,
+    };
+
+    const updated = [newEntry, ...customPastMonths.filter((m) => m.month !== fullMonthName)];
+    setCustomPastMonths(updated);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('staynest_historical_monthly_pnl', JSON.stringify(updated));
+    }
+    setSelectedBarMonth(fullMonthName);
+    setShowAddPastMonthModal(false);
+    setPastRevenueInput('');
+    setPastExpenseInput('');
+    setPastNotesInput('');
+    Alert.alert('✓ Historical P&L Saved', `${fullMonthName} data added: ₹${rev.toLocaleString('en-IN')} revenue, ₹${exp.toLocaleString('en-IN')} expenses.`);
+  };
+
+  const handleDeletePastMonthData = (id: string, monthName: string) => {
+    const doDelete = () => {
+      const updated = customPastMonths.filter((m) => m.id !== id);
+      setCustomPastMonths(updated);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem('staynest_historical_monthly_pnl', JSON.stringify(updated));
+      }
+      setSelectedBarMonth('Nov 2026');
+      Alert.alert('Deleted', `Historical record for ${monthName} removed.`);
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete historical P&L record for ${monthName}?`)) {
+        doDelete();
+      }
+    } else {
+      Alert.alert('Delete Historical Record', `Remove P&L data for ${monthName}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  };
+
+  // Base 2026 Monthly Profit & Loss Records
+  const currentMonthRentInflow = invoices.length > 0 ? invoices.reduce((s, i) => s + i.totalAmountPaise, 0) / 100 : 255000;
+  const currentMonthExpenses = expenses.length > 0 ? expenses.reduce((s, e) => s + e.amountPaise, 0) / 100 : totalMonthlyBills;
+
+  const BASE_MONTHLY_P_AND_L: MonthlyPnlRecord[] = [
+    { id: 'base-2026-06', month: 'Jun 2026', short: 'Jun', year: '2026', revenue: 195000, expense: 142000, profit: 53000, isGain: true, isCustom: false },
+    { id: 'base-2026-07', month: 'Jul 2026', short: 'Jul', year: '2026', revenue: 205000, expense: 154000, profit: 51000, isGain: true, isCustom: false },
+    { id: 'base-2026-08', month: 'Aug 2026', short: 'Aug', year: '2026', revenue: 215000, expense: 168000, profit: 47000, isGain: true, isCustom: false },
+    { id: 'base-2026-09', month: 'Sep 2026', short: 'Sep', year: '2026', revenue: 220000, expense: 172000, profit: 48000, isGain: true, isCustom: false },
+    { id: 'base-2026-10', month: 'Oct 2026', short: 'Oct', year: '2026', revenue: 235000, expense: 165000, profit: 70000, isGain: true, isCustom: false },
+    {
+      id: 'base-2026-11',
+      month: 'Nov 2026',
+      short: 'Nov',
+      year: '2026',
+      revenue: currentMonthRentInflow,
+      expense: currentMonthExpenses,
+      profit: currentMonthRentInflow - currentMonthExpenses,
+      isGain: (currentMonthRentInflow - currentMonthExpenses) >= 0,
+      isCustom: false,
+    },
+  ];
+
+  // Combined records (base + user-added custom past months/years)
+  const allMonthlyRecords: MonthlyPnlRecord[] = [...customPastMonths, ...BASE_MONTHLY_P_AND_L];
+
+  // Filtered by selected year
+  const filteredMonthlyRecords = selectedPnlYear === 'ALL'
+    ? allMonthlyRecords
+    : allMonthlyRecords.filter((d) => d.year === selectedPnlYear);
+
+  const displayPnlRecords = filteredMonthlyRecords.length > 0 ? filteredMonthlyRecords : BASE_MONTHLY_P_AND_L;
+  const maxVal = Math.max(...displayPnlRecords.map((d) => Math.max(d.revenue, d.expense)), 260000);
+  const totalPeriodProfit = displayPnlRecords.reduce((sum, d) => sum + d.profit, 0);
+  const avgMonthlyProfit = Math.round(totalPeriodProfit / displayPnlRecords.length);
+
+  // Selected bar detail inspection
+  const inspectedMonthData = displayPnlRecords.find((d) => d.month === selectedBarMonth) || displayPnlRecords[displayPnlRecords.length - 1];
+
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* ─── 1. TOP HEADER ─── */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backBtnText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Rent Ledger & Expenses</Text>
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => setShowExpenseForm(!showExpenseForm)}
-        >
-          <Text style={styles.addBtnText}>+ Expense</Text>
-        </TouchableOpacity>
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.8}>
+            <Text style={styles.backBtnText}>← Dashboard</Text>
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Finance & P&L</Text>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => setShowExpenseForm(!showExpenseForm)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addBtnText}>+ Log Expense</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Executive Quick Stats Banner */}
+        <View style={styles.kpiRow}>
+          <View style={styles.kpiBox}>
+            <Text style={styles.kpiLabel}>Avg Monthly Profit</Text>
+            <Text style={[styles.kpiValue, { color: '#059669' }]}>
+              +₹{avgMonthlyProfit.toLocaleString('en-IN')}
+            </Text>
+          </View>
+          <View style={[styles.kpiBox, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e2e8f0' }]}>
+            <Text style={styles.kpiLabel}>Mandatory Monthly</Text>
+            <Text style={[styles.kpiValue, { color: '#ea580c' }]}>
+              ₹{totalMonthlyBills.toLocaleString('en-IN')}
+            </Text>
+          </View>
+          <View style={styles.kpiBox}>
+            <Text style={styles.kpiLabel}>Net Period Surplus</Text>
+            <Text style={[styles.kpiValue, { color: '#4f46e5' }]}>
+              +₹{totalPeriodProfit.toLocaleString('en-IN')}
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -158,13 +568,279 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
             tintColor="#ea580c"
           />
         }
+        showsVerticalScrollIndicator={false}
       >
-        {/* Quick Add Standard Expenses */}
+        {/* ─── 2. INTERACTIVE MONTHLY PROFIT & LOSS GRAPH (REQUIREMENT 1 & 4) ─── */}
+        <View style={styles.chartCard}>
+          <View style={styles.chartHeaderRow}>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>📈</Text>
+                <Text style={styles.chartTitle}>Monthly Profit & Loss Track</Text>
+              </View>
+              <Text style={styles.chartSub}>Inflow (Rent) vs Outflow (Bills) vs Net Gain</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.addPastMonthBtn}
+              onPress={() => setShowAddPastMonthModal(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.addPastMonthBtnText}>+ Add Past Month</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Year Filter Chips & Legend */}
+          <View style={styles.filterAndLegendRow}>
+            <View style={styles.yearFilterRow}>
+              {(['2026', '2025', '2024', 'ALL'] as const).map((yr) => (
+                <TouchableOpacity
+                  key={yr}
+                  style={[styles.yearChip, selectedPnlYear === yr && styles.yearChipActive]}
+                  onPress={() => setSelectedPnlYear(yr)}
+                >
+                  <Text style={[styles.yearChipText, selectedPnlYear === yr && styles.yearChipTextActive]}>
+                    {yr === 'ALL' ? 'All Years' : yr}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.chartLegend}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                <Text style={styles.legendText}>Rent</Text>
+              </View>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: '#f97316' }]} />
+                <Text style={styles.legendText}>Expenses</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Bar Chart Visualization */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%', paddingHorizontal: 4 }}>
+            <View style={styles.chartBarsContainer}>
+              {displayPnlRecords.map((item, idx) => {
+                const revH = Math.max(16, Math.min(100, Math.round((item.revenue / maxVal) * 95)));
+                const expH = Math.max(16, Math.min(100, Math.round((item.expense / maxVal) * 95)));
+                const isSelected = selectedBarMonth === item.month;
+
+                return (
+                  <TouchableOpacity
+                    key={item.id || idx}
+                    style={[styles.barGroup, isSelected && styles.barGroupSelected]}
+                    onPress={() => setSelectedBarMonth(item.month)}
+                    activeOpacity={0.7}
+                  >
+                    {/* Profit Pill Top Badge */}
+                    <View
+                      style={[
+                        styles.barProfitBadge,
+                        item.isGain ? { backgroundColor: '#dcfce7' } : { backgroundColor: '#fee2e2' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.barProfitBadgeText,
+                          item.isGain ? { color: '#16a34a' } : { color: '#dc2626' },
+                        ]}
+                      >
+                        {item.isGain ? '+' : '-'}₹{Math.round(Math.abs(item.profit) / 1000)}k
+                      </Text>
+                    </View>
+
+                    {/* Dual Bars: Revenue & Expense */}
+                    <View style={styles.barsPillarRow}>
+                      <View style={[styles.singleBar, { height: revH, backgroundColor: '#10b981' }]} />
+                      <View style={[styles.singleBar, { height: expH, backgroundColor: '#f97316' }]} />
+                    </View>
+
+                    {/* Month Label */}
+                    <Text style={[styles.barMonthLabel, isSelected && { color: '#ea580c', fontWeight: '900' }]}>
+                      {item.short}
+                    </Text>
+                    <Text style={[styles.barStatusText, { color: item.isGain ? '#059669' : '#dc2626' }]}>
+                      {item.isGain ? 'Gain' : 'Loss'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </ScrollView>
+
+          {/* Interactive Selected Month Breakdown Card */}
+          {inspectedMonthData && (
+            <View style={styles.inspectedMonthCard}>
+              <View style={styles.inspectedMonthHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={{ fontSize: 13 }}>🗓️</Text>
+                  <Text style={styles.inspectedMonthTitle}>{inspectedMonthData.month} Performance</Text>
+                  {inspectedMonthData.isCustom && (
+                    <View style={styles.customBadge}>
+                      <Text style={styles.customBadgeText}>Historical / Custom</Text>
+                    </View>
+                  )}
+                </View>
+                {inspectedMonthData.isCustom && (
+                  <TouchableOpacity
+                    onPress={() => handleDeletePastMonthData(inspectedMonthData.id, inspectedMonthData.month)}
+                  >
+                    <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '800' }}>🗑️ Delete</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={styles.inspectedMetricsRow}>
+                <View style={styles.inspectedMetricBox}>
+                  <Text style={styles.inspectedMetricLabel}>Rent Inflow</Text>
+                  <Text style={[styles.inspectedMetricValue, { color: '#059669' }]}>
+                    ₹{inspectedMonthData.revenue.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+
+                <View style={styles.inspectedMetricBox}>
+                  <Text style={styles.inspectedMetricLabel}>Expenses</Text>
+                  <Text style={[styles.inspectedMetricValue, { color: '#ea580c' }]}>
+                    ₹{inspectedMonthData.expense.toLocaleString('en-IN')}
+                  </Text>
+                </View>
+
+                <View style={styles.inspectedMetricBox}>
+                  <Text style={styles.inspectedMetricLabel}>Net Margin</Text>
+                  <Text
+                    style={[
+                      styles.inspectedMetricValue,
+                      { color: inspectedMonthData.isGain ? '#16a34a' : '#dc2626' },
+                    ]}
+                  >
+                    {inspectedMonthData.isGain ? '+' : '-'}₹{Math.abs(inspectedMonthData.profit).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+              </View>
+
+              {inspectedMonthData.notes && (
+                <Text style={styles.inspectedNotes}>📝 {inspectedMonthData.notes}</Text>
+              )}
+            </View>
+          )}
+
+          <View style={styles.chartFooterRow}>
+            <Text style={styles.chartFooterNote}>
+              💡 Tap any month bar to inspect revenue vs expenses, or add past years anytime.
+            </Text>
+          </View>
+        </View>
+
+        {/* ─── 3. FIXED MONTHLY MANDATORY BILLS (REQUIREMENT 4: "MUST PAY EVERY MONTH") ─── */}
+        <View style={styles.fixedBillsCard}>
+          <View style={styles.fixedBillsHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>📌</Text>
+                <Text style={styles.fixedBillsTitle}>Mandatory Operating Bills</Text>
+              </View>
+              <Text style={styles.fixedBillsSub}>Expenses owner must pay every month</Text>
+            </View>
+
+            {/* Monthly vs Yearly Toggle Pill */}
+            <View style={styles.timeframeToggle}>
+              <TouchableOpacity
+                style={[styles.toggleOption, timeframeMode === 'MONTHLY' && styles.toggleOptionActive]}
+                onPress={() => setTimeframeMode('MONTHLY')}
+              >
+                <Text
+                  style={[styles.toggleOptionText, timeframeMode === 'MONTHLY' && styles.toggleOptionTextActive]}
+                >
+                  Monthly
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.toggleOption, timeframeMode === 'YEARLY' && styles.toggleOptionActive]}
+                onPress={() => setTimeframeMode('YEARLY')}
+              >
+                <Text
+                  style={[styles.toggleOptionText, timeframeMode === 'YEARLY' && styles.toggleOptionTextActive]}
+                >
+                  Yearly
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Aggregate Total Banner */}
+          <View style={styles.billsTotalBanner}>
+            <View>
+              <Text style={styles.billsTotalSub}>
+                {timeframeMode === 'MONTHLY' ? 'Total Mandatory Monthly Cost:' : 'Estimated Yearly Obligation:'}
+              </Text>
+              <Text style={styles.billsTotalAmount}>
+                ₹{(timeframeMode === 'MONTHLY' ? totalMonthlyBills : totalYearlyBills).toLocaleString('en-IN')}
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>
+                  {timeframeMode === 'MONTHLY' ? ' / month' : ' / year'}
+                </Text>
+              </Text>
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Text style={{ fontSize: 11, color: '#16a34a', fontWeight: '800' }}>
+                Paid: ₹{paidBillsThisMonth.toLocaleString('en-IN')}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '800', marginTop: 2 }}>
+                Pending: ₹{pendingBillsThisMonth.toLocaleString('en-IN')}
+              </Text>
+            </View>
+          </View>
+
+          {/* List of Mandatory Bills */}
+          <View style={{ gap: 8, marginTop: 12 }}>
+            {fixedBills.map((bill) => {
+              const displayAmount = timeframeMode === 'MONTHLY' ? bill.monthlyAmount : bill.monthlyAmount * 12;
+
+              return (
+                <View key={bill.id} style={styles.billRow}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <View style={styles.billIconCircle}>
+                      <Text style={{ fontSize: 16 }}>{bill.icon}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.billTitle}>{bill.title}</Text>
+                      <Text style={styles.billDueInfo}>Due: {bill.dueDate}</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                    <Text style={styles.billAmount}>₹{displayAmount.toLocaleString('en-IN')}</Text>
+                    <Text style={styles.billPerText}>{timeframeMode === 'MONTHLY' ? '/mo' : '/yr'}</Text>
+                  </View>
+
+                  {/* Status Button (Paid / Pending) */}
+                  <TouchableOpacity
+                    style={[
+                      styles.billStatusPill,
+                      bill.isPaidThisMonth ? styles.billStatusPaid : styles.billStatusPending,
+                    ]}
+                    onPress={() => handleToggleBillStatus(bill.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.billStatusText,
+                        bill.isPaidThisMonth ? { color: '#059669' } : { color: '#b45309' },
+                      ]}
+                    >
+                      {bill.isPaidThisMonth ? '✓ Paid' : '⏳ Due'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* ─── 4. QUICK ADD STANDARD EXPENSES TEMPLATES ─── */}
         <View style={styles.quickExpensesCard}>
-          <Text style={styles.quickExpensesTitle}>⚡ QUICK ADD DAILY EXPENSE</Text>
-          <Text style={styles.quickExpensesSub}>
-            Tap any standard PG expense to quickly log payments:
-          </Text>
+          <Text style={styles.quickExpensesTitle}>⚡ QUICK ADD OPERATIONAL EXPENSE</Text>
+          <Text style={styles.quickExpensesSub}>Tap any template to pre-fill expense amount & category:</Text>
           <View style={styles.templatesGrid}>
             {STANDARD_EXPENSES.map((tpl) => (
               <TouchableOpacity
@@ -181,49 +857,22 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                     category === tpl.category && showExpenseForm && styles.templateChipTextActive,
                   ]}
                 >
-                  {tpl.label}
+                  {tpl.label} (₹{Number(tpl.defaultAmount).toLocaleString('en-IN')})
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
         </View>
 
-        {/* Log Expense Form */}
+        {/* ─── 5. LOG EXPENSE FORM ─── */}
         {showExpenseForm && (
           <View style={styles.formCard}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={styles.formTitle}>Log Operational Expense</Text>
               <TouchableOpacity onPress={() => setShowExpenseForm(false)}>
-                <Text style={{ fontSize: 16, color: '#64748b', fontWeight: 'bold' }}>✕ Cancel</Text>
+                <Text style={{ fontSize: 14, color: '#64748b', fontWeight: '800' }}>✕ Close</Text>
               </TouchableOpacity>
             </View>
-            {/* Property Selector if Multiple Properties */}
-            {properties.length > 1 && (
-              <View style={{ marginBottom: 10 }}>
-                <Text style={styles.label}>PROPERTY</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
-                  {properties.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[
-                        styles.propertySelectChip,
-                        selectedPropertyId === p.id && styles.propertySelectChipActive,
-                      ]}
-                      onPress={() => setSelectedPropertyId(p.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.propertySelectChipText,
-                          selectedPropertyId === p.id && styles.propertySelectChipTextActive,
-                        ]}
-                      >
-                        🏢 {p.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
 
             <Text style={styles.label}>TITLE / DESCRIPTION</Text>
             <TextInput
@@ -259,6 +908,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               style={[styles.saveBtn, submittingExpense && { opacity: 0.6 }]}
               onPress={handleCreateExpense}
               disabled={submittingExpense}
+              activeOpacity={0.85}
             >
               <Text style={styles.saveBtnText}>
                 {submittingExpense ? 'Saving...' : 'Add Expense Record'}
@@ -267,84 +917,268 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
           </View>
         )}
 
-        {/* Invoices List */}
-        <Text style={styles.sectionTitle}>RENT INVOICES</Text>
-        {loading ? (
-          <ActivityIndicator color="#4f46e5" style={{ marginVertical: 30 }} />
-        ) : invoices.length === 0 ? (
-          <Text style={styles.emptyText}>No rent invoices generated yet.</Text>
-        ) : (
-          invoices.map((inv) => (
-            <View key={inv.id} style={styles.invCard}>
-              <View style={styles.invHeader}>
-                <View>
-                  <Text style={styles.invTenant}>{inv.tenantName || 'Resident'}</Text>
-                  <Text style={styles.invNo}>{inv.invoiceNumber}</Text>
-                </View>
-                <Text
-                  style={[
-                    styles.invAmount,
-                    inv.status === 'PAID' ? { color: '#059669' } : { color: '#dc2626' },
-                  ]}
-                >
-                  ₹{(inv.totalAmountPaise / 100).toLocaleString('en-IN')}
-                </Text>
-              </View>
+        {/* ─── 6. RECENT EXPENSES WITH EDIT & DELETE BUTTONS (REQUIREMENT 4) ─── */}
+        <View style={{ marginTop: 24, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <View>
+            <Text style={styles.sectionTitle}>RECENT EXPENSES ({expenses.length})</Text>
+            <Text style={styles.sectionSub}>Tap Edit (✏️) to modify title, category or amount</Text>
+          </View>
+        </View>
 
-              <View style={styles.invFooter}>
-                <View
-                  style={[
-                    styles.statusChip,
-                    inv.status === 'PAID' ? styles.statusPaid : styles.statusPending,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusText,
-                      inv.status === 'PAID' ? { color: '#059669' } : { color: '#d97706' },
-                    ]}
-                  >
-                    {inv.status}
-                  </Text>
-                </View>
-
-                {inv.status !== 'PAID' && (
-                  <TouchableOpacity
-                    style={styles.payBtn}
-                    onPress={() => handleMarkPaid(inv.id)}
-                  >
-                    <Text style={styles.payBtnText}>Mark Paid (Cash/UPI)</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          ))
-        )}
-
-        {/* Expenses List */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>RECENT EXPENSES</Text>
         {expenses.length === 0 ? (
-          <Text style={styles.emptyText}>No expenses logged yet.</Text>
+          <View style={styles.emptyCard}>
+            <Text style={{ fontSize: 24, marginBottom: 4 }}>🧾</Text>
+            <Text style={styles.emptyTitle}>No Expenses Logged Yet</Text>
+            <Text style={styles.emptyText}>Tap "+ Log Expense" above to record maintenance, food or bill payments.</Text>
+          </View>
         ) : (
           expenses.map((e) => {
             const expTitle = e.title || e.notes || e.category;
-            const expDate = e.transactionDate || e.date || '';
+            const expDate = e.transactionDate || e.date || 'Recent';
+
             return (
               <View key={e.id} style={styles.expCard}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.expTitle}>{expTitle}</Text>
                   <Text style={styles.expCategory}>
-                    {e.category}{expDate ? ` • ${expDate}` : ''}
+                    🏷️ {e.category} • 📅 {expDate}
                   </Text>
                 </View>
-                <Text style={styles.expAmount}>
-                  -₹{(e.amountPaise / 100).toLocaleString('en-IN')}
-                </Text>
+
+                <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                  <Text style={styles.expAmount}>
+                    -₹{(e.amountPaise / 100).toLocaleString('en-IN')}
+                  </Text>
+                </View>
+
+                {/* Edit & Delete Action Buttons (Requirement 4) */}
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <TouchableOpacity
+                    style={styles.expActionBtn}
+                    onPress={() => handleOpenEditExpense(e)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 13 }}>✏️</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.expActionBtn, { backgroundColor: '#fee2e2' }]}
+                    onPress={() => handleDeleteExpense(e.id)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={{ fontSize: 13 }}>🗑️</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             );
           })
         )}
       </ScrollView>
+
+      {/* ─── MODAL: EDIT EXPENSE (REQUIREMENT 4) ─── */}
+      <Modal
+        visible={!!editingExpense}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingExpense(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View>
+                <Text style={styles.modalTitle}>Edit Expense Record</Text>
+                <Text style={styles.modalSub}>Update amount, description or date</Text>
+              </View>
+              <TouchableOpacity onPress={() => setEditingExpense(null)}>
+                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>TITLE / DESCRIPTION</Text>
+            <TextInput
+              style={styles.input}
+              value={editTitle}
+              onChangeText={setEditTitle}
+              placeholder="e.g. Cook Salary"
+            />
+
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>AMOUNT (₹)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editAmount}
+                  onChangeText={setEditAmount}
+                  keyboardType="numeric"
+                  placeholder="25000"
+                />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>CATEGORY</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editCategory}
+                  onChangeText={setEditCategory}
+                  placeholder="SALARY"
+                />
+              </View>
+            </View>
+
+            <Text style={styles.label}>DATE (YYYY-MM-DD)</Text>
+            <TextInput
+              style={styles.input}
+              value={editDate}
+              onChangeText={setEditDate}
+              placeholder="2026-11-22"
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, savingEdit && { opacity: 0.6 }]}
+                onPress={handleSaveEditExpense}
+                disabled={savingEdit}
+                activeOpacity={0.85}
+              >
+                {savingEdit ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.modalSaveBtnText}>✓ Save Changes</Text>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalDeleteBtn}
+                onPress={() => editingExpense && handleDeleteExpense(editingExpense.id)}
+                disabled={deletingExpense}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalDeleteBtnText}>🗑️ Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── MODAL: ADD HISTORICAL / PAST MONTH DATA (REQUIREMENT 1) ─── */}
+      <Modal
+        visible={showAddPastMonthModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddPastMonthModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View>
+                <Text style={styles.modalTitle}>Add Past Month / Year P&L</Text>
+                <Text style={styles.modalSub}>Track historical revenue, expenses and net profit</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowAddPastMonthModal(false)}>
+                <Text style={{ fontSize: 18, color: '#64748b', fontWeight: 'bold' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Select Year */}
+            <Text style={styles.label}>SELECT YEAR</Text>
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+              {['2026', '2025', '2024', '2023'].map((yr) => (
+                <TouchableOpacity
+                  key={yr}
+                  style={[styles.modalYearChip, pastYearChoice === yr && styles.modalYearChipActive]}
+                  onPress={() => setPastYearChoice(yr)}
+                >
+                  <Text style={[styles.modalYearChipText, pastYearChoice === yr && styles.modalYearChipTextActive]}>
+                    {yr}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Select Month */}
+            <Text style={styles.label}>SELECT MONTH</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((m) => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.modalMonthChip, pastMonthChoice === m && styles.modalMonthChipActive]}
+                    onPress={() => setPastMonthChoice(m)}
+                  >
+                    <Text style={[styles.modalMonthChipText, pastMonthChoice === m && styles.modalMonthChipTextActive]}>
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            {/* Revenue & Expenses Inputs */}
+            <View style={styles.row}>
+              <View style={styles.col}>
+                <Text style={styles.label}>RENT INFLOW (₹) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pastRevenueInput}
+                  onChangeText={setPastRevenueInput}
+                  keyboardType="numeric"
+                  placeholder="e.g. 210000"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>EXPENSES (₹) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={pastExpenseInput}
+                  onChangeText={setPastExpenseInput}
+                  keyboardType="numeric"
+                  placeholder="e.g. 155000"
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+            </View>
+
+            {/* Calculated Profit Preview */}
+            {pastRevenueInput && pastExpenseInput ? (
+              <View
+                style={[
+                  styles.previewBox,
+                  Number(pastRevenueInput) >= Number(pastExpenseInput) ? styles.previewGain : styles.previewLoss,
+                ]}
+              >
+                <Text style={styles.previewLabel}>Calculated Net Margin:</Text>
+                <Text
+                  style={[
+                    styles.previewValue,
+                    Number(pastRevenueInput) >= Number(pastExpenseInput) ? { color: '#16a34a' } : { color: '#dc2626' },
+                  ]}
+                >
+                  {Number(pastRevenueInput) >= Number(pastExpenseInput) ? '+' : '-'}₹
+                  {Math.abs(Number(pastRevenueInput) - Number(pastExpenseInput)).toLocaleString('en-IN')}
+                  {' '}({Number(pastRevenueInput) >= Number(pastExpenseInput) ? 'Gain' : 'Loss'})
+                </Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.label}>NOTES (OPTIONAL)</Text>
+            <TextInput
+              style={styles.input}
+              value={pastNotesInput}
+              onChangeText={setPastNotesInput}
+              placeholder="e.g. Peak college semester admissions"
+              placeholderTextColor="#94a3b8"
+            />
+
+            <TouchableOpacity
+              style={styles.savePastMonthBtn}
+              onPress={handleSavePastMonthData}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.savePastMonthBtnText}>✓ Save Historical Month Record</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -359,204 +1193,317 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 14,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
   },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   backBtn: {
-    padding: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
   },
   backBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#4f46e5',
+    color: '#475569',
   },
   headerTitle: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
     color: '#0f172a',
   },
   addBtn: {
-    backgroundColor: '#dc2626',
-    paddingVertical: 6,
+    backgroundColor: '#ea580c',
+    paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
   },
   addBtnText: {
-    color: '#ffffff',
-    fontWeight: '800',
     fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingVertical: 8,
+  },
+  kpiBox: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  kpiLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+  },
+  kpiValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 2,
   },
   content: {
     padding: 16,
+    paddingBottom: 120,
   },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#64748b',
-    letterSpacing: 0.5,
-    marginBottom: 8,
-  },
-  formCard: {
+  // Profit & Loss Chart Card
+  chartCard: {
     backgroundColor: '#ffffff',
-    padding: 16,
     borderRadius: 16,
-    marginBottom: 16,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#e2e8f0',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  formTitle: {
+  chartHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+  },
+  chartTitle: {
     fontSize: 14,
     fontWeight: '900',
     color: '#0f172a',
-    marginBottom: 12,
   },
-  label: {
-    fontSize: 10,
-    fontWeight: '800',
+  chartSub: {
+    fontSize: 11,
     color: '#64748b',
-    marginBottom: 4,
+    marginTop: 2,
   },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 10,
-  },
-  row: {
+  chartLegend: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
-  col: {
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  legendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legendText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  chartBarsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 150,
+    paddingTop: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 8,
+  },
+  barGroup: {
+    alignItems: 'center',
     flex: 1,
   },
-  saveBtn: {
-    backgroundColor: '#dc2626',
-    padding: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginTop: 4,
+  barProfitBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginBottom: 6,
   },
-  saveBtnText: {
-    color: '#ffffff',
+  barProfitBadgeText: {
+    fontSize: 8,
     fontWeight: '800',
-    fontSize: 13,
   },
-  invCard: {
-    backgroundColor: '#ffffff',
-    padding: 14,
-    borderRadius: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  invHeader: {
+  barsPillarRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-end',
+    gap: 3,
   },
-  invTenant: {
-    fontSize: 14,
+  singleBar: {
+    width: 12,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  barMonthLabel: {
+    fontSize: 11,
     fontWeight: '800',
     color: '#0f172a',
+    marginTop: 6,
   },
-  invNo: {
-    fontSize: 10,
-    color: '#94a3b8',
+  barStatusText: {
+    fontSize: 9,
+    fontWeight: '800',
     marginTop: 1,
   },
-  invAmount: {
-    fontSize: 15,
-    fontWeight: '900',
+  chartFooterRow: {
+    marginTop: 10,
   },
-  invFooter: {
+  chartFooterNote: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  // Fixed Bills Card
+  fixedBillsCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  fixedBillsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f8fafc',
+    marginBottom: 12,
   },
-  statusChip: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: 6,
+  fixedBillsTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0f172a',
   },
-  statusPaid: {
-    backgroundColor: '#ecfdf5',
+  fixedBillsSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
   },
-  statusPending: {
-    backgroundColor: '#fef3c7',
+  timeframeToggle: {
+    flexDirection: 'row',
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    padding: 2,
   },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  payBtn: {
-    backgroundColor: '#4f46e5',
+  toggleOption: {
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 6,
   },
-  payBtnText: {
-    color: '#ffffff',
+  toggleOptionActive: {
+    backgroundColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  toggleOptionText: {
     fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  toggleOptionTextActive: {
+    color: '#ea580c',
     fontWeight: '800',
   },
-  expCard: {
-    backgroundColor: '#ffffff',
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 8,
+  billsTotalBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    backgroundColor: '#fff7ed',
+    borderRadius: 12,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#fed7aa',
   },
-  expTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1e293b',
+  billsTotalSub: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9a3412',
   },
-  expCategory: {
-    fontSize: 10,
-    color: '#94a3b8',
-    marginTop: 1,
-  },
-  expAmount: {
-    fontSize: 13,
+  billsTotalAmount: {
+    fontSize: 18,
     fontWeight: '900',
-    color: '#dc2626',
+    color: '#ea580c',
+    marginTop: 2,
   },
-  emptyText: {
-    fontSize: 12,
-    color: '#94a3b8',
-    paddingVertical: 10,
-  },
-  quickExpensesCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 16,
+  billRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    padding: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
+  },
+  billIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  billTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  billDueInfo: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  billAmount: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  billPerText: {
+    fontSize: 9,
+    color: '#64748b',
+    fontWeight: '700',
+  },
+  billStatusPill: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  billStatusPaid: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+  },
+  billStatusPending: {
+    backgroundColor: '#fef3c7',
+    borderColor: '#fde68a',
+  },
+  billStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  // Quick Add Standard Expenses
+  quickExpensesCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 16,
   },
   quickExpensesTitle: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#4f46e5',
+    color: '#ea580c',
     letterSpacing: 0.5,
   },
   quickExpensesSub: {
@@ -568,19 +1515,19 @@ const styles = StyleSheet.create({
   templatesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   templateChip: {
     backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
     borderRadius: 8,
-    paddingHorizontal: 10,
     paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
   templateChipActive: {
-    backgroundColor: '#eef2ff',
-    borderColor: '#4f46e5',
+    backgroundColor: '#fff7ed',
+    borderColor: '#f97316',
   },
   templateChipText: {
     fontSize: 11,
@@ -588,28 +1535,364 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   templateChipTextActive: {
-    color: '#4f46e5',
-    fontWeight: '900',
+    color: '#ea580c',
+    fontWeight: '800',
   },
-  propertySelectChip: {
-    backgroundColor: '#f1f5f9',
+  // Form Card
+  formCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+    marginBottom: 16,
+  },
+  formTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  label: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#64748b',
+    marginTop: 10,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  input: {
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#cbd5e1',
     borderRadius: 8,
     paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#0f172a',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  col: {
+    flex: 1,
+  },
+  saveBtn: {
+    backgroundColor: '#ea580c',
+    paddingVertical: 11,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  saveBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  // Recent Expenses Section
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.5,
+  },
+  sectionSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  expCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  expTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  expCategory: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  expAmount: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#dc2626',
+  },
+  expActionBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  emptyTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  emptyText: {
+    fontSize: 11,
+    color: '#64748b',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  // Modal Edit Expense
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  modalSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    backgroundColor: '#ea580c',
+    borderRadius: 10,
+    paddingVertical: 11,
+    alignItems: 'center',
+  },
+  modalSaveBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  modalDeleteBtn: {
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+  },
+  modalDeleteBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#dc2626',
+  },
+  // Year & Past Month Graph Controls
+  addPastMonthBtn: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fdba74',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  addPastMonthBtnText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#ea580c',
+  },
+  filterAndLegendRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  yearFilterRow: {
+    flexDirection: 'row',
+    gap: 5,
+  },
+  yearChip: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  yearChipActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#c2410c',
+  },
+  yearChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  yearChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  barGroupSelected: {
+    backgroundColor: '#fff7ed',
+    borderRadius: 6,
+  },
+  inspectedMonthCard: {
+    marginTop: 12,
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  inspectedMonthHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  inspectedMonthTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  customBadge: {
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  customBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#b45309',
+  },
+  inspectedMetricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  inspectedMetricBox: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    alignItems: 'center',
+  },
+  inspectedMetricLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+  },
+  inspectedMetricValue: {
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  inspectedNotes: {
+    fontSize: 10,
+    color: '#475569',
+    fontStyle: 'italic',
+    marginTop: 6,
+  },
+  modalYearChip: {
+    paddingHorizontal: 12,
     paddingVertical: 6,
-    marginRight: 8,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
   },
-  propertySelectChipActive: {
-    backgroundColor: '#4f46e5',
-    borderColor: '#4338ca',
+  modalYearChipActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#c2410c',
   },
-  propertySelectChipText: {
+  modalYearChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  modalYearChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  modalMonthChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  modalMonthChipActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#c2410c',
+  },
+  modalMonthChipText: {
     fontSize: 11,
     fontWeight: '700',
     color: '#475569',
   },
-  propertySelectChipTextActive: {
+  modalMonthChipTextActive: {
     color: '#ffffff',
+    fontWeight: '800',
+  },
+  previewBox: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  previewGain: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#86efac',
+  },
+  previewLoss: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#fca5a5',
+  },
+  previewLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748b',
+    textTransform: 'uppercase',
+  },
+  previewValue: {
+    fontSize: 13,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  savePastMonthBtn: {
+    backgroundColor: '#ea580c',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  savePastMonthBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

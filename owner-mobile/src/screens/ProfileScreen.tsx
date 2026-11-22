@@ -16,6 +16,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { GooglePayLogo, PhonePeLogo, PaytmLogo, CardPaymentLogo } from '../components/PaymentLogos';
+import { pickImageFromDevice } from '../utils/imagePicker';
 
 interface ProfileScreenProps {
   onBackToDashboard: () => void;
@@ -115,6 +116,46 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
     }
   };
 
+  // Upload Avatar directly from local machine or device camera (Point 10)
+  const handleUploadAvatarFromDevice = async () => {
+    try {
+      const picked = await pickImageFromDevice();
+      if (picked) {
+        setAvatarUrl(picked);
+        setEditAvatarUrl(picked);
+        const savedData = await AsyncStorage.getItem('@staynest_owner_custom_profile');
+        const parsed = savedData ? JSON.parse(savedData) : {};
+        await AsyncStorage.setItem(
+          '@staynest_owner_custom_profile',
+          JSON.stringify({ ...parsed, avatarUrl: picked })
+        );
+        Alert.alert('Profile Photo Updated! 📸', 'Your avatar has been updated from your local machine.');
+      }
+    } catch (err) {
+      console.log('Error uploading avatar:', err);
+    }
+  };
+
+  // Upload Heritage / Background Banner directly from local machine (Point 10)
+  const handleUploadBannerFromDevice = async () => {
+    try {
+      const picked = await pickImageFromDevice();
+      if (picked) {
+        setBannerUrl(picked);
+        setEditBannerUrl(picked);
+        const savedData = await AsyncStorage.getItem('@staynest_owner_custom_profile');
+        const parsed = savedData ? JSON.parse(savedData) : {};
+        await AsyncStorage.setItem(
+          '@staynest_owner_custom_profile',
+          JSON.stringify({ ...parsed, bannerUrl: picked })
+        );
+        Alert.alert('Banner Updated! 🖼️', 'Your profile banner has been updated from your local machine.');
+      }
+    } catch (err) {
+      console.log('Error uploading banner:', err);
+    }
+  };
+
   // Confirm Auto-Pay Mandate (Direct to payment app, no WhatsApp message)
   const handleConfirmAutoPay = async () => {
     setSubscribing(true);
@@ -190,13 +231,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
           />
 
           <View style={styles.topBarRight}>
-            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
-              <Text style={{ fontSize: 18 }}>🔔</Text>
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>2</Text>
-              </View>
-            </TouchableOpacity>
-
             <TouchableOpacity style={styles.iconButton} onPress={handleLogout} activeOpacity={0.7}>
               <Text style={{ fontSize: 18 }}>🚪</Text>
             </TouchableOpacity>
@@ -215,31 +249,36 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
             {/* Banner Change Pill Button */}
             <TouchableOpacity
               style={styles.editBannerPill}
-              onPress={() => {
-                setEditBannerUrl(bannerUrl);
-                setIsEditModalOpen(true);
-              }}
+              onPress={handleUploadBannerFromDevice}
               activeOpacity={0.8}
             >
-              <Text style={styles.editBannerPillText}>📷 Change Banner</Text>
+              <Text style={styles.editBannerPillText}>📷 Change Banner (Upload)</Text>
             </TouchableOpacity>
           </View>
 
           {/* Profile Card Foreground Content */}
           <View style={styles.profileContentRow}>
-            {/* Circular Avatar with Crown & Online Indicator */}
-            <View style={styles.avatarWrapper}>
+            {/* Circular Avatar with Crown, Online Indicator & Local Photo Picker (Point 10) */}
+            <TouchableOpacity
+              style={styles.avatarWrapper}
+              onPress={handleUploadAvatarFromDevice}
+              activeOpacity={0.85}
+            >
               <Image
                 source={{ uri: avatarUrl }}
                 style={styles.avatarImage}
               />
+              {/* Camera edit overlay badge */}
+              <View style={styles.avatarCameraBadge}>
+                <Text style={{ fontSize: 9 }}>📷</Text>
+              </View>
               {/* Gold Crown Badge */}
               <View style={styles.crownBadge}>
                 <Text style={{ fontSize: 11 }}>👑</Text>
               </View>
               {/* Green Online Dot */}
               <View style={styles.onlineDot} />
-            </View>
+            </TouchableOpacity>
 
             {/* Profile Info Details */}
             <View style={styles.profileDetailsCol}>
@@ -460,50 +499,60 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
             </View>
           </View>
 
-          {/* Card D: Quick Actions (2x2 Grid) */}
-          <View style={styles.halfCard}>
+          {/* Card D: Quick Actions (Styled matching bottom navigation board color palette) */}
+          <View style={[styles.halfCard, styles.quickActionsCardWarm]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>⚡</Text>
-                <Text style={styles.cardHeaderTitle}>Quick Actions</Text>
+                <View style={styles.quickActionsIconCircle}>
+                  <Text style={{ fontSize: 13 }}>⚡</Text>
+                </View>
+                <Text style={styles.quickActionsCardTitle}>Quick Actions</Text>
               </View>
             </View>
 
             <View style={styles.quickGrid}>
               <TouchableOpacity
-                style={styles.quickActionTile}
+                style={styles.quickActionTileWarm}
                 onPress={() => onNavigateTab && onNavigateTab('tenants')}
                 activeOpacity={0.75}
               >
-                <Text style={styles.quickTileIcon}>👤+</Text>
-                <Text style={styles.quickTileLabel}>Add Tenant</Text>
+                <View style={styles.quickTileIconBadge}>
+                  <Text style={styles.quickTileIconWarm}>👤+</Text>
+                </View>
+                <Text style={styles.quickTileLabelWarm}>Add Tenant</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.quickActionTile}
+                style={styles.quickActionTileWarm}
                 onPress={() => onNavigateTab && onNavigateTab('tenants')}
                 activeOpacity={0.75}
               >
-                <Text style={styles.quickTileIcon}>₹</Text>
-                <Text style={styles.quickTileLabel}>Record Rent</Text>
+                <View style={styles.quickTileIconBadge}>
+                  <Text style={styles.quickTileIconWarm}>₹</Text>
+                </View>
+                <Text style={styles.quickTileLabelWarm}>Record Rent</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.quickActionTile}
+                style={styles.quickActionTileWarm}
                 onPress={() => onNavigateTab && onNavigateTab('management')}
                 activeOpacity={0.75}
               >
-                <Text style={styles.quickTileIcon}>📄</Text>
-                <Text style={styles.quickTileLabel}>Add Expense</Text>
+                <View style={styles.quickTileIconBadge}>
+                  <Text style={styles.quickTileIconWarm}>📄</Text>
+                </View>
+                <Text style={styles.quickTileLabelWarm}>Add Expense</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.quickActionTile}
+                style={styles.quickActionTileWarm}
                 onPress={() => onNavigateTab && onNavigateTab('management')}
                 activeOpacity={0.75}
               >
-                <Text style={styles.quickTileIcon}>📊</Text>
-                <Text style={styles.quickTileLabel}>View Reports</Text>
+                <View style={styles.quickTileIconBadge}>
+                  <Text style={styles.quickTileIconWarm}>📊</Text>
+                </View>
+                <Text style={styles.quickTileLabelWarm}>View Reports</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -533,23 +582,47 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
             </View>
 
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* Profile Photo URL Input */}
-              <Text style={styles.fieldLabel}>PROFILE PHOTO URL</Text>
+              {/* Profile Photo with Local Machine Upload Button */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 4 }}>
+                <Text style={styles.fieldLabel}>PROFILE PHOTO</Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const picked = await pickImageFromDevice();
+                    if (picked) setEditAvatarUrl(picked);
+                  }}
+                  style={styles.pickDeviceBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.pickDeviceBtnText}>📁 Upload from Device</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.inputField}
                 value={editAvatarUrl}
                 onChangeText={setEditAvatarUrl}
-                placeholder="Enter image URL for avatar"
+                placeholder="Image URL or local file path"
                 placeholderTextColor="#94a3b8"
               />
 
-              {/* Background Banner URL Input */}
-              <Text style={styles.fieldLabel}>BACKGROUND BANNER URL</Text>
+              {/* Background Banner with Local Machine Upload Button */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 4 }}>
+                <Text style={styles.fieldLabel}>BACKGROUND BANNER</Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    const picked = await pickImageFromDevice();
+                    if (picked) setEditBannerUrl(picked);
+                  }}
+                  style={styles.pickDeviceBtn}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.pickDeviceBtnText}>📁 Upload from Device</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.inputField}
                 value={editBannerUrl}
                 onChangeText={setEditBannerUrl}
-                placeholder="Enter image URL for heritage banner"
+                placeholder="Image URL or local file path"
                 placeholderTextColor="#94a3b8"
               />
 
@@ -883,6 +956,37 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     borderWidth: 2.5,
     borderColor: '#ffffff',
+  },
+  avatarCameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    left: 2,
+    backgroundColor: '#3b82f6',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  pickDeviceBtn: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  pickDeviceBtnText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ea580c',
   },
   profileDetailsCol: {
     flex: 1,
@@ -1235,6 +1339,55 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#0f172a',
+  },
+  quickActionsCardWarm: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+  },
+  quickActionsIconCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#ffedd5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickActionsCardTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#9a3412',
+  },
+  quickActionTileWarm: {
+    width: '48%',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+    shadowColor: '#f97316',
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  quickTileIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  quickTileIconWarm: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  quickTileLabelWarm: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#7c2d12',
   },
 
   // ─── Modal Styles ───

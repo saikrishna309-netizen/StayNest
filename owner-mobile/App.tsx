@@ -182,7 +182,9 @@ const MainNavigator: React.FC = () => {
           )}
 
           {/* Tab 4: Management (Expenses, Finance & Reports) */}
-          {currentTab === 'management' && <ManagementScreen />}
+          {currentTab === 'management' && (
+            <ManagementScreen onBackToDashboard={() => setCurrentTab('dashboard')} />
+          )}
 
           {/* Tab 5: Profile (PG Owner Account & Settings) */}
           {currentTab === 'profile' && (

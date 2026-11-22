@@ -2,11 +2,15 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { FinanceScreen } from './FinanceScreen';
 
-export const ManagementScreen: React.FC = () => {
+interface ManagementScreenProps {
+  onBackToDashboard?: () => void;
+}
+
+export const ManagementScreen: React.FC<ManagementScreenProps> = ({ onBackToDashboard }) => {
   return (
     <View style={styles.container}>
-      {/* Dedicated Finance, Expenses & Rent Ledger Screen without redundant tenant tab */}
-      <FinanceScreen onBack={() => {}} />
+      {/* Dedicated Finance, Expenses & Rent Ledger Screen */}
+      <FinanceScreen onBack={onBackToDashboard || (() => {})} />
     </View>
   );
 };

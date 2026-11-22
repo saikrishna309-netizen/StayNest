@@ -66,7 +66,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
       const existingEnquiries = bookingApi.getLocalEnquiries();
       const heldIds = new Set(
         existingEnquiries
-          .filter((e) => e.propertyId === propertyId && e.status === 'PENDING_HOLD')
+          .filter((e) => e.propertyId === propertyId && (e.status === 'PENDING_HOLD' || e.status === 'HOLD'))
           .map((e) => e.bedId)
       );
       setLocalHeldBedIds(heldIds);
@@ -184,6 +184,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
           }
         } catch { }
 
+        // Check if custom building photo exists in localStorage (Point 8)
+        try {
+          const customBuildingPhoto = window.localStorage.getItem(`staynest_building_photo_${id}`);
+          if (customBuildingPhoto && propertyBase) {
+            propertyBase = {
+              ...propertyBase,
+              primaryPhotoUrl: customBuildingPhoto,
+            };
+          }
+        } catch { }
+
         // Check if owner configured rooms in localStorage for this PG
         try {
           const cachedFloors = window.localStorage.getItem(`staynest_floors_${id}`);
@@ -202,6 +213,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                     rentMonthlyPaise: (r.rentRupees || 8500) * 100,
                     depositPaise: (r.depositRupees || 8500) * 100,
                     status: 'AVAILABLE',
+                    photos: r.photos || [],
                     beds: (r.beds || []).map((b: any, bIdx: number) => ({
                       id: b.id || `bed-${r.roomNumber}-${bIdx + 1}`,
                       bedLabel: b.bedLabel || `Bed ${bIdx + 1}`,
@@ -584,6 +596,20 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       <div className="text-base font-extrabold text-slate-900 mb-3">
                         ₹{rent} <span className="text-xs font-normal text-slate-500">/mo</span>
                       </div>
+
+                      {/* Room Photos Gallery (Point 9) */}
+                      {(room as any).photos && (room as any).photos.length > 0 && (
+                        <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
+                          {(room as any).photos.map((photo: string, pIdx: number) => (
+                            <img
+                              key={pIdx}
+                              src={photo}
+                              alt={`Room ${room.roomNumber} photo ${pIdx + 1}`}
+                              className="w-16 h-12 object-cover rounded-lg border border-slate-200 flex-shrink-0 shadow-xs"
+                            />
+                          ))}
+                        </div>
+                      )}
 
                       {/* Beds list (Requirements 1, 2: Available vs Occupied) */}
                       <div className="space-y-2 mb-2">
