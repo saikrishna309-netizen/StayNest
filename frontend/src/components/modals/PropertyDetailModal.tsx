@@ -80,42 +80,47 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
   const loadProperty = async (id: string) => {
     setLoading(true);
     try {
-      const data = await propertyApi.getPropertyDetail(id);
-      setProperty(data);
-      const floors = Array.from(new Set((data.rooms || []).map((r) => r.floorNumber || 1))).sort(
-        (a, b) => a - b
-      );
-      if (floors.length > 0) setSelectedFloor(floors[0]);
-    } catch {
-      // Fallback property detail if backend cold-starting
-      const fallback: PropertyDetail = {
-        id,
-        ownerId: 'owner-default-1',
-        name: id.includes('prime') ? 'StayNest Prime PG (Building 02)' : 'StayNest Luxury PG (Building 01)',
-        propertyType: 'PG',
-        genderPolicy: 'BOYS',
-        cityId: 'hyd-1',
-        cityName: 'Hyderabad',
-        localityId: 'hitec-1',
-        localityName: 'Hitec City',
-        addressLine: 'Plot 42, Silicon Valley, Hitec City Road',
-        primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1000&q=80',
-        startingPricePaise: 850000,
-        foodIncluded: true,
-        approvalStatus: 'APPROVED',
-        published: true,
-        description: 'Premium luxury co-living PG with high-speed WiFi, 3-times homestyle food, daily housekeeping, 100% power backup and 24/7 security.',
-        pincode: '500081',
-        latitude: null,
-        longitude: null,
-        noticePeriodDays: 30,
-        depositMonths: 1,
-        payAtPropertyAllowed: true,
-        rules: 'Gate closes at 10:30 PM. Quiet hours 11:00 PM to 6:00 AM. Non-smoking premises.',
-        cancellationPolicy: 'Free cancellation up to 48 hours before check-in date.',
-        amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'AC_ROOMS', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'WASHING_MACHINE', 'CCTV_SECURITY'],
-        createdAt: new Date().toISOString(),
-        rooms: [
+      let propertyBase: PropertyDetail | null = null;
+      let rawRooms: any[] = [];
+
+      try {
+        const data = await propertyApi.getPropertyDetail(id);
+        propertyBase = data;
+        rawRooms = data.rooms || [];
+      } catch {
+        // Fallback property detail if backend cold-starting
+        propertyBase = {
+          id,
+          ownerId: 'owner-default-1',
+          name: id.includes('prime') ? 'StayNest Prime PG (Building 02)' : 'StayNest Luxury PG (Building 01)',
+          propertyType: 'PG',
+          genderPolicy: 'BOYS',
+          cityId: 'hyd-1',
+          cityName: 'Hyderabad',
+          localityId: 'hitec-1',
+          localityName: 'Hitec City',
+          addressLine: 'Plot 42, Silicon Valley, Hitec City Road',
+          primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1000&q=80',
+          startingPricePaise: 850000,
+          foodIncluded: true,
+          approvalStatus: 'APPROVED',
+          published: true,
+          description: 'Premium luxury co-living PG with high-speed WiFi, 3-times homestyle food, daily housekeeping, 100% power backup and 24/7 security.',
+          pincode: '500081',
+          latitude: 17.4435,
+          longitude: 78.3772,
+          googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=17.4435,78.3772',
+          noticePeriodDays: 30,
+          depositMonths: 1,
+          payAtPropertyAllowed: true,
+          rules: 'Gate closes at 10:30 PM. Quiet hours 11:00 PM to 6:00 AM. Non-smoking premises.',
+          cancellationPolicy: 'Free cancellation up to 48 hours before check-in date.',
+          amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'AC_ROOMS', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'WASHING_MACHINE', 'CCTV_SECURITY'],
+          createdAt: new Date().toISOString(),
+          rooms: [],
+        };
+
+        rawRooms = [
           {
             id: 'room-101',
             roomNumber: '101',
@@ -160,10 +165,102 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
               { id: 'bed-201-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
             ],
           },
-        ],
-      };
-      setProperty(fallback);
-      setSelectedFloor(1);
+        ];
+      }
+
+      // Check if custom owner properties exist in localStorage (Requirement 5)
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cachedProps = window.localStorage.getItem('staynest_custom_properties');
+          if (cachedProps) {
+            const parsedProps = JSON.parse(cachedProps);
+            const found = parsedProps.find((cp: any) => cp.id === id);
+            if (found) {
+              propertyBase = {
+                ...propertyBase,
+                ...found,
+              };
+            }
+          }
+        } catch { }
+
+        // Check if owner configured rooms in localStorage for this PG
+        try {
+          const cachedFloors = window.localStorage.getItem(`staynest_floors_${id}`);
+          if (cachedFloors) {
+            const parsed = JSON.parse(cachedFloors);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const localRooms: any[] = [];
+              parsed.forEach((f: any) => {
+                (f.rooms || []).forEach((r: any) => {
+                  localRooms.push({
+                    id: r.id,
+                    roomNumber: r.roomNumber,
+                    sharingType: r.sharingType || 'DOUBLE',
+                    capacity: r.beds?.length || 2,
+                    floorNumber: f.floorNumber || 1,
+                    rentMonthlyPaise: (r.rentRupees || 8500) * 100,
+                    depositPaise: (r.depositRupees || 8500) * 100,
+                    status: 'AVAILABLE',
+                    beds: (r.beds || []).map((b: any, bIdx: number) => ({
+                      id: b.id || `bed-${r.roomNumber}-${bIdx + 1}`,
+                      bedLabel: b.bedLabel || `Bed ${bIdx + 1}`,
+                      status: b.status || 'AVAILABLE',
+                      active: true,
+                    })),
+                  });
+                });
+              });
+              if (localRooms.length > 0) {
+                rawRooms = localRooms;
+              }
+            }
+          }
+        } catch { }
+      }
+
+      // ─── STRICT DEDUPLICATION (Requirement 2: Fix rooms and beds showing two times) ───
+      const seenRoomKeys = new Set<string>();
+      const dedupedRooms: any[] = [];
+
+      for (const room of rawRooms) {
+        const floorNum = room.floorNumber || 1;
+        const roomKey = `${floorNum}-${room.roomNumber}`;
+        if (!seenRoomKeys.has(roomKey)) {
+          seenRoomKeys.add(roomKey);
+
+          // Strictly deduplicate beds within this room
+          const seenBedKeys = new Set<string>();
+          const dedupedBeds: any[] = [];
+
+          for (const bed of (room.beds || [])) {
+            const bKey = bed.id || bed.bedLabel;
+            if (bKey && !seenBedKeys.has(bKey) && !seenBedKeys.has(bed.bedLabel)) {
+              seenBedKeys.add(bKey);
+              if (bed.bedLabel) seenBedKeys.add(bed.bedLabel);
+              dedupedBeds.push(bed);
+            }
+          }
+
+          dedupedRooms.push({
+            ...room,
+            floorNumber: floorNum,
+            beds: dedupedBeds,
+          });
+        }
+      }
+
+      if (propertyBase) {
+        setProperty({
+          ...propertyBase,
+          rooms: dedupedRooms,
+        });
+      }
+
+      const floors = Array.from(new Set(dedupedRooms.map((r) => r.floorNumber || 1))).sort((a, b) => a - b);
+      if (floors.length > 0) setSelectedFloor(floors[0]);
+    } catch {
+      // ignore
     } finally {
       setLoading(false);
     }
@@ -273,61 +370,133 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         </button>
 
         <div className="p-6 md:p-8 max-h-[85vh] overflow-y-auto space-y-6">
-          {/* Header Banner */}
-          <div className="flex flex-col md:flex-row gap-6 items-start">
-            <div className="w-full md:w-56 h-40 rounded-2xl overflow-hidden shadow-sm flex-shrink-0 bg-slate-100 relative">
-              <img
-                src={property.primaryPhotoUrl || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=700&q=80'}
-                alt={property.name}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute top-2 left-2">
-                <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-md text-brand-700 shadow">
-                  {property.genderPolicy === 'BOYS' ? '👨 Gents PG' : property.genderPolicy === 'GIRLS' ? '👩 Ladies PG' : '👥 Co-Ed PG'}
-                </span>
+          {/* Header Banner - Amenities beside image & Google Maps Address (Requirement 4) */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            {/* Left: Image Container */}
+            <div className="md:col-span-5 w-full">
+              <div className="w-full h-52 md:h-60 rounded-2xl overflow-hidden shadow-sm bg-slate-100 relative group">
+                <img
+                  src={property.primaryPhotoUrl || 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=700&q=80'}
+                  alt={property.name}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+                <div className="absolute top-2.5 left-2.5 flex gap-1.5">
+                  <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-white/95 backdrop-blur-md text-brand-700 shadow-sm">
+                    {property.genderPolicy === 'BOYS' ? '👨 Gents PG' : property.genderPolicy === 'GIRLS' ? '👩 Ladies PG' : '👥 Co-Ed PG'}
+                  </span>
+                  <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-emerald-500 text-white shadow-sm flex items-center gap-1">
+                    <i className="fa-solid fa-check text-[9px]"></i> Verified
+                  </span>
+                </div>
+                <div className="absolute bottom-2.5 right-2.5 bg-slate-900/90 backdrop-blur-md text-white text-xs font-black px-3 py-1.5 rounded-xl shadow-lg">
+                  ₹{(property.startingPricePaise / 100).toLocaleString('en-IN')} <span className="text-[10px] font-normal text-slate-300">/mo</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                  <i className="fa-solid fa-circle-check mr-1 text-[9px]"></i> Verified StayNest PG
-                </span>
-                <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
-                  {property.noticePeriodDays || 30} Days Notice
-                </span>
-              </div>
-              <h3 className="text-2xl font-extrabold text-slate-900 leading-tight">{property.name}</h3>
-              <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
-                <i className="fa-solid fa-location-dot text-rose-500"></i>
-                {property.addressLine}, {property.localityName ? `${property.localityName}, ` : ''}{property.cityName} - {property.pincode}
-              </p>
-              <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
-                {property.description}
-              </p>
-            </div>
-          </div>
+            {/* Right: Details, Google Map Address & Amenities Beside the Image Only (Requirement 4) */}
+            <div className="md:col-span-7 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[10px] uppercase font-black px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                    {property.propertyType || 'PG'}
+                  </span>
+                  <span className="text-[10px] uppercase font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                    {property.foodIncluded ? '🍲 Food Included' : 'Food Optional'}
+                  </span>
+                  <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                    {property.noticePeriodDays || 30} Days Notice
+                  </span>
+                </div>
 
-          {/* Amenities Chips */}
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
-            <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block mb-2">
-              Included Amenities & House Rules
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {(property.amenities || ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'DAILY_HOUSEKEEPING', 'POWER_BACKUP']).map((amenity) => (
-                <span
-                  key={amenity}
-                  className="px-2.5 py-1 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 shadow-sm flex items-center gap-1.5"
-                >
-                  <i className="fa-solid fa-check text-emerald-600 text-xs"></i>
-                  {amenity.replace(/_/g, ' ')}
-                </span>
-              ))}
+                <h3 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">{property.name}</h3>
+
+                {/* Google Map Address Box */}
+                <div className="mt-2.5 p-3 bg-slate-50 border border-slate-200/90 rounded-2xl flex items-start justify-between gap-3 shadow-2xs">
+                  <div className="flex items-start gap-2 flex-1">
+                    <i className="fa-solid fa-location-dot text-rose-500 text-sm mt-0.5 flex-shrink-0"></i>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 leading-snug">
+                        {property.addressLine}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">
+                        {property.localityName ? `${property.localityName}, ` : ''}{property.cityName} - {property.pincode}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Google Maps External Action Button */}
+                  <a
+                    href={
+                      property.googleMapsUrl ||
+                      (property.latitude && property.longitude
+                        ? `https://www.google.com/maps/search/?api=1&query=${property.latitude},${property.longitude}`
+                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(property.name + ' ' + (property.addressLine || '') + ' ' + (property.cityName || ''))}`)
+                    }
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold bg-[#6c5ce7] hover:bg-[#5e4ee3] text-white shadow-sm transition active:scale-95"
+                    title="View property on Google Maps"
+                  >
+                    <i className="fa-solid fa-map-location-dot text-xs"></i>
+                    <span>Maps ↗</span>
+                  </a>
+                </div>
+
+                <p className="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">
+                  {property.description}
+                </p>
+
+                {/* Amenities - Displayed Beside Image Only */}
+                <div className="mt-3 pt-3 border-t border-slate-100">
+                  <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Amenities Included
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(property.amenities && property.amenities.length > 0
+                      ? property.amenities
+                      : ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'AC_ROOMS', 'DAILY_HOUSEKEEPING', 'POWER_BACKUP', 'CCTV_SECURITY']
+                    ).map((amenity) => (
+                      <span
+                        key={amenity}
+                        className="px-2.5 py-1 rounded-xl text-[11px] font-bold bg-white text-slate-700 border border-slate-200/90 shadow-2xs flex items-center gap-1.5"
+                      >
+                        <i className="fa-solid fa-check text-emerald-600 text-[10px]"></i>
+                        {amenity.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Floor & Bed Inventory (Requirement 1 & 4) */}
           <div className="border-t border-slate-200 pt-5">
+            {/* Unauthenticated Quick Banner (Requirement 3: When click hold bed show signin/register) */}
+            {!isAuthenticated && (
+              <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700 flex-shrink-0">
+                    <i className="fa-solid fa-user-lock text-sm"></i>
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-slate-800">
+                      Sign In or Register to Hold Beds
+                    </p>
+                    <p className="text-[11px] text-slate-500">
+                      Reserve any available bed instantly with a 15-minute lock.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={onOpenAuth}
+                  className="px-4 py-2 rounded-xl bg-[#6c5ce7] hover:bg-[#5e4ee3] text-white text-xs font-black shadow-md shadow-[#6c5ce7]/25 transition self-start sm:self-auto"
+                >
+                  Sign In / Register
+                </button>
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div>
                 <h4 className="text-base font-extrabold text-slate-900 flex items-center gap-2">

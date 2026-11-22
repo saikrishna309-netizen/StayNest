@@ -145,6 +145,22 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
   useEffect(() => {
     loadCities();
     searchProperties();
+
+    const handleSync = () => {
+      searchProperties();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('staynest_property_created', handleSync);
+      window.addEventListener('storage', handleSync);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('staynest_property_created', handleSync);
+        window.removeEventListener('storage', handleSync);
+      }
+    };
   }, []);
 
   const loadCities = async () => {
@@ -166,12 +182,32 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
   const searchProperties = async () => {
     setLoading(true);
     try {
-      const res = await propertyApi.searchProperties({ size: 50 });
-      if (res && res.content && res.content.length > 0) {
-        setProperties(res.content);
-      } else {
-        setProperties(VERIFIED_FALLBACK_PGS);
+      let baseList: PropertySummary[] = VERIFIED_FALLBACK_PGS;
+      try {
+        const res = await propertyApi.searchProperties({ size: 50 });
+        if (res && res.content && res.content.length > 0) {
+          baseList = res.content;
+        }
+      } catch {
+        // use fallback list
       }
+
+      // Merge owner-created properties from localStorage (Requirement 5)
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cachedProps = window.localStorage.getItem('staynest_custom_properties');
+          if (cachedProps) {
+            const parsed = JSON.parse(cachedProps);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const existingIds = new Set(baseList.map((p) => p.id));
+              const newProps = parsed.filter((p: any) => !existingIds.has(p.id));
+              baseList = [...newProps, ...baseList];
+            }
+          }
+        } catch { }
+      }
+
+      setProperties(baseList);
     } catch {
       setProperties(VERIFIED_FALLBACK_PGS);
     } finally {
@@ -399,9 +435,23 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
                   className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-2xl hover:-translate-y-1 transition duration-200 flex flex-col justify-between"
                 >
                   <div>
-                    {/* Image Banner */}
-                    <div className="relative h-52 bg-slate-100 overflow-hidden">
-                      <img src={coverPhoto} alt={p.name} className="w-full h-full object-cover" />
+                    {/* Image Banner - Clicking photo opens all PG details (Requirement 1) */}
+                    <div
+                      onClick={() => onSelectProperty(p.id)}
+                      className="relative h-52 bg-slate-100 overflow-hidden cursor-pointer group"
+                      title={`Click to view all ${p.name} details & available rooms`}
+                    >
+                      <img
+                        src={coverPhoto}
+                        alt={p.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/15 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                        <span className="px-3.5 py-1.5 rounded-full bg-white/95 text-slate-900 text-xs font-black shadow-lg flex items-center gap-1.5">
+                          <span>🔍 View PG Details</span>
+                        </span>
+                      </div>
+
                       <div className="absolute top-3 left-3 flex gap-1.5">
                         <span className="px-3 py-1 rounded-full text-xs font-extrabold bg-white/95 backdrop-blur-md text-brand-700 shadow-sm border border-slate-200">
                           {p.genderPolicy === 'BOYS' ? '👨 Gents PG' : p.genderPolicy === 'GIRLS' ? '👩 Ladies PG' : '👥 Co-Ed Living'}

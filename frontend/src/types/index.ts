@@ -82,6 +82,7 @@ export interface PropertySummary {
   approvalStatus: ApprovalStatus;
   published: boolean;
   amenities: string[];
+  googleMapsUrl?: string;
   createdAt: string;
 }
 
@@ -90,6 +91,7 @@ export interface PropertyDetail extends PropertySummary {
   pincode: string;
   latitude: number | null;
   longitude: number | null;
+  googleMapsUrl?: string;
   noticePeriodDays: number;
   depositMonths: number;
   payAtPropertyAllowed: boolean;

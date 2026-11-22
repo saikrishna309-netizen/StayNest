@@ -37,6 +37,9 @@ export interface Property {
   localityName?: string;
   addressLine: string;
   pincode?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  googleMapsUrl?: string;
   startingPricePaise?: number;
   foodIncluded: boolean;
   approvalStatus?: string;
@@ -96,8 +99,11 @@ export interface RentInvoice {
   invoiceNumber: string;
   tenantName: string;
   propertyName: string;
-  periodMonth: number;
-  periodYear: number;
+  periodMonth?: number;
+  periodYear?: number;
+  billingMonth?: string;
+  dueDate?: string;
+  createdAt?: string;
   totalAmountPaise: number;
   paidAmountPaise: number;
   status: 'PAID' | 'PENDING' | 'OVERDUE';
@@ -110,6 +116,8 @@ export interface Expense {
   amountPaise: number;
   category: string;
   date?: string;
+  expenseDate?: string;
+  createdAt?: string;
   transactionDate?: string;
   paidTo?: string;
   propertyId?: string;
