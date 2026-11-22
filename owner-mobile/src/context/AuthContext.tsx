@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient, setAuthToken } from '../api/client';
 import { User } from '../types';
 
@@ -22,6 +23,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
+  // ─── RESTORE SESSION ON APP LAUNCH (Saves WhatsApp OTP cost & keeps owner logged in) ───
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const storedToken = await AsyncStorage.getItem('@staynest_owner_token');
+        const storedUser = await AsyncStorage.getItem('@staynest_owner_user');
+        if (storedToken && storedUser) {
+          setAuthToken(storedToken);
+          setToken(storedToken);
+          setUser(JSON.parse(storedUser));
+        }
+      } catch (err) {
+        console.log('Error restoring session:', err);
+      }
+    };
+    restoreSession();
+  }, []);
+
   const sendOtp = async (phone: string): Promise<{ message: string; demoOtp?: string }> => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
 
@@ -29,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const randomOtp = String(Math.floor(100000 + Math.random() * 900000));
     activeOtps[cleanPhone] = randomOtp;
 
-    // 2. Direct Automated WhatsApp Message via UltraMsg API
+    // 2. Direct Automated WhatsApp Message via UltraMsg API (Sent only ONCE)
     try {
       const params = new URLSearchParams();
       params.append('token', '4kcul3wmcwdoh5d0');
@@ -66,51 +85,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     const cleanOtp = otp.trim();
 
+    let authenticatedUser: User | null = null;
+    let authenticatedToken: string | null = null;
+
     try {
       const res = await apiClient<{ accessToken: string; user: User }>('/auth/otp/verify', {
         method: 'POST',
         body: JSON.stringify({ phone: cleanPhone, otp: cleanOtp }),
       });
 
-      setAuthToken(res.accessToken);
-      setToken(res.accessToken);
-      setUser(res.user);
+      authenticatedToken = res.accessToken;
+      authenticatedUser = res.user;
     } catch (err: any) {
       // Validate offline against the exact generated OTP or test code
       const expected = activeOtps[cleanPhone];
       if (cleanOtp === expected || cleanOtp === '123456') {
-        const fallbackUser: User = {
-          id: 'demo-owner-' + cleanPhone,
+        authenticatedUser = {
+          id: 'owner-' + cleanPhone,
           fullName: 'StayNest PG Owner',
           email: `owner_${cleanPhone}@staynest.in`,
           phone: cleanPhone,
           role: 'ROLE_OWNER',
           status: 'ACTIVE',
         };
-        const mockToken = 'mock-jwt-token-' + cleanPhone;
-        setAuthToken(mockToken);
-        setToken(mockToken);
-        setUser(fallbackUser);
+        authenticatedToken = 'mock-jwt-token-' + cleanPhone;
       } else {
         throw new Error('The OTP entered is incorrect. Please check the code received on WhatsApp.');
       }
     }
 
-    // Send Welcome / Login confirmation to WhatsApp
-    try {
-      const welcomeParams = new URLSearchParams();
-      welcomeParams.append('token', '4kcul3wmcwdoh5d0');
-      welcomeParams.append('to', `+91${cleanPhone}`);
-      welcomeParams.append(
-        'body',
-        `🎉 *Welcome back to StayNest Owner Dashboard!* 🏢\n\nYour account has been successfully verified.\n\n• Manage PG rooms, beds & monthly rents\n• Track month-wise collections & profits\n• Onboard new tenants & download records\n\n— *Team StayNest*`
-      );
-      fetch('https://api.ultramsg.com/instance197383/messages/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: welcomeParams.toString(),
-      }).catch(() => {});
-    } catch {}
+    if (authenticatedUser && authenticatedToken) {
+      setAuthToken(authenticatedToken);
+      setToken(authenticatedToken);
+      setUser(authenticatedUser);
+
+      // Persist session to AsyncStorage so owner stays logged in on reopen
+      try {
+        await AsyncStorage.setItem('@staynest_owner_token', authenticatedToken);
+        await AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(authenticatedUser));
+      } catch (storageErr) {
+        console.log('Storage save error:', storageErr);
+      }
+
+      // ─── Send automated WhatsApp Welcome Message ONLY on first onboarding ───
+      try {
+        const welcomeKey = `@staynest_welcomed_${cleanPhone}`;
+        const hasBeenWelcomed = await AsyncStorage.getItem(welcomeKey);
+        if (!hasBeenWelcomed) {
+          const welcomeParams = new URLSearchParams();
+          welcomeParams.append('token', '4kcul3wmcwdoh5d0');
+          welcomeParams.append('to', `+91${cleanPhone}`);
+          welcomeParams.append(
+            'body',
+            `🎉 *Welcome to StayNest!* 🏡\n\nHappily manage your PG seamlessly with StayNest Owner App!\n\n• Manage PG rooms, beds & monthly rents\n• Track month-wise collections & profits\n• Send 1-click WhatsApp rent reminders\n\n— *Team StayNest*`
+          );
+          fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: welcomeParams.toString(),
+          }).catch(() => {});
+          await AsyncStorage.setItem(welcomeKey, 'true');
+        }
+      } catch {}
+    }
   };
 
   const updateProfile = async (fullName: string, email: string) => {
@@ -120,9 +157,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ fullName: fullName.trim(), email: email.trim() }),
       });
       setUser(updatedUser);
+      if (updatedUser) {
+        await AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(updatedUser));
+      }
     } catch {
       // Local fallback for smooth offline / demo experience
-      setUser((prev) => (prev ? { ...prev, fullName: fullName.trim(), email: email.trim() } : null));
+      setUser((prev) => {
+        const updated = prev ? { ...prev, fullName: fullName.trim(), email: email.trim() } : null;
+        if (updated) {
+          AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(updated)).catch(() => {});
+        }
+        return updated;
+      });
     }
   };
 
@@ -135,9 +181,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthToken(res.accessToken);
     setToken(res.accessToken);
     setUser(res.user);
+    await AsyncStorage.setItem('@staynest_owner_token', res.accessToken);
+    await AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(res.user));
   };
 
   const logout = () => {
+    AsyncStorage.removeItem('@staynest_owner_token').catch(() => {});
+    AsyncStorage.removeItem('@staynest_owner_user').catch(() => {});
     setAuthToken(null);
     setToken(null);
     setUser(null);

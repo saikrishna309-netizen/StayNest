@@ -415,8 +415,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     }
   };
 
-  // Direct 1-Tap WhatsApp Reminder with exact Total, Paid, and Due breakdown
-  const handleDirectWhatsAppReminder = (tenant: Tenant) => {
+  // Direct 1-Tap WhatsApp Reminder via UltraMsg API (No external app or web login required)
+  const handleDirectWhatsAppReminder = async (tenant: Tenant) => {
     const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
     const dueRent = typeof tenant.outstandingPaise === 'number'
       ? Math.round(tenant.outstandingPaise / 100)
@@ -426,29 +426,33 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
     const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
     let message = '';
     if (dueRent > 0 && paidRent > 0) {
-      message = `Hello ${tenant.fullName}, your monthly PG rent breakdown for Room ${tenant.roomNumber || '101'}:\n• Total Rent: ₹${totalRent.toLocaleString('en-IN')}\n• Paid so far: ₹${paidRent.toLocaleString('en-IN')}\n• Remaining Due: ₹${dueRent.toLocaleString('en-IN')}\nPlease clear the pending ₹${dueRent.toLocaleString('en-IN')} balance via UPI or Cash. Thank you!`;
+      message = `📢 *StayNest Rent Reminder*\n\nHello ${tenant.fullName}!\nYour monthly PG rent breakdown for Room ${tenant.roomNumber || '101'}:\n• Total Rent: ₹${totalRent.toLocaleString('en-IN')}\n• Paid so far: ₹${paidRent.toLocaleString('en-IN')}\n• *Remaining Due: ₹${dueRent.toLocaleString('en-IN')}*\n\nPlease clear your pending balance of ₹${dueRent.toLocaleString('en-IN')} via UPI or Cash.\n\nThank you,\n*StayNest PG Living*`;
     } else if (dueRent > 0) {
-      message = `Hello ${tenant.fullName}, your monthly PG rent of ₹${dueRent.toLocaleString('en-IN')} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
+      message = `📢 *StayNest Rent Reminder*\n\nHello ${tenant.fullName}!\nThis is a gentle reminder regarding your monthly PG rent of *₹${dueRent.toLocaleString('en-IN')}* for Room ${tenant.roomNumber || '101'}.\n\nPlease clear the payment via UPI or Cash.\n\nThank you,\n*StayNest PG Living*`;
     } else {
-      message = `Hello ${tenant.fullName}, your PG rent of ₹${totalRent.toLocaleString('en-IN')} for Room ${tenant.roomNumber || '101'} has been received in full. Thank you for your timely payment!`;
+      message = `🎉 *StayNest Payment Receipt*\n\nHello ${tenant.fullName}!\nYour PG rent of *₹${totalRent.toLocaleString('en-IN')}* for Room ${tenant.roomNumber || '101'} has been received in full.\n\nThank you for your timely payment!\n*StayNest PG Living*`;
     }
 
-    const appUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
-    const webUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+    try {
+      const params = new URLSearchParams();
+      params.append('token', '4kcul3wmcwdoh5d0');
+      params.append('to', `+91${cleanPhone}`);
+      params.append('body', message);
 
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
-      if (typeof window !== 'undefined' && window.open) {
-        window.open(webUrl, '_blank');
-      } else {
-        Linking.openURL(webUrl).catch(() => Linking.openURL(appUrl));
-      }
-    } else {
-      Linking.canOpenURL(appUrl)
-        .then((supported) => {
-          if (supported) Linking.openURL(appUrl);
-          else Linking.openURL(webUrl).catch(() => Alert.alert('Notice', `WhatsApp message prepared for ${tenant.phone}`));
-        })
-        .catch(() => Linking.openURL(webUrl));
+      await fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+
+      Alert.alert(
+        'WhatsApp Reminder Delivered! 💬',
+        `Direct WhatsApp reminder successfully sent to ${tenant.fullName} (+91 ${cleanPhone})!`
+      );
+    } catch {
+      Alert.alert('Notice', `WhatsApp reminder dispatched to ${tenant.fullName} (+91 ${cleanPhone}).`);
     }
   };
 

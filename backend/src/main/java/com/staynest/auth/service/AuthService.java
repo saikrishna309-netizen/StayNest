@@ -182,11 +182,16 @@ public class AuthService {
         user.setPhoneOtp(otp);
         userRepository.save(user);
 
-        // Dispatch automated WhatsApp message
-        WhatsAppService.WhatsAppResult waResult = whatsAppService.sendOtp(phone, otp);
+        // Dispatch automated WhatsApp message only if client did NOT already pre-dispatch it
+        boolean clientPreDispatched = request.getOtp() != null && !request.getOtp().trim().isEmpty();
+        WhatsAppService.WhatsAppResult waResult = clientPreDispatched
+                ? new WhatsAppService.WhatsAppResult(true, "Client pre-dispatched OTP")
+                : whatsAppService.sendOtp(phone, otp);
 
-        // Dispatch real SMS via Fast2SMS
-        SmsService.SmsResult smsResult = smsService.sendOtpSms(phone, otp);
+        // Dispatch real SMS via Fast2SMS only if not pre-dispatched
+        SmsService.SmsResult smsResult = clientPreDispatched
+                ? new SmsService.SmsResult(true, "Client pre-dispatched")
+                : smsService.sendOtpSms(phone, otp);
 
         String message = waResult.success()
                 ? "WhatsApp OTP delivered directly to +91 " + phone

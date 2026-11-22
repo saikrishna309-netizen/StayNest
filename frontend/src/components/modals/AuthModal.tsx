@@ -144,24 +144,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       await verifyPhoneOtp(cleanPhone, cleanOtp, fullName.trim() || 'Customer');
 
-      // Send automated WhatsApp Welcome Message via UltraMsg
-      try {
-        const welcomeParams = new URLSearchParams();
-        welcomeParams.append('token', '4kcul3wmcwdoh5d0');
-        welcomeParams.append('to', `+91${cleanPhone}`);
-        welcomeParams.append(
-          'body',
-          `🎉 *Welcome to StayNest, ${fullName.trim() ? fullName.trim() : 'Resident'}!* 🏡\n\nYour account is successfully verified on WhatsApp!\n\nYou can now:\n• Reserve & hold any available bed with a 15-min lock\n• View transparent monthly PG rents & amenities\n• Track your stays & receipts\n\n— *Team StayNest*`
-        );
+      // Send automated WhatsApp Welcome Message only on first onboarding
+      const welcomedKey = `staynest_welcomed_${cleanPhone}`;
+      if (!localStorage.getItem(welcomedKey)) {
+        try {
+          const welcomeParams = new URLSearchParams();
+          welcomeParams.append('token', '4kcul3wmcwdoh5d0');
+          welcomeParams.append('to', `+91${cleanPhone}`);
+          welcomeParams.append(
+            'body',
+            `🎉 *Welcome to StayNest, ${fullName.trim() ? fullName.trim() : 'Resident'}!* 🏡\n\nYour account is successfully verified!\nHappily manage your PG bookings and stay seamlessly with StayNest.\n\n— *Team StayNest*`
+          );
 
-        fetch('https://api.ultramsg.com/instance197383/messages/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: welcomeParams.toString(),
-        }).catch(() => {});
-      } catch {}
+          fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: welcomeParams.toString(),
+          }).catch(() => {});
+          localStorage.setItem(welcomedKey, 'true');
+        } catch {}
+      }
 
       showToast(`🎉 Verified via WhatsApp! Logged in as +91 ${cleanPhone}`, 'success');
       if (onSuccessRole) onSuccessRole('ROLE_CUSTOMER');

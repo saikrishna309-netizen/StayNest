@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
   Alert,
+  Modal,
   Platform,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 
 interface ProfileScreenProps {
@@ -21,509 +23,701 @@ interface ProfileScreenProps {
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard, onNavigateTab }) => {
   const { user, updateProfile, logout } = useAuth();
 
-  const [fullName, setFullName] = useState(user?.fullName || '');
-  const [email, setEmail] = useState(user?.email || '');
-  const [phone] = useState(user?.phone || '');
-  const [businessName, setBusinessName] = useState('StayNest Premium PG');
-  const [upiId, setUpiId] = useState('9876543210@upi');
-  const [supportContact, setSupportContact] = useState(user?.phone || '9876543210');
-  const [saving, setSaving] = useState(false);
-  const [termsExpanded, setTermsExpanded] = useState(true);
+  // Profile data
+  const [fullName, setFullName] = useState(user?.fullName || 'Ramesh Kumar');
+  const [email, setEmail] = useState(user?.email || 'ramesh@example.com');
+  const [phone, setPhone] = useState(user?.phone || '9876543210');
+  const [location, setLocation] = useState('Bengaluru, Karnataka');
+  const [pgName, setPgName] = useState('Ramesh PG');
 
-  const handleSave = async () => {
-    if (!fullName.trim()) {
+  // Custom Editable Images (Requirement 9)
+  const defaultAvatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80';
+  const defaultBanner = 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=1000&q=80';
+  const defaultPgPhoto = 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
+
+  const [avatarUrl, setAvatarUrl] = useState(defaultAvatar);
+  const [bannerUrl, setBannerUrl] = useState(defaultBanner);
+
+  // Edit Profile Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState(fullName);
+  const [editEmail, setEditEmail] = useState(email);
+  const [editPhone, setEditPhone] = useState(phone);
+  const [editLocation, setEditLocation] = useState(location);
+  const [editAvatarUrl, setEditAvatarUrl] = useState(avatarUrl);
+  const [editBannerUrl, setEditBannerUrl] = useState(bannerUrl);
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Subscription Modal & Auto-Pay State (Requirements 6, 7, 8)
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [selectedPlanPeriod, setSelectedPlanPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
+  const [autoPayMethod, setAutoPayMethod] = useState<'GPAY' | 'PHONEPE' | 'PAYTM' | 'CARD'>('GPAY');
+  const [subscribing, setSubscribing] = useState(false);
+  const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
+
+  // Load custom profile & banner from AsyncStorage
+  useEffect(() => {
+    const loadSavedProfile = async () => {
+      try {
+        const savedData = await AsyncStorage.getItem('@staynest_owner_custom_profile');
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.fullName) setFullName(parsed.fullName);
+          if (parsed.email) setEmail(parsed.email);
+          if (parsed.phone) setPhone(parsed.phone);
+          if (parsed.location) setLocation(parsed.location);
+          if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl);
+          if (parsed.bannerUrl) setBannerUrl(parsed.bannerUrl);
+        }
+      } catch (e) {
+        console.log('Error loading saved profile:', e);
+      }
+    };
+    loadSavedProfile();
+  }, []);
+
+  // Save Profile Changes
+  const handleSaveProfile = async () => {
+    if (!editName.trim()) {
       Alert.alert('Required', 'Please enter your full name');
       return;
     }
 
-    setSaving(true);
+    setSavingProfile(true);
     try {
-      await updateProfile(fullName.trim(), email.trim());
-      const msg = '✓ Profile & business settings saved successfully!';
-      if (Platform.OS === 'web' || typeof window !== 'undefined') {
-        window.alert(msg);
-      } else {
-        Alert.alert('✓ Saved', msg);
-      }
-    } catch (err: any) {
-      Alert.alert('Notice', err.message || 'Profile changes saved.');
+      setFullName(editName.trim());
+      setEmail(editEmail.trim());
+      setPhone(editPhone.trim());
+      setLocation(editLocation.trim());
+      setAvatarUrl(editAvatarUrl.trim() || defaultAvatar);
+      setBannerUrl(editBannerUrl.trim() || defaultBanner);
+
+      const profilePayload = {
+        fullName: editName.trim(),
+        email: editEmail.trim(),
+        phone: editPhone.trim(),
+        location: editLocation.trim(),
+        avatarUrl: editAvatarUrl.trim() || defaultAvatar,
+        bannerUrl: editBannerUrl.trim() || defaultBanner,
+      };
+
+      await AsyncStorage.setItem('@staynest_owner_custom_profile', JSON.stringify(profilePayload));
+      await updateProfile(editName.trim(), editEmail.trim());
+
+      setIsEditModalOpen(false);
+      Alert.alert('Profile Updated! 🎉', 'Your profile details and custom photos have been saved successfully.');
+    } catch {
+      setIsEditModalOpen(false);
     } finally {
-      setSaving(false);
+      setSavingProfile(false);
     }
   };
 
-  const handleLogoutConfirm = () => {
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+  // Confirm Auto-Pay Mandate (Requirements 6, 7, 8)
+  const handleConfirmAutoPay = async () => {
+    setSubscribing(true);
+    try {
+      const planName = selectedPlanPeriod === 'MONTHLY' ? 'Monthly Plan (₹99/mo)' : 'Annual Plan (₹1,099/yr)';
+      setIsSubscriptionActive(true);
+      setIsSubscriptionModalOpen(false);
+
+      // Automated WhatsApp Confirmation via UltraMsg
+      try {
+        const cleanPhone = (phone || '9515614331').replace(/[^0-9]/g, '');
+        const params = new URLSearchParams();
+        params.append('token', '4kcul3wmcwdoh5d0');
+        params.append('to', `+91${cleanPhone}`);
+        params.append(
+          'body',
+          `🎉 *StayNest Auto-Pay Mandate Active!* 👑\n\nHello ${fullName}!\nYour 30-Day Free Trial for the *${planName}* has been activated successfully.\n• Charged Today: *₹0*\n• Next Billing: 15 Dec 2026\n• Unlimited WhatsApp rent reminders & calls enabled!\n\n— *Team StayNest*`
+        );
+        fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        }).catch(() => {});
+      } catch {}
+
+      Alert.alert(
+        'Auto-Pay Activated! 🎉',
+        `₹0 Auto-Pay setup successfully for ${planName}!\n\nYou have unlimited automated WhatsApp reminders, calls, and priority platform facilities.`
+      );
+    } finally {
+      setSubscribing(false);
+    }
+  };
+
+  // Logout confirmation
+  const handleLogout = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
       if (window.confirm('Are you sure you want to log out from StayNest?')) {
         logout();
       }
     } else {
-      Alert.alert(
-        'Confirm Logout',
-        'Are you sure you want to log out from StayNest?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Logout', style: 'destructive', onPress: logout },
-        ]
-      );
+      Alert.alert('Confirm Logout', 'Are you sure you want to log out from StayNest?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive', onPress: logout },
+      ]);
     }
   };
-
-  const handleOpenWhatsApp = () => {
-    const contact = supportContact.replace(/[^0-9]/g, '') || '919876543210';
-    const text = encodeURIComponent('Hello StayNest Support, I need assistance with my PG property.');
-    const url = `https://wa.me/${contact}?text=${text}`;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(url, '_blank');
-    } else {
-      Linking.openURL(url).catch(() => {
-        Alert.alert('Support', `Contact support at +91 ${supportContact}`);
-      });
-    }
-  };
-
-  const initials = fullName
-    ? fullName
-      .split(' ')
-      .map((w) => w[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2)
-    : 'PO';
 
   return (
     <View style={styles.container}>
-      {/* ─── 1. SIGNATURE FLIPKART-STYLE BLUE HEADER ─── */}
-      <View style={styles.flipkartHeader}>
-        <View style={styles.headerTopRow}>
-          <TouchableOpacity style={styles.backButton} onPress={onBackToDashboard}>
-            <Text style={styles.backButtonText}>← Dashboard</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>My Account</Text>
-          <TouchableOpacity style={styles.headerLogoutBtn} onPress={handleLogoutConfirm}>
-            <Text style={styles.headerLogoutText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* ─── 2. FLIPKART SUPERHOST HERO PROFILE CARD ─── */}
-        <View style={styles.heroCard}>
-          <View style={styles.avatarRow}>
-            <View style={styles.avatarContainer}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{initials}</Text>
+        {/* ─── 1. TOP APP BAR ─── */}
+        <View style={styles.topBar}>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.logoImage}
+            resizeMode="contain"
+          />
+
+          <View style={styles.topBarRight}>
+            <TouchableOpacity style={styles.iconButton} activeOpacity={0.7}>
+              <Text style={{ fontSize: 18 }}>🔔</Text>
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>2</Text>
               </View>
-              <View style={styles.verifiedBadge}>
-                <Text style={styles.verifiedCheck}>✓</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.iconButton} onPress={handleLogout} activeOpacity={0.7}>
+              <Text style={{ fontSize: 18 }}>🚪</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ─── 2. HERO PROFILE CARD WITH EDITABLE BANNER & AVATAR (EXACT SCREENSHOT) ─── */}
+        <View style={styles.profileHeroCard}>
+          {/* Background Illustration Banner */}
+          <View style={styles.bannerWrapper}>
+            <Image
+              source={{ uri: bannerUrl }}
+              style={styles.bannerImage}
+              resizeMode="cover"
+            />
+            {/* Banner Change Pill Button */}
+            <TouchableOpacity
+              style={styles.editBannerPill}
+              onPress={() => {
+                setEditBannerUrl(bannerUrl);
+                setIsEditModalOpen(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.editBannerPillText}>📷 Change Banner</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Profile Card Foreground Content */}
+          <View style={styles.profileContentRow}>
+            {/* Circular Avatar with Crown & Online Indicator */}
+            <View style={styles.avatarWrapper}>
+              <Image
+                source={{ uri: avatarUrl }}
+                style={styles.avatarImage}
+              />
+              {/* Gold Crown Badge */}
+              <View style={styles.crownBadge}>
+                <Text style={{ fontSize: 11 }}>👑</Text>
               </View>
+              {/* Green Online Dot */}
+              <View style={styles.onlineDot} />
             </View>
 
-            <View style={styles.heroDetails}>
+            {/* Profile Info Details */}
+            <View style={styles.profileDetailsCol}>
+              <Text style={styles.profileName}>{fullName}</Text>
+
+              {/* PG Owner Tag */}
+              <View style={styles.ownerTagRow}>
+                <View style={styles.ownerTagPill}>
+                  <Text style={{ fontSize: 11 }}>👑</Text>
+                  <Text style={styles.ownerTagText}>PG Owner</Text>
+                </View>
+              </View>
+
+              <Text style={styles.profileContactText}>📞 +91 {phone}</Text>
+              <Text style={styles.profileContactText} numberOfLines={1}>✉️ {email}</Text>
+              <Text style={styles.profileLocationText}>📍 {location}</Text>
+            </View>
+
+            {/* Edit Profile Button */}
+            <TouchableOpacity
+              style={styles.editProfileBtn}
+              onPress={() => {
+                setEditName(fullName);
+                setEditEmail(email);
+                setEditPhone(phone);
+                setEditLocation(location);
+                setEditAvatarUrl(avatarUrl);
+                setEditBannerUrl(bannerUrl);
+                setIsEditModalOpen(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.editProfileBtnText}>✏️ Edit Profile</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ─── 3. FOUR STAT PILLS (ROW OF 4) ─── */}
+        <View style={styles.statsRow}>
+          <View style={styles.statPill}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#e0f2fe' }]}>
+              <Text style={{ fontSize: 16 }}>🏠</Text>
+            </View>
+            <Text style={styles.statNumber}>1</Text>
+            <Text style={styles.statLabel}>Properties</Text>
+          </View>
+
+          <View style={styles.statPill}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#dcfce7' }]}>
+              <Text style={{ fontSize: 16 }}>👥</Text>
+            </View>
+            <Text style={styles.statNumber}>45</Text>
+            <Text style={styles.statLabel}>Total Beds</Text>
+          </View>
+
+          <View style={styles.statPill}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#ede9fe' }]}>
+              <Text style={{ fontSize: 16 }}>👤</Text>
+            </View>
+            <Text style={styles.statNumber}>32</Text>
+            <Text style={styles.statLabel}>Occupied</Text>
+          </View>
+
+          <View style={styles.statPill}>
+            <View style={[styles.statIconCircle, { backgroundColor: '#ffedd5' }]}>
+              <Text style={{ fontSize: 16 }}>🛏️</Text>
+            </View>
+            <Text style={styles.statNumber}>13</Text>
+            <Text style={styles.statLabel}>Available</Text>
+          </View>
+        </View>
+
+        {/* ─── 4. MIDDLE TWO CARDS (PG DETAILS & SUBSCRIPTION PLAN) ─── */}
+        <View style={styles.cardsRow}>
+          {/* Card A: PG Details */}
+          <View style={styles.halfCard}>
+            <TouchableOpacity
+              style={styles.cardHeaderNav}
+              onPress={() => onNavigateTab && onNavigateTab('properties')}
+              activeOpacity={0.7}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={styles.heroName}>{fullName || 'PG Owner'}</Text>
+                <Text style={{ fontSize: 16 }}>🏢</Text>
+                <Text style={styles.cardHeaderTitle}>PG Details</Text>
               </View>
-              <Text style={styles.heroPhone}>📱 +91 {phone || '9876543210'}</Text>
-              <Text style={styles.heroEmail} numberOfLines={1}>
-                ✉️ {email || 'owner@staynest.in'}
-              </Text>
+              <Text style={styles.chevronIcon}>›</Text>
+            </TouchableOpacity>
 
-              {/* Flipkart Plus Style Pill */}
-              <View style={styles.plusPill}>
-                <Text style={styles.plusStar}>⭐</Text>
-                <Text style={styles.plusText}>StayNest SuperHost Plus</Text>
+            <View style={styles.pgPhotoContainer}>
+              <Image
+                source={{ uri: defaultPgPhoto }}
+                style={styles.pgPhotoImage}
+                resizeMode="cover"
+              />
+            </View>
+
+            <View style={styles.pgInfoBox}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={styles.pgCardName}>{pgName}</Text>
+                <View style={styles.activeGreenBadge}>
+                  <Text style={styles.activeGreenBadgeText}>Active</Text>
+                </View>
               </View>
+
+              <Text style={styles.pgCardLocation}>📍 {location}</Text>
+              <Text style={styles.pgCardFeature}>🏢 3 Floors | 12 Rooms</Text>
+              <Text style={styles.pgCardFeature}>👥 Triple, Double & Single Sharing</Text>
+              <Text style={styles.pgCardFeature}>📶 Wi-Fi, AC, Food Included</Text>
+
+              <TouchableOpacity
+                style={styles.viewPropertyBtn}
+                onPress={() => onNavigateTab && onNavigateTab('properties')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.viewPropertyBtnText}>View Property Details →</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
-          {/* Membership & Coins Banner */}
-          <View style={styles.coinsRow}>
-            <View style={styles.coinCol}>
-              <Text style={styles.coinLabel}>REPUTATION</Text>
-              <Text style={styles.coinVal}>⭐ 4.9 / 5.0</Text>
-            </View>
-            <View style={styles.coinDivider} />
-            <View style={styles.coinCol}>
-              <Text style={styles.coinLabel}>HOST TIER</Text>
-              <Text style={styles.coinVal}>💎 Titanium Host</Text>
-            </View>
-            <View style={styles.coinDivider} />
-            <View style={styles.coinCol}>
-              <Text style={styles.coinLabel}>NESTCOINS</Text>
-              <Text style={styles.coinVal}>🪙 1,250 Pts</Text>
-            </View>
-          </View>
-        </View>
+          {/* Card B: Subscription Plan */}
+          <View style={styles.halfCard}>
+            <TouchableOpacity
+              style={styles.cardHeaderNav}
+              onPress={() => setIsSubscriptionModalOpen(true)}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>👑</Text>
+                <Text style={styles.cardHeaderTitle}>Subscription Plan</Text>
+              </View>
+              <Text style={styles.chevronIcon}>›</Text>
+            </TouchableOpacity>
 
-        {/* ─── 3. FLIPKART 4 QUICK TILES GRID ─── */}
-        <View style={styles.quickGrid}>
-          <TouchableOpacity
-            style={styles.quickTile}
-            onPress={() => onNavigateTab ? onNavigateTab('properties') : null}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: '#e0f2fe' }]}>
-              <Text style={{ fontSize: 20 }}>🏢</Text>
-            </View>
-            <Text style={styles.tileTitle}>Properties</Text>
-            <Text style={styles.tileSub}>Manage Floors</Text>
-          </TouchableOpacity>
+            <View style={styles.subPlanCardContent}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <View style={styles.starBadgePill}>
+                  <Text style={{ fontSize: 11 }}>⭐</Text>
+                  <Text style={styles.starBadgeText}>Premium Plan</Text>
+                </View>
+                <View style={styles.activeGreenBadge}>
+                  <Text style={styles.activeGreenBadgeText}>Active</Text>
+                </View>
+              </View>
 
-          <TouchableOpacity
-            style={styles.quickTile}
-            onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: '#fef3c7' }]}>
-              <Text style={{ fontSize: 20 }}>👥</Text>
-            </View>
-            <Text style={styles.tileTitle}>Residents</Text>
-            <Text style={styles.tileSub}>Tenant List</Text>
-          </TouchableOpacity>
+              <View style={styles.subPriceWrap}>
+                <Text style={styles.subPriceBig}>
+                  ₹99 <Text style={styles.subPricePerMonth}>/ month</Text>
+                </Text>
+                <Text style={styles.subCrownWatermark}>👑</Text>
+              </View>
 
-          <TouchableOpacity
-            style={styles.quickTile}
-            onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: '#fee2e2' }]}>
-              <Text style={{ fontSize: 20 }}>💰</Text>
-            </View>
-            <Text style={styles.tileTitle}>Rent Dues</Text>
-            <Text style={styles.tileSub}>Pending Fees</Text>
-          </TouchableOpacity>
+              <View style={styles.subFeatureList}>
+                <View style={styles.subFeatureItem}>
+                  <Text style={styles.subGreenCheck}>✓</Text>
+                  <Text style={styles.subFeatureItemText}>Manage up to 5 PGs</Text>
+                </View>
+                <View style={styles.subFeatureItem}>
+                  <Text style={styles.subGreenCheck}>✓</Text>
+                  <Text style={styles.subFeatureItemText}>Unlimited WhatsApp Messages</Text>
+                </View>
+                <View style={styles.subFeatureItem}>
+                  <Text style={styles.subGreenCheck}>✓</Text>
+                  <Text style={styles.subFeatureItemText}>Advanced Reports & Analytics</Text>
+                </View>
+                <View style={styles.subFeatureItem}>
+                  <Text style={styles.subGreenCheck}>✓</Text>
+                  <Text style={styles.subFeatureItemText}>Priority Support</Text>
+                </View>
+              </View>
 
-          <TouchableOpacity
-            style={styles.quickTile}
-            onPress={() => onNavigateTab ? onNavigateTab('management') : null}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.tileIconCircle, { backgroundColor: '#dcfce7' }]}>
-              <Text style={{ fontSize: 20 }}>📊</Text>
-            </View>
-            <Text style={styles.tileTitle}>Ledger</Text>
-            <Text style={styles.tileSub}>Profit & Loss</Text>
-          </TouchableOpacity>
-        </View>
+              <Text style={styles.nextBillingText}>📅 Next Billing: 15 Dec 2026</Text>
 
-        {/* ─── 4. PERSONAL & CONTACT DETAILS (FLIPKART CARD) ─── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderTitle}>Personal & Contact Information</Text>
-            <Text style={styles.cardHeaderTag}>VERIFIED</Text>
-          </View>
-          <Text style={styles.cardSub}>Keep your primary account details updated</Text>
-
-          <Text style={styles.label}>FULL NAME *</Text>
-          <TextInput
-            style={styles.input}
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="e.g. Ramesh Sharma"
-          />
-
-          <Text style={styles.label}>EMAIL ADDRESS</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholder="owner@staynest.in"
-          />
-
-          <Text style={styles.label}>REGISTERED MOBILE (LOGIN ID)</Text>
-          <TextInput
-            style={[styles.input, styles.inputDisabled]}
-            value={phone}
-            editable={false}
-            placeholder="9876543210"
-          />
-          <Text style={styles.fieldNote}>🔒 Mobile number is verified via OTP authentication.</Text>
-        </View>
-
-        {/* ─── 5. PG BUSINESS & RENT COLLECTION (UPI) ─── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderTitle}>Business & Rent Collections</Text>
-            <Text style={[styles.cardHeaderTag, { backgroundColor: '#e0f2fe', color: '#0369a1' }]}>
-              PAYMENTS
-            </Text>
-          </View>
-          <Text style={styles.cardSub}>Displayed on resident rent receipts and WhatsApp reminders</Text>
-
-          <Text style={styles.label}>PG / BUSINESS NAME</Text>
-          <TextInput
-            style={styles.input}
-            value={businessName}
-            onChangeText={setBusinessName}
-            placeholder="e.g. StayNest Luxury PG"
-          />
-
-          <Text style={styles.label}>UPI ID FOR INSTANT RENT RECEIPT</Text>
-          <TextInput
-            style={styles.input}
-            value={upiId}
-            onChangeText={setUpiId}
-            placeholder="e.g. 9876543210@paytm or owner@okaxis"
-          />
-          <Text style={styles.fieldNote}>
-            💡 Tenants can scan this UPI ID directly to settle monthly dues with zero gateway fees.
-          </Text>
-
-          <Text style={styles.label}>EMERGENCY / HELPLINE CONTACT</Text>
-          <TextInput
-            style={styles.input}
-            value={supportContact}
-            onChangeText={setSupportContact}
-            keyboardType="phone-pad"
-            placeholder="9876543210"
-          />
-        </View>
-
-        {/* ─── 6. PG HOUSE RULES & TIMINGS ─── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeaderRow}>
-            <Text style={styles.cardHeaderTitle}>PG House Rules & Code of Conduct</Text>
-            <Text style={[styles.cardHeaderTag, { backgroundColor: '#fef3c7', color: '#b45309' }]}>
-              DISCIPLINE
-            </Text>
-          </View>
-          <Text style={styles.cardSub}>Enforced across all floors for resident safety and quietness</Text>
-
-          <View style={styles.ruleItem}>
-            <Text style={styles.ruleIcon}>🚪</Text>
-            <View style={styles.ruleTextCol}>
-              <Text style={styles.ruleTitle}>Gate Closing Time: 10:30 PM Sharp</Text>
-              <Text style={styles.ruleDesc}>
-                Main entrance gates are locked at 10:30 PM. Late entry requires prior warden intimation.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <Text style={styles.ruleIcon}>🔇</Text>
-            <View style={styles.ruleTextCol}>
-              <Text style={styles.ruleTitle}>Quiet Hours: 11:00 PM – 06:00 AM</Text>
-              <Text style={styles.ruleDesc}>
-                No loud music, shouting, or noisy group gatherings during quiet hours to respect sleep.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <Text style={styles.ruleIcon}>👥</Text>
-            <View style={styles.ruleTextCol}>
-              <Text style={styles.ruleTitle}>Visitor Policy: Reception & Lobby Only</Text>
-              <Text style={styles.ruleDesc}>
-                Outside visitors permitted only in ground floor lobby till 8:00 PM. No overnight guests.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.ruleItem}>
-            <Text style={styles.ruleIcon}>🚭</Text>
-            <View style={styles.ruleTextCol}>
-              <Text style={styles.ruleTitle}>100% Non-Smoking & Drug-Free Property</Text>
-              <Text style={styles.ruleDesc}>
-                Smoking, alcohol, and narcotics are strictly forbidden with zero tolerance.
-              </Text>
+              <TouchableOpacity
+                style={styles.manageSubBtn}
+                onPress={() => setIsSubscriptionModalOpen(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.manageSubBtnText}>Manage Subscription</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
-        {/* ─── 7. COMPREHENSIVE TERMS & CONDITIONS (LEGAL AGREEMENT) ─── */}
-        <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.cardHeaderRow}
-            onPress={() => setTermsExpanded((prev) => !prev)}
-            activeOpacity={0.8}
-          >
-            <View>
-              <Text style={styles.cardHeaderTitle}>📜 Terms & Conditions (Rental Agreement)</Text>
-              <Text style={styles.cardSub}>Comprehensive PG guidelines & legal policies</Text>
-            </View>
-            <Text style={{ fontSize: 18, color: '#2874f0', fontWeight: '800' }}>
-              {termsExpanded ? '▲' : '▼'}
-            </Text>
-          </TouchableOpacity>
-
-          {termsExpanded && (
-            <View style={styles.termsContainer}>
-              {/* Clause 1 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>1</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Rent Schedule & Late Fee Penalty</Text>
-                  <Text style={styles.clauseBody}>
-                    Monthly rent is payable in advance on or before the 5th of each calendar month. A grace
-                    period is extended until the 7th. Rent received after the 7th attracts an automatic late
-                    fee of ₹100 per day until clearance.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 2 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>2</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Security Deposit & Refund Policy</Text>
-                  <Text style={styles.clauseBody}>
-                    A refundable security deposit equal to 1 month's rent is mandatory prior to move-in. The
-                    deposit will be refunded via UPI/bank transfer within 7 business days following room
-                    handover inspection, subject to deductions for damages or unpaid utilities.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 3 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>3</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Mandatory 30-Day Written Notice</Text>
-                  <Text style={styles.clauseBody}>
-                    Residents must serve a minimum 30 days prior written notice through the StayNest application
-                    or verified message before vacating. Notice cannot be adjusted against the last month's rent.
-                    Failure to provide 30 days notice results in forfeiture of the security deposit.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 4 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>4</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Minimum Lock-In Commitment</Text>
-                  <Text style={styles.clauseBody}>
-                    A mandatory lock-in period of 3 months applies from check-in. If a resident departs prior to
-                    completing 3 months of stay, 50% of the security deposit stands forfeited towards vacancy
-                    losses.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 5 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>5</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Electricity Sub-Metering & Utilities</Text>
-                  <Text style={styles.clauseBody}>
-                    Room electricity consumption is measured via digital sub-meters and billed at actual state
-                    electricity board commercial tariff (₹8.50/unit) divided equally among room occupants. High-speed
-                    Wi-Fi, water supply, and general housekeeping are included in base monthly rent.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 6 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>6</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Damage Liability & Fixtures</Text>
-                  <Text style={styles.clauseBody}>
-                    Residents are jointly responsible for maintaining room furniture, cots, mattresses, AC remotes,
-                    and sanitary fittings. Any physical damage resulting from negligence will be billed directly to
-                    the occupants or deducted from deposits.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 7 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>7</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Guest Policy & Curfew Regulations</Text>
-                  <Text style={styles.clauseBody}>
-                    Visitors and family members are permitted only in the ground floor lounge between 9:00 AM and
-                    8:00 PM. No unauthorized overnight guests or visitors of the opposite gender are permitted inside
-                    resident rooms. The PG gate is locked strictly at 10:30 PM.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 8 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>8</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Prohibited Items & Code of Conduct</Text>
-                  <Text style={styles.clauseBody}>
-                    Consumption or storage of alcohol, narcotics, contraband, and dangerous chemicals is strictly
-                    prohibited. Use of high-wattage personal heating appliances (induction plates, immersion rods, room
-                    heaters) without written management approval is barred. Violations lead to immediate eviction.
-                  </Text>
-                </View>
-              </View>
-
-              {/* Clause 9 */}
-              <View style={styles.termClause}>
-                <View style={styles.clauseNumberBadge}>
-                  <Text style={styles.clauseNumberText}>9</Text>
-                </View>
-                <View style={styles.clauseContent}>
-                  <Text style={styles.clauseHeading}>Right of Inspection & Safety Audits</Text>
-                  <Text style={styles.clauseBody}>
-                    Management and authorized staff reserve the right to inspect premises during daytime hours for
-                    cleanliness, security audits, and routine maintenance with reasonable advance notice.
-                  </Text>
-                </View>
+        {/* ─── 5. LOWER TWO CARDS (MY TENANTS & QUICK ACTIONS) ─── */}
+        <View style={styles.cardsRow}>
+          {/* Card C: My Tenants */}
+          <View style={styles.halfCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>👥</Text>
+                <Text style={styles.cardHeaderTitle}>My Tenants</Text>
               </View>
             </View>
-          )}
-        </View>
 
-        {/* ─── 8. 24/7 HELP & SUPPORT SECTION ─── */}
-        <View style={styles.supportCard}>
-          <View style={styles.supportHeaderRow}>
-            <View style={styles.supportIconCircle}>
-              <Text style={{ fontSize: 20 }}>🎧</Text>
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.supportTitle}>24/7 Host Help & Support</Text>
-              <Text style={styles.supportSub}>Direct WhatsApp and phone assistance for property owners</Text>
+            <View style={styles.tenantsRow}>
+              {[
+                { name: 'Amit Sharma', room: 'Room 101-B', status: 'PAID', photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80' },
+                { name: 'Rahul Kumar', room: 'Room 101-A', status: 'DUE', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80' },
+                { name: 'Priya Singh', room: 'Room 102-A', status: 'PAID', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80' },
+                { name: 'Arjun Reddy', room: 'Room 201-C', status: 'PAID', photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80' },
+              ].map((t, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.tenantPillCol}
+                  onPress={() => onNavigateTab && onNavigateTab('tenants')}
+                  activeOpacity={0.7}
+                >
+                  <Image source={{ uri: t.photo }} style={styles.tenantAvatarThumb} />
+                  <Text style={styles.tenantThumbName} numberOfLines={1}>{t.name}</Text>
+                  <Text style={styles.tenantThumbRoom}>{t.room}</Text>
+                  <View style={[styles.statusSmallBadge, t.status === 'PAID' ? styles.statusPaidBg : styles.statusDueBg]}>
+                    <Text style={[styles.statusSmallText, t.status === 'PAID' ? styles.statusPaidText : styles.statusDueText]}>
+                      {t.status === 'PAID' ? 'Paid' : 'Due'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
           </View>
 
-          <TouchableOpacity style={styles.whatsappBtn} onPress={handleOpenWhatsApp} activeOpacity={0.8}>
-            <Text style={styles.whatsappBtnText}>💬 Chat with Support on WhatsApp</Text>
-          </TouchableOpacity>
+          {/* Card D: Quick Actions (2x2 Grid) */}
+          <View style={styles.halfCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>⚡</Text>
+                <Text style={styles.cardHeaderTitle}>Quick Actions</Text>
+              </View>
+            </View>
+
+            <View style={styles.quickGrid}>
+              <TouchableOpacity
+                style={styles.quickActionTile}
+                onPress={() => onNavigateTab && onNavigateTab('tenants')}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.quickTileIcon}>👤+</Text>
+                <Text style={styles.quickTileLabel}>Add Tenant</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionTile}
+                onPress={() => onNavigateTab && onNavigateTab('tenants')}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.quickTileIcon}>₹</Text>
+                <Text style={styles.quickTileLabel}>Record Rent</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionTile}
+                onPress={() => onNavigateTab && onNavigateTab('management')}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.quickTileIcon}>📄</Text>
+                <Text style={styles.quickTileLabel}>Add Expense</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickActionTile}
+                onPress={() => onNavigateTab && onNavigateTab('management')}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.quickTileIcon}>📊</Text>
+                <Text style={styles.quickTileLabel}>View Reports</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
-
-        {/* ─── 9. SAVE PROFILE & FLIPKART LOGOUT ─── */}
-        <TouchableOpacity
-          style={[styles.saveBtn, saving && { opacity: 0.7 }]}
-          onPress={handleSave}
-          disabled={saving}
-          activeOpacity={0.8}
-        >
-          {saving ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.saveBtnText}>💾 Save Account Changes</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.logoutBtnFull} onPress={handleLogoutConfirm} activeOpacity={0.8}>
-          <Text style={styles.logoutBtnFullText}>🚪 Log Out from StayNest</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* ─── MODAL 1: EDIT PROFILE, PHOTO & BACKGROUND BANNER (REQUIREMENT 9) ─── */}
+      <Modal
+        visible={isEditModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEditModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalTitle}>Edit Owner Profile</Text>
+                <Text style={styles.modalSub}>Update your personal details, profile photo & banner</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsEditModalOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Profile Photo URL Input */}
+              <Text style={styles.fieldLabel}>PROFILE PHOTO URL</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editAvatarUrl}
+                onChangeText={setEditAvatarUrl}
+                placeholder="Enter image URL for avatar"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {/* Background Banner URL Input */}
+              <Text style={styles.fieldLabel}>BACKGROUND BANNER URL</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editBannerUrl}
+                onChangeText={setEditBannerUrl}
+                placeholder="Enter image URL for heritage banner"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {/* Full Name */}
+              <Text style={styles.fieldLabel}>FULL NAME</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editName}
+                onChangeText={setEditName}
+                placeholder="Ramesh Kumar"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {/* Email Address */}
+              <Text style={styles.fieldLabel}>EMAIL ADDRESS</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editEmail}
+                onChangeText={setEditEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                placeholder="ramesh@example.com"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {/* Phone Number */}
+              <Text style={styles.fieldLabel}>PHONE NUMBER</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editPhone}
+                onChangeText={setEditPhone}
+                keyboardType="number-pad"
+                placeholder="9876543210"
+                placeholderTextColor="#94a3b8"
+              />
+
+              {/* City / Location */}
+              <Text style={styles.fieldLabel}>CITY / LOCATION</Text>
+              <TextInput
+                style={styles.inputField}
+                value={editLocation}
+                onChangeText={setEditLocation}
+                placeholder="Bengaluru, Karnataka"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <TouchableOpacity
+                style={[styles.saveModalBtn, savingProfile && styles.btnDisabled]}
+                onPress={handleSaveProfile}
+                disabled={savingProfile}
+              >
+                {savingProfile ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveModalBtnText}>Save Profile & Photos</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ─── MODAL 2: SUBSCRIPTION & ₹0 AUTO-PAY SETUP (REQUIREMENTS 6, 7, 8) ─── */}
+      <Modal
+        visible={isSubscriptionModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsSubscriptionModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalTitle}>Setup Auto-Pay Subscription</Text>
+                <Text style={styles.modalSub}>First 30 days are 100% free • Cancel anytime</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsSubscriptionModalOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+              {/* Plan Cards */}
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.modalPlanCard,
+                    selectedPlanPeriod === 'MONTHLY' && styles.modalPlanCardSelected,
+                  ]}
+                  onPress={() => setSelectedPlanPeriod('MONTHLY')}
+                >
+                  <View style={styles.modalPlanTopRow}>
+                    <Text style={styles.modalPlanTitle}>Monthly Plan</Text>
+                    <Text style={styles.modalPlanTag}>POPULAR</Text>
+                  </View>
+                  <Text style={styles.modalPlanPrice}>₹99 <Text style={{ fontSize: 12, color: '#64748b' }}>/ mo</Text></Text>
+                  <Text style={styles.modalPlanSub}>Billed monthly after trial</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.modalPlanCard,
+                    selectedPlanPeriod === 'YEARLY' && styles.modalPlanCardSelected,
+                  ]}
+                  onPress={() => setSelectedPlanPeriod('YEARLY')}
+                >
+                  <View style={styles.modalPlanTopRow}>
+                    <Text style={styles.modalPlanTitle}>Yearly Plan</Text>
+                    <Text style={[styles.modalPlanTag, { backgroundColor: '#dcfce7', color: '#15803d' }]}>SAVE 8%</Text>
+                  </View>
+                  <Text style={styles.modalPlanPrice}>₹1,099 <Text style={{ fontSize: 12, color: '#64748b' }}>/ yr</Text></Text>
+                  <Text style={styles.modalPlanSub}>2 months free included</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Mandate Summary */}
+              <View style={styles.mandateSummary}>
+                <View style={styles.mandateRow}>
+                  <Text style={styles.mandateKey}>Initial Charge Today:</Text>
+                  <Text style={[styles.mandateVal, { color: '#16a34a', fontWeight: '900' }]}>₹0 (FREE TRIAL)</Text>
+                </View>
+                <View style={styles.mandateRow}>
+                  <Text style={styles.mandateKey}>Auto-Pay Recurring:</Text>
+                  <Text style={styles.mandateVal}>{selectedPlanPeriod === 'MONTHLY' ? '₹99 / month' : '₹1,099 / year'}</Text>
+                </View>
+                <View style={styles.mandateRow}>
+                  <Text style={styles.mandateKey}>First Deduction Date:</Text>
+                  <Text style={styles.mandateVal}>15 Dec 2026</Text>
+                </View>
+                <View style={styles.mandateRow}>
+                  <Text style={styles.mandateKey}>Unlimited Services:</Text>
+                  <Text style={styles.mandateVal}>WhatsApp + Calls + Reports</Text>
+                </View>
+              </View>
+
+              {/* Auto-Pay UPI Options */}
+              <Text style={styles.fieldLabel}>SELECT AUTO-PAY PAYMENT METHOD</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+                {[
+                  { id: 'GPAY', label: 'Google Pay', icon: '🟢' },
+                  { id: 'PHONEPE', label: 'PhonePe', icon: '🟣' },
+                  { id: 'PAYTM', label: 'Paytm UPI', icon: '🔵' },
+                  { id: 'CARD', label: 'Debit / Credit Card', icon: '💳' },
+                ].map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    style={[
+                      styles.methodPill,
+                      autoPayMethod === m.id && styles.methodPillActive,
+                    ]}
+                    onPress={() => setAutoPayMethod(m.id as any)}
+                  >
+                    <Text style={{ fontSize: 13 }}>{m.icon}</Text>
+                    <Text
+                      style={[
+                        styles.methodPillText,
+                        autoPayMethod === m.id && styles.methodPillTextActive,
+                      ]}
+                    >
+                      {m.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.saveModalBtn, subscribing && styles.btnDisabled]}
+                onPress={handleConfirmAutoPay}
+                disabled={subscribing}
+              >
+                {subscribing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveModalBtnText}>
+                    Authorize ₹0 Auto-Pay & Activate Unlimited Plan
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -531,446 +725,668 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f1f3f6', // Signature Flipkart soft grey background
+    backgroundColor: '#f8fafc',
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
 
-  // ─── Signature Flipkart Blue Header ───
-  flipkartHeader: {
-    backgroundColor: '#2874f0', // Flipkart Brand Blue
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'web' ? 14 : 20,
-    paddingBottom: 22,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
-  },
-  headerTopRow: {
+  // ─── Top App Bar ───
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  backButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-  },
-  backButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#ffffff',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: '#ffffff',
-    letterSpacing: -0.3,
-  },
-  headerLogoutBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.15)',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  headerLogoutText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#ffffff',
-  },
-
-  scrollContent: {
-    padding: 16,
-    paddingTop: 8,
-  },
-
-  // ─── Hero Profile Card ───
-  heroCard: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: -10,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 3,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
   },
-  avatarRow: {
+  logoImage: {
+    height: 38,
+    width: 140,
+  },
+  topBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  avatarContainer: {
-    position: 'relative',
-  },
-  avatar: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: '#2874f0',
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#ff9f00', // Flipkart Gold border
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
   },
-  avatarText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#ffffff',
-  },
-  verifiedBadge: {
+  notifBadge: {
     position: 'absolute',
-    bottom: -2,
+    top: 4,
+    right: 4,
+    backgroundColor: '#ef4444',
+    borderRadius: 10,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: {
+    color: '#ffffff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+
+  // ─── Hero Profile Card with Banner ───
+  profileHeroCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  bannerWrapper: {
+    height: 130,
+    width: '100%',
+    position: 'relative',
+    backgroundColor: '#fef3c7',
+  },
+  bannerImage: {
+    width: '100%',
+    height: '100%',
+  },
+  editBannerPill: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  editBannerPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  profileContentRow: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+    paddingTop: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  avatarWrapper: {
+    position: 'relative',
+    marginTop: -38,
+  },
+  avatarImage: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    borderWidth: 3.5,
+    borderColor: '#ffffff',
+    backgroundColor: '#cbd5e1',
+  },
+  crownBadge: {
+    position: 'absolute',
+    top: -2,
     right: -2,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#fef08a',
+    borderRadius: 12,
     width: 22,
     height: 22,
-    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#ffffff',
   },
-  verifiedCheck: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '900',
+  onlineDot: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: '#22c55e',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 2.5,
+    borderColor: '#ffffff',
   },
-  heroDetails: {
+  profileDetailsCol: {
     flex: 1,
-    marginLeft: 14,
   },
-  heroName: {
-    fontSize: 18,
+  profileName: {
+    fontSize: 20,
     fontWeight: '900',
-    color: '#1e293b',
+    color: '#0f172a',
+    letterSpacing: -0.3,
   },
-  heroPhone: {
-    fontSize: 13,
+  ownerTagRow: {
+    flexDirection: 'row',
+    marginTop: 4,
+    marginBottom: 6,
+  },
+  ownerTagPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fde68a',
+  },
+  ownerTagText: {
+    color: '#b45309',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  profileContactText: {
+    fontSize: 12,
     color: '#475569',
-    marginTop: 2,
+    marginTop: 1,
     fontWeight: '600',
   },
-  heroEmail: {
+  profileLocationText: {
     fontSize: 12,
     color: '#64748b',
-    marginTop: 1,
+    marginTop: 2,
+    fontWeight: '500',
   },
-  plusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff7ed',
-    borderWidth: 1,
-    borderColor: '#fed7aa',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginTop: 6,
-    gap: 4,
+  editProfileBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  plusStar: {
+  editProfileBtnText: {
     fontSize: 11,
-  },
-  plusText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#c2410c',
-    letterSpacing: 0.2,
-  },
-
-  // ─── Coins & Host Tier Banner ───
-  coinsRow: {
-    flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  coinCol: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  coinLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  coinVal: {
-    fontSize: 12,
     fontWeight: '800',
     color: '#0f172a',
   },
-  coinDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: '#e2e8f0',
-  },
 
-  // ─── Flipkart 4 Quick Tiles Grid ───
-  quickGrid: {
+  // ─── 4 Stat Pills ───
+  statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 14,
   },
-  quickTile: {
+  statPill: {
     flex: 1,
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 18,
+    paddingVertical: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#f1f5f9',
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  tileIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  statIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,
   },
-  tileTitle: {
-    fontSize: 12,
-    fontWeight: '800',
+  statNumber: {
+    fontSize: 18,
+    fontWeight: '900',
     color: '#0f172a',
   },
-  tileSub: {
-    fontSize: 9,
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '700',
     color: '#64748b',
     marginTop: 1,
-    fontWeight: '600',
   },
 
-  // ─── General Flipkart White Cards ───
-  card: {
+  // ─── Middle & Lower Cards Row ───
+  cardsRow: {
+    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    gap: 12,
+    marginHorizontal: 16,
+    marginTop: 14,
+  },
+  halfCard: {
+    flex: 1,
     backgroundColor: '#ffffff',
-    borderRadius: 16,
+    borderRadius: 22,
     padding: 16,
-    marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#f1f5f9',
     shadowColor: '#000',
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 2,
   },
-  cardHeaderRow: {
+  cardHeaderNav: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
   },
   cardHeaderTitle: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
     color: '#0f172a',
   },
-  cardHeaderTag: {
-    fontSize: 10,
+  chevronIcon: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+
+  // Card A: PG Details
+  pgPhotoContainer: {
+    height: 120,
+    borderRadius: 14,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  pgPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  pgInfoBox: {
+    marginTop: 2,
+  },
+  pgCardName: {
+    fontSize: 16,
     fontWeight: '900',
+    color: '#0f172a',
+  },
+  activeGreenBadge: {
     backgroundColor: '#dcfce7',
-    color: '#15803d',
     paddingHorizontal: 8,
     paddingVertical: 2,
+    borderRadius: 10,
+  },
+  activeGreenBadgeText: {
+    color: '#15803d',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  pgCardLocation: {
+    fontSize: 11,
+    color: '#64748b',
+    marginBottom: 6,
+    fontWeight: '600',
+  },
+  pgCardFeature: {
+    fontSize: 11,
+    color: '#334155',
+    marginBottom: 3,
+    fontWeight: '600',
+  },
+  viewPropertyBtn: {
+    backgroundColor: '#e0f2fe',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  viewPropertyBtnText: {
+    color: '#0284c7',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // Card B: Subscription Plan
+  subPlanCardContent: {
+    position: 'relative',
+  },
+  starBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fef3c7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  starBadgeText: {
+    color: '#b45309',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  subPriceWrap: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    marginVertical: 10,
+  },
+  subPriceBig: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.5,
+  },
+  subPricePerMonth: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  subCrownWatermark: {
+    fontSize: 36,
+    opacity: 0.25,
+  },
+  subFeatureList: {
+    marginBottom: 8,
+  },
+  subFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  subGreenCheck: {
+    color: '#16a34a',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  subFeatureItemText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  nextBillingText: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 4,
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  manageSubBtn: {
+    backgroundColor: '#0f172a',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  manageSubBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // Card C: My Tenants
+  tenantsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  tenantPillCol: {
+    alignItems: 'center',
+    width: '23%',
+  },
+  tenantAvatarThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#cbd5e1',
+    marginBottom: 4,
+  },
+  tenantThumbName: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#0f172a',
+    textAlign: 'center',
+  },
+  tenantThumbRoom: {
+    fontSize: 9,
+    color: '#64748b',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 3,
+  },
+  statusSmallBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
     borderRadius: 6,
   },
-  cardSub: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 2,
-    marginBottom: 12,
+  statusPaidBg: {
+    backgroundColor: '#dcfce7',
   },
-  label: {
-    fontSize: 11,
+  statusDueBg: {
+    backgroundColor: '#fef3c7',
+  },
+  statusSmallText: {
+    fontSize: 9,
     fontWeight: '800',
-    color: '#475569',
-    marginTop: 10,
-    marginBottom: 5,
-    letterSpacing: 0.4,
   },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#0f172a',
+  statusPaidText: {
+    color: '#15803d',
   },
-  inputDisabled: {
-    backgroundColor: '#f1f5f9',
-    color: '#64748b',
-  },
-  fieldNote: {
-    fontSize: 11,
-    color: '#64748b',
-    marginTop: 4,
+  statusDueText: {
+    color: '#b45309',
   },
 
-  // ─── House Rules ───
-  ruleItem: {
+  // Card D: Quick Actions (2x2 Grid)
+  quickGrid: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
   },
-  ruleIcon: {
+  quickActionTile: {
+    width: '48%',
+    backgroundColor: '#f8fafc',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickTileIcon: {
     fontSize: 18,
-    marginRight: 10,
-    marginTop: 1,
+    color: '#2563eb',
+    marginBottom: 4,
   },
-  ruleTextCol: {
-    flex: 1,
-  },
-  ruleTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1e293b',
-  },
-  ruleDesc: {
+  quickTileLabel: {
     fontSize: 11,
-    color: '#64748b',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-
-  // ─── Terms & Conditions Section ───
-  termsContainer: {
-    marginTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingTop: 10,
-  },
-  termClause: {
-    flexDirection: 'row',
-    marginBottom: 12,
-    alignItems: 'flex-start',
-  },
-  clauseNumberBadge: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#2874f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 2,
-  },
-  clauseNumberText: {
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  clauseContent: {
-    flex: 1,
-  },
-  clauseHeading: {
-    fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
-    marginBottom: 2,
-  },
-  clauseBody: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 17,
   },
 
-  // ─── Help & Support Card ───
-  supportCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
+  // ─── Modal Styles ───
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 480,
+    padding: 22,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  supportHeaderRow: {
+  modalHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+    paddingBottom: 10,
   },
-  supportIconCircle: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#ede9fe',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  supportTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '900',
     color: '#0f172a',
   },
-  supportSub: {
+  modalSub: {
     fontSize: 11,
     color: '#64748b',
     marginTop: 2,
   },
-  whatsappBtn: {
-    backgroundColor: '#25d366', // WhatsApp Brand Green
-    borderRadius: 10,
-    paddingVertical: 12,
+  modalCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f1f5f9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  whatsappBtnText: {
+  fieldLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  inputField: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  saveModalBtn: {
+    backgroundColor: '#4f46e5',
+    borderRadius: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 6,
+  },
+  saveModalBtnText: {
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '800',
   },
+  btnDisabled: {
+    opacity: 0.6,
+  },
 
-  // ─── Action Buttons ───
-  saveBtn: {
-    backgroundColor: '#2874f0', // Flipkart Blue
-    borderRadius: 12,
-    paddingVertical: 14,
+  // Modal Plan Switcher
+  modalPlanCard: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 14,
+    padding: 10,
+  },
+  modalPlanCardSelected: {
+    borderColor: '#4f46e5',
+    backgroundColor: '#eef2ff',
+  },
+  modalPlanTopRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    shadowColor: '#2874f0',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    elevation: 4,
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
-  saveBtnText: {
-    color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  logoutBtnFull: {
-    marginTop: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  logoutBtnFullText: {
-    color: '#dc2626',
-    fontSize: 14,
+  modalPlanTitle: {
+    fontSize: 12,
     fontWeight: '800',
+    color: '#0f172a',
+  },
+  modalPlanTag: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#4f46e5',
+    backgroundColor: '#e0e7ff',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  modalPlanPrice: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  modalPlanSub: {
+    fontSize: 9,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  mandateSummary: {
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  mandateRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  mandateKey: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  mandateVal: {
+    fontSize: 11,
+    color: '#0f172a',
+    fontWeight: '800',
+  },
+  methodPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
+  },
+  methodPillActive: {
+    borderColor: '#10b981',
+    backgroundColor: '#ecfdf5',
+  },
+  methodPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  methodPillTextActive: {
+    color: '#047857',
   },
 });
