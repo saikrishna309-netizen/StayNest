@@ -35,3 +35,11 @@ staynest:
   sms:
     fast2sms:
       api-key: ${FAST2SMS_API_KEY:qseD4buVIZcIcceLLXOil10MRhiH7BcTfz4pfDrA95x6bHh0zYirXCvs6BYNV8qce04ATbqohB4HZleb}
+  whatsapp:
+    provider: ${WHATSAPP_PROVIDER:ultramsg}
+    ultramsg:
+      instance-id: ${ULTRAMSG_INSTANCE_ID:}
+      token: ${ULTRAMSG_TOKEN:}
+    greenapi:
+      id-instance: ${GREENAPI_ID_INSTANCE:}
+      api-token-instance: ${GREENAPI_TOKEN_INSTANCE:}

@@ -31,17 +31,20 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final SmsService smsService;
+    private final WhatsAppService whatsAppService;
 
     public AuthService(UserRepository userRepository,
                        OwnerProfileRepository ownerProfileRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider jwtTokenProvider,
-                       SmsService smsService) {
+                       SmsService smsService,
+                       WhatsAppService whatsAppService) {
         this.userRepository = userRepository;
         this.ownerProfileRepository = ownerProfileRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.smsService = smsService;
+        this.whatsAppService = whatsAppService;
     }
 
     @Transactional
@@ -177,15 +180,21 @@ public class AuthService {
         user.setPhoneOtp(otp);
         userRepository.save(user);
 
+        // Dispatch automated WhatsApp message
+        WhatsAppService.WhatsAppResult waResult = whatsAppService.sendOtp(phone, otp);
+
         // Dispatch real SMS via Fast2SMS
         SmsService.SmsResult smsResult = smsService.sendOtpSms(phone, otp);
 
-        String message = smsResult.success()
+        String message = waResult.success()
+                ? "WhatsApp OTP delivered directly to +91 " + phone
+                : (smsResult.success()
                 ? "Real OTP SMS sent to +91 " + phone
-                : "Fast2SMS Notice: " + smsResult.message();
+                : "OTP generated for +91 " + phone);
 
         return Map.of(
                 "message", message,
+                "whatsappDelivered", String.valueOf(waResult.success()),
                 "smsDelivered", String.valueOf(smsResult.success()),
                 "otp", otp,
                 "demoOtp", otp
