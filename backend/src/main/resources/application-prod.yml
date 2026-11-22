@@ -47,6 +47,11 @@ staynest:
     secret: ${JWT_SECRET:prodStayNestSecretKeyMustBeAtLeast256BitsLongForHS512AlgorithmComplianceInProdEnvironment!}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}
     refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION_MS:604800000}
+  whatsapp:
+    provider: ${WHATSAPP_PROVIDER:ultramsg}
+    ultramsg:
+      instance-id: ${ULTRAMSG_INSTANCE_ID:instance197383}
+      token: ${ULTRAMSG_TOKEN:4kcul3wmcwdoh5d0}
   cors:
     allowed-origins: ${ALLOWED_ORIGINS:https://staynest.in,https://www.staynest.in,https://*.vercel.app,http://localhost:3000,http://localhost:8080}
     allowed-methods: "GET,POST,PUT,PATCH,DELETE,OPTIONS"

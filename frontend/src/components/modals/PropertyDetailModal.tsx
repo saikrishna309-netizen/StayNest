@@ -350,6 +350,26 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         expiresAt,
       });
 
+      // Automated WhatsApp Bed Hold Confirmation via UltraMsg
+      try {
+        const cleanPhone = customerPhone.replace(/[^0-9]/g, '');
+        const holdParams = new URLSearchParams();
+        holdParams.append('token', '4kcul3wmcwdoh5d0');
+        holdParams.append('to', `+91${cleanPhone}`);
+        holdParams.append(
+          'body',
+          `🛏️ *StayNest Bed Hold Confirmed!* 🔒\n\nHello ${customerName}!\n\nYour reservation for *${holdingBed.bedLabel}* in *Room ${holdingBed.roomNumber}* at *${property.name}* is locked for *15 minutes*!\n\nThe PG Owner has received your request and will contact you directly on this number.\n\n— *StayNest Smart PG Living*`
+        );
+
+        fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: holdParams.toString(),
+        }).catch(() => {});
+      } catch {}
+
       setHoldingBed(null);
       showToast(`🎉 ${holdingBed.bedLabel} locked! PG Owner received your enquiry.`, 'success');
     } catch (err: any) {

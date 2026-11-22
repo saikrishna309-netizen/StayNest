@@ -76,6 +76,65 @@ public class WhatsAppService {
         return new WhatsAppResult(false, "WhatsApp Gateway awaiting Instance ID & Token configuration");
     }
 
+    /**
+     * Sends welcome message after successful verification / registration.
+     */
+    public WhatsAppResult sendWelcomeMessage(String phone, String fullName) {
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        if (cleanPhone.length() == 10) {
+            cleanPhone = "91" + cleanPhone;
+        }
+
+        String displayName = (fullName != null && !fullName.trim().isEmpty()) ? fullName.trim() : "Resident";
+        String message = String.format(
+                "🎉 *Welcome to StayNest, %s!* 🏡\n\n" +
+                "Your account has been successfully verified!\n\n" +
+                "You can now:\n" +
+                "• Explore verified PGs with photos & transparent rent\n" +
+                "• Lock & hold any vacant bed for 15 minutes\n" +
+                "• Manage your monthly stays, rent receipts & dues\n\n" +
+                "— *Team StayNest*",
+                displayName
+        );
+
+        if (ultraMsgInstanceId != null && !ultraMsgInstanceId.trim().isEmpty()
+                && ultraMsgToken != null && !ultraMsgToken.trim().isEmpty()) {
+            return sendViaUltraMsg(cleanPhone, message);
+        }
+        return new WhatsAppResult(false, "No gateway configured");
+    }
+
+    /**
+     * Sends automated Bed Hold Confirmation on WhatsApp.
+     */
+    public WhatsAppResult sendBedHoldConfirmation(String phone, String customerName, String bedLabel, String roomNumber, String propertyName) {
+        String cleanPhone = phone.replaceAll("[^0-9]", "");
+        if (cleanPhone.length() == 10) {
+            cleanPhone = "91" + cleanPhone;
+        }
+
+        String message = String.format(
+                "🛏️ *Bed Hold Confirmed!* 🔒\n\n" +
+                "Hello %s,\n\n" +
+                "Your bed reservation has been locked for *15 minutes*:\n" +
+                "• *Property*: %s\n" +
+                "• *Room*: Room %s\n" +
+                "• *Bed*: %s\n\n" +
+                "The PG Owner has been notified and will contact you shortly to confirm your check-in.\n\n" +
+                "— *StayNest PG Living*",
+                customerName != null ? customerName : "Resident",
+                propertyName != null ? propertyName : "StayNest PG",
+                roomNumber != null ? roomNumber : "101",
+                bedLabel != null ? bedLabel : "Bed 1"
+        );
+
+        if (ultraMsgInstanceId != null && !ultraMsgInstanceId.trim().isEmpty()
+                && ultraMsgToken != null && !ultraMsgToken.trim().isEmpty()) {
+            return sendViaUltraMsg(cleanPhone, message);
+        }
+        return new WhatsAppResult(false, "No gateway configured");
+    }
+
     private WhatsAppResult sendViaUltraMsg(String phoneWithCountry, String message) {
         try {
             String url = String.format("https://api.ultramsg.com/%s/messages/chat", ultraMsgInstanceId.trim());

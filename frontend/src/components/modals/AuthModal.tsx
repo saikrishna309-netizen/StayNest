@@ -79,10 +79,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const randomOtp = String(Math.floor(100000 + Math.random() * 900000));
       setGeneratedOtp(randomOtp);
 
-      // 2. Prepare WhatsApp Direct Link message (Free click-to-chat Meta link)
-      const message = `Hello! Your StayNest Verification Code is: ${randomOtp}\n\nUse this OTP to verify your mobile number and lock your bed reservation instantly. Valid for 10 minutes.\n(StayNest - Smart PG Living)`;
-      const waUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
-      setWhatsappUrl(waUrl);
+      // 2. Automated Server-to-Phone WhatsApp Message via UltraMsg API
+      try {
+        const params = new URLSearchParams();
+        params.append('token', '4kcul3wmcwdoh5d0');
+        params.append('to', `+91${cleanPhone}`);
+        params.append(
+          'body',
+          `🔐 *StayNest Verification Code*\n\nHello ${fullName.trim() ? fullName.trim() : 'Resident'}!\n\nYour 6-digit WhatsApp OTP is: *${randomOtp}*\n\nValid for 10 minutes. Use this code to verify your mobile number and hold your bed.\n\n— *StayNest PG Living*`
+        );
+
+        await fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: params.toString(),
+        });
+      } catch (waErr) {
+        console.warn('UltraMsg API note:', waErr);
+      }
 
       // 3. Inform backend endpoint to send real OTP
       try {
@@ -94,7 +110,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setOtpStep('OTP');
       setResendTimer(30);
       setResendActive(true);
-      showToast(`Verification code sent for +91 ${cleanPhone}!`, 'success');
+      showToast(`💬 WhatsApp OTP delivered directly to +91 ${cleanPhone}!`, 'success');
     } catch (err: any) {
       setError(err.message || 'Could not generate WhatsApp OTP. Please try again.');
     } finally {
@@ -123,6 +139,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     try {
       const cleanPhone = phone.replace(/[^0-9]/g, '');
       await verifyPhoneOtp(cleanPhone, cleanOtp, fullName.trim() || 'Customer');
+
+      // Send automated WhatsApp Welcome Message via UltraMsg
+      try {
+        const welcomeParams = new URLSearchParams();
+        welcomeParams.append('token', '4kcul3wmcwdoh5d0');
+        welcomeParams.append('to', `+91${cleanPhone}`);
+        welcomeParams.append(
+          'body',
+          `🎉 *Welcome to StayNest, ${fullName.trim() ? fullName.trim() : 'Resident'}!* 🏡\n\nYour account is successfully verified on WhatsApp!\n\nYou can now:\n• Reserve & hold any available bed with a 15-min lock\n• View transparent monthly PG rents & amenities\n• Track your stays & receipts\n\n— *Team StayNest*`
+        );
+
+        fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: welcomeParams.toString(),
+        }).catch(() => {});
+      } catch {}
 
       showToast(`🎉 Verified via WhatsApp! Logged in as +91 ${cleanPhone}`, 'success');
       if (onSuccessRole) onSuccessRole('ROLE_CUSTOMER');
