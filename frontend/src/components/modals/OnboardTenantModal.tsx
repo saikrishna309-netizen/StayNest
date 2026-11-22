@@ -171,7 +171,7 @@ export const OnboardTenantModal: React.FC<OnboardTenantModalProps> = ({
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Rahul Sharma"
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-slate-700"
                 />
               </div>
               <div>
@@ -182,7 +182,7 @@ export const OnboardTenantModal: React.FC<OnboardTenantModalProps> = ({
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="e.g. 9876543210"
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500"
+                  className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-slate-400"
                 />
               </div>
               <div>
@@ -316,23 +316,31 @@ export const OnboardTenantModal: React.FC<OnboardTenantModalProps> = ({
 
                   <div>
                     <label className="block font-bold text-slate-700 mb-1">Monthly Rent (₹) *</label>
-                    <input
-                      type="number"
-                      required
-                      value={rentRupees}
-                      onChange={(e) => setRentRupees(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-slate-400 font-bold">₹</span>
+                      <input
+                        type="number"
+                        required
+                        value={rentRupees}
+                        onChange={(e) => setRentRupees(e.target.value)}
+                        placeholder="INR 8,500"
+                        className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-7 pr-3 font-semibold outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-slate-400"
+                      />
+                    </div>
                   </div>
 
                   <div className="sm:col-span-2">
                     <label className="block font-bold text-slate-700 mb-1">Security Deposit (₹)</label>
-                    <input
-                      type="number"
-                      value={depositRupees}
-                      onChange={(e) => setDepositRupees(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-lg p-2 font-semibold outline-none focus:ring-2 focus:ring-brand-500"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-2 text-slate-400 font-bold">₹</span>
+                      <input
+                        type="number"
+                        value={depositRupees}
+                        onChange={(e) => setDepositRupees(e.target.value)}
+                        placeholder="INR 2,500"
+                        className="w-full bg-white border border-slate-200 rounded-lg py-2 pl-7 pr-3 font-semibold outline-none focus:ring-2 focus:ring-brand-500 placeholder:text-slate-400"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

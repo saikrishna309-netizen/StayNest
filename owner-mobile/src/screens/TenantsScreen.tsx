@@ -812,6 +812,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
               value={fullName}
               onChangeText={setFullName}
               placeholder="e.g. Anand Kumar"
+              placeholderTextColor="#334155"
             />
 
             <View style={styles.row}>
@@ -822,7 +823,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
                   value={phone}
                   onChangeText={setPhone}
                   keyboardType="phone-pad"
-                  placeholder="9876543210"
+                  placeholder="e.g. 9876543210"
+                  placeholderTextColor="#94a3b8"
                 />
               </View>
 
@@ -887,13 +889,17 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
             </View>
 
             <Text style={styles.label}>RENT AMOUNT PAYING NOW (₹) *</Text>
-            <TextInput
-              style={styles.input}
-              value={rentPayingNow}
-              onChangeText={setRentPayingNow}
-              keyboardType="numeric"
-              placeholder={String(fixedRentAmount)}
-            />
+            <View style={styles.currencyInputRow}>
+              <Text style={styles.currencyInrLight}>₹</Text>
+              <TextInput
+                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                value={rentPayingNow}
+                onChangeText={setRentPayingNow}
+                keyboardType="numeric"
+                placeholder={`INR ${fixedRentAmount}`}
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
 
             {/* Dynamic Rent Due Indicator */}
             {(() => {
@@ -1903,6 +1909,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     marginBottom: 10,
+  },
+  currencyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    marginBottom: 10,
+  },
+  currencyInrLight: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginRight: 4,
   },
   row: {
     flexDirection: 'row',

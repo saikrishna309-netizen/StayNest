@@ -51,6 +51,7 @@ export interface Bed {
   bedLabel: string;
   active: boolean;
   status: BedStatus;
+  photo?: string;
 }
 
 export interface Room {

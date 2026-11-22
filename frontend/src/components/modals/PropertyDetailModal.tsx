@@ -218,6 +218,7 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                       id: b.id || `bed-${r.roomNumber}-${bIdx + 1}`,
                       bedLabel: b.bedLabel || `Bed ${bIdx + 1}`,
                       status: b.status || 'AVAILABLE',
+                      photo: b.photo,
                       active: true,
                     })),
                   });
@@ -630,9 +631,17 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                               }`}
                             >
                               <div className="flex items-center gap-2">
-                                <span className={isOccupied ? 'text-slate-400' : isHeld ? 'text-amber-500' : 'text-emerald-500'}>
-                                  🛏️
-                                </span>
+                                {(b as any).photo ? (
+                                  <img
+                                    src={(b as any).photo}
+                                    alt={b.bedLabel}
+                                    className="w-6 h-6 rounded-md object-cover border border-slate-200"
+                                  />
+                                ) : (
+                                  <span className={isOccupied ? 'text-slate-400' : isHeld ? 'text-amber-500' : 'text-emerald-500'}>
+                                    🛏️
+                                  </span>
+                                )}
                                 <span className="font-bold">{b.bedLabel}</span>
                               </div>
 

@@ -3040,7 +3040,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 value={onboardFullName}
                 onChangeText={setOnboardFullName}
                 placeholder="e.g. Ramesh Kumar"
-                placeholderTextColor="#94a3b8"
+                placeholderTextColor="#334155"
               />
 
               <Text style={styles.inputLabel}>Mobile Phone *</Text>
@@ -3122,14 +3122,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
 
               <Text style={styles.inputLabel}>Rent Amount Paying Now (₹) *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={onboardRentPayingNow}
-                onChangeText={setOnboardRentPayingNow}
-                keyboardType="numeric"
-                placeholder={`₹ Amount in INR (e.g. ${fixedRentAmount})`}
-                placeholderTextColor="#94a3b8"
-              />
+              <View style={styles.currencyInputRow}>
+                <Text style={styles.currencyInrLight}>₹</Text>
+                <TextInput
+                  style={[styles.textInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, marginBottom: 0, backgroundColor: 'transparent' }]}
+                  value={onboardRentPayingNow}
+                  onChangeText={setOnboardRentPayingNow}
+                  keyboardType="numeric"
+                  placeholder={`INR ${fixedRentAmount}`}
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
 
               {/* Dynamic Rent Due Indicator */}
               {(() => {
@@ -3164,14 +3167,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Security Deposit Paid (₹)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={onboardDepositPayingNow}
-                    onChangeText={setOnboardDepositPayingNow}
-                    keyboardType="numeric"
-                    placeholder={`₹ Amount in INR (e.g. ${fixedDepositAmount})`}
-                    placeholderTextColor="#94a3b8"
-                  />
+                  <View style={styles.currencyInputRow}>
+                    <Text style={styles.currencyInrLight}>₹</Text>
+                    <TextInput
+                      style={[styles.textInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, marginBottom: 0, backgroundColor: 'transparent' }]}
+                      value={onboardDepositPayingNow}
+                      onChangeText={setOnboardDepositPayingNow}
+                      keyboardType="numeric"
+                      placeholder={`INR ${fixedDepositAmount}`}
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
                 </View>
 
                 <View style={{ flex: 1 }}>
@@ -5704,6 +5710,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0f172a',
     marginBottom: 6,
+  },
+  currencyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+  },
+  currencyInrLight: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginRight: 4,
   },
   chip: {
     paddingVertical: 6,

@@ -13,6 +13,7 @@ export interface Bed {
   propertyId?: string;
   bedLabel: string;
   status: 'AVAILABLE' | 'OCCUPIED' | 'MAINTENANCE' | 'RESERVED';
+  photo?: string;
 }
 
 export interface Room {

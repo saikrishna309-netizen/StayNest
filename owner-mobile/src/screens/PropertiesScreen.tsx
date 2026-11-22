@@ -46,6 +46,7 @@ interface BedConfig {
   id: string;
   bedLabel: string;
   status: 'AVAILABLE' | 'OCCUPIED' | 'RESERVED' | 'MAINTENANCE';
+  photo?: string;
 }
 
 export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
@@ -115,9 +116,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const [assignTenantEmail, setAssignTenantEmail] = useState('');
   const [assignIdProofType, setAssignIdProofType] = useState<'AADHAAR' | 'PAN' | 'VOTER_ID'>('AADHAAR');
   const [assignIdProofNumber, setAssignIdProofNumber] = useState('');
-  const [assignRentAmount, setAssignRentAmount] = useState('8500');
-  const [assignRentPayingNow, setAssignRentPayingNow] = useState('8500');
-  const [assignDepositPayingNow, setAssignDepositPayingNow] = useState('2500');
+  const [assignRentAmount, setAssignRentAmount] = useState('');
+  const [assignRentPayingNow, setAssignRentPayingNow] = useState('');
+  const [assignDepositPayingNow, setAssignDepositPayingNow] = useState('');
   const [assignPayMode, setAssignPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [submittingAssign, setSubmittingAssign] = useState(false);
 
@@ -135,10 +136,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     setAssignTenantEmail('');
     setAssignIdProofType('AADHAAR');
     setAssignIdProofNumber('');
-    const rentStr = String(bedData.rentRupees || 8500);
-    setAssignRentAmount(rentStr);
-    setAssignRentPayingNow(rentStr);
-    setAssignDepositPayingNow('2500');
+    setAssignRentAmount('');
+    setAssignRentPayingNow('');
+    setAssignDepositPayingNow('');
     setAssignPayMode('UPI');
   };
 
@@ -297,6 +297,42 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         return nextFloors;
       });
     });
+  };
+
+  // Upload photo for specific bed (Requirement 1)
+  const handleUploadBedPhoto = async (floorNum: number, roomId: string, bedId: string) => {
+    try {
+      const picked = await pickImageFromDevice();
+      if (!picked) return;
+      setFloors((prev) => {
+        const nextFloors = prev.map((fl) => {
+          if (fl.floorNumber !== floorNum) return fl;
+          return {
+            ...fl,
+            rooms: fl.rooms.map((rm) => {
+              if (rm.id !== roomId) return rm;
+              return {
+                ...rm,
+                beds: rm.beds.map((b) => {
+                  if (b.id !== bedId) return b;
+                  return { ...b, photo: picked };
+                }),
+              };
+            }),
+          };
+        });
+        if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.dispatchEvent(new Event('storage'));
+          } catch {}
+        }
+        return nextFloors;
+      });
+      notifyUser('Bed Photo Uploaded! 📸', 'Photo for this bed has been saved and will show in the bed box.');
+    } catch (e) {
+      console.log('Error adding bed photo:', e);
+    }
   };
 
   // Delete Bed Handler
@@ -1848,7 +1884,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                         key={bed.id}
                                         style={[
                                           styles.bedBoxCard,
-                                          { backgroundColor: styleObj.bg, borderColor: styleObj.border },
+                                          bed.photo
+                                            ? styles.bedBoxWithPhoto
+                                            : { backgroundColor: styleObj.bg, borderColor: styleObj.border },
                                         ]}
                                         onPress={() =>
                                           setOccupiedBedAction({
@@ -1863,13 +1901,50 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                         }
                                         activeOpacity={0.8}
                                       >
-                                        <Text style={styles.bedIconEmoji}>🛏️</Text>
-                                        <Text style={[styles.bedBoxNumber, { color: styleObj.numColor }]}>
-                                          {bedNumStr}
-                                        </Text>
-                                        <Text style={[styles.bedBoxTenantName, { color: styleObj.textColor }]} numberOfLines={1}>
-                                          {tenantName}
-                                        </Text>
+                                        {bed.photo ? (
+                                          <>
+                                            <Image
+                                              source={{ uri: bed.photo }}
+                                              style={styles.bedBoxImageCover}
+                                              resizeMode="cover"
+                                            />
+                                            {/* Highlight Number Badge in Top Left */}
+                                            <View style={styles.bedNumberHighlightBadge}>
+                                              <Text style={styles.bedNumberHighlightText}>{bedNumStr}</Text>
+                                            </View>
+                                            {/* Camera Icon in Top Right */}
+                                            <TouchableOpacity
+                                              style={styles.bedPhotoCameraBtn}
+                                              onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                              activeOpacity={0.8}
+                                            >
+                                              <Text style={{ fontSize: 9 }}>📷</Text>
+                                            </TouchableOpacity>
+                                            {/* Highlighted Tenant Name Pill at Bottom */}
+                                            <View style={styles.bedTenantHighlightBar}>
+                                              <Text style={styles.bedTenantHighlightText} numberOfLines={1}>
+                                                {tenantName}
+                                              </Text>
+                                            </View>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <TouchableOpacity
+                                              style={styles.bedPhotoCornerIcon}
+                                              onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                              activeOpacity={0.8}
+                                            >
+                                              <Text style={{ fontSize: 8 }}>📷</Text>
+                                            </TouchableOpacity>
+                                            <Text style={styles.bedIconEmoji}>🛏️</Text>
+                                            <Text style={[styles.bedBoxNumber, { color: styleObj.numColor }]}>
+                                              {bedNumStr}
+                                            </Text>
+                                            <Text style={[styles.bedBoxTenantName, { color: styleObj.textColor }]} numberOfLines={1}>
+                                              {tenantName}
+                                            </Text>
+                                          </>
+                                        )}
                                       </TouchableOpacity>
                                     );
                                   } else {
@@ -1877,7 +1952,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                     return (
                                       <TouchableOpacity
                                         key={bed.id}
-                                        style={styles.bedBoxVacantCard}
+                                        style={[
+                                          styles.bedBoxVacantCard,
+                                          bed.photo && styles.bedBoxWithPhoto,
+                                        ]}
                                         onPress={() =>
                                           openAssignModalForBed({
                                             floorNum: floor.floorNumber,
@@ -1890,9 +1968,44 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                         }
                                         activeOpacity={0.8}
                                       >
-                                        <Text style={styles.bedIconEmojiGrey}>🛏️</Text>
-                                        <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
-                                        <Text style={styles.bedBoxAddText}>+ Add</Text>
+                                        {bed.photo ? (
+                                          <>
+                                            <Image
+                                              source={{ uri: bed.photo }}
+                                              style={styles.bedBoxImageCover}
+                                              resizeMode="cover"
+                                            />
+                                            {/* Highlight Number Badge in Top Left */}
+                                            <View style={[styles.bedNumberHighlightBadge, { backgroundColor: '#3b82f6' }]}>
+                                              <Text style={styles.bedNumberHighlightText}>{bedNumStr}</Text>
+                                            </View>
+                                            {/* Camera Icon in Top Right */}
+                                            <TouchableOpacity
+                                              style={styles.bedPhotoCameraBtn}
+                                              onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                              activeOpacity={0.8}
+                                            >
+                                              <Text style={{ fontSize: 9 }}>📷</Text>
+                                            </TouchableOpacity>
+                                            {/* Highlighted + Add Pill at Bottom */}
+                                            <View style={[styles.bedTenantHighlightBar, { backgroundColor: 'rgba(234, 88, 12, 0.9)' }]}>
+                                              <Text style={styles.bedTenantHighlightText}>+ Add</Text>
+                                            </View>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <TouchableOpacity
+                                              style={styles.bedPhotoCornerIcon}
+                                              onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                              activeOpacity={0.8}
+                                            >
+                                              <Text style={{ fontSize: 8 }}>📷</Text>
+                                            </TouchableOpacity>
+                                            <Text style={styles.bedIconEmojiGrey}>🛏️</Text>
+                                            <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
+                                            <Text style={styles.bedBoxAddText}>+ Add</Text>
+                                          </>
+                                        )}
                                       </TouchableOpacity>
                                     );
                                   }
@@ -2698,6 +2811,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 value={assignTenantName}
                 onChangeText={setAssignTenantName}
                 placeholder="e.g. Harsha Vardhan"
+                placeholderTextColor="#334155"
               />
 
               <Text style={styles.modalInputLabel}>Phone Number *</Text>
@@ -2706,7 +2820,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 value={assignTenantPhone}
                 onChangeText={setAssignTenantPhone}
                 keyboardType="phone-pad"
-                placeholder="9876543210"
+                placeholder="e.g. 9876543210"
+                placeholderTextColor="#94a3b8"
               />
 
               <Text style={styles.modalInputLabel}>Email Address (Optional)</Text>
@@ -2717,6 +2832,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 keyboardType="email-address"
                 autoCapitalize="none"
                 placeholder="resident@gmail.com"
+                placeholderTextColor="#94a3b8"
               />
 
               {/* ID Proof Selection */}
@@ -2749,13 +2865,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 value={assignIdProofNumber}
                 onChangeText={setAssignIdProofNumber}
                 placeholder="e.g. 5432-8765-1098"
+                placeholderTextColor="#94a3b8"
               />
 
               {/* Fixed Monthly Rent & Security Deposit Banner */}
               <View style={styles.assignRentBanner}>
                 <View style={styles.assignRentBannerCol}>
                   <Text style={styles.assignRentBannerLabel}>MONTHLY RENT</Text>
-                  <Text style={styles.assignRentBannerVal}>₹{Number(assignRentAmount || 8500).toLocaleString('en-IN')}</Text>
+                  <Text style={styles.assignRentBannerVal}>₹{Number(assignRentAmount || assigningBed?.rentRupees || 8500).toLocaleString('en-IN')}</Text>
                 </View>
                 <View style={[styles.assignRentBannerCol, { borderLeftWidth: 1, borderLeftColor: '#f1f5f9' }]}>
                   <Text style={styles.assignRentBannerLabel}>SECURITY DEPOSIT</Text>
@@ -2766,34 +2883,46 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalInputLabel}>Monthly Rent (₹)</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={assignRentAmount}
-                    onChangeText={setAssignRentAmount}
-                    keyboardType="numeric"
-                    placeholder="8500"
-                  />
+                  <View style={styles.currencyInputRow}>
+                    <Text style={styles.currencyPrefixLight}>₹</Text>
+                    <TextInput
+                      style={[styles.modalTextInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                      value={assignRentAmount}
+                      onChangeText={setAssignRentAmount}
+                      keyboardType="numeric"
+                      placeholder={`INR ${assigningBed?.rentRupees || 8500}`}
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalInputLabel}>Deposit (₹)</Text>
-                  <TextInput
-                    style={styles.modalTextInput}
-                    value={assignDepositPayingNow}
-                    onChangeText={setAssignDepositPayingNow}
-                    keyboardType="numeric"
-                    placeholder="2500"
-                  />
+                  <View style={styles.currencyInputRow}>
+                    <Text style={styles.currencyPrefixLight}>₹</Text>
+                    <TextInput
+                      style={[styles.modalTextInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                      value={assignDepositPayingNow}
+                      onChangeText={setAssignDepositPayingNow}
+                      keyboardType="numeric"
+                      placeholder="INR 2,500"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
                 </View>
               </View>
 
               <Text style={styles.modalInputLabel}>Rent Amount Paying Now (₹) *</Text>
-              <TextInput
-                style={styles.modalTextInput}
-                value={assignRentPayingNow}
-                onChangeText={setAssignRentPayingNow}
-                keyboardType="numeric"
-                placeholder={assignRentAmount || '8500'}
-              />
+              <View style={styles.currencyInputRow}>
+                <Text style={styles.currencyPrefixLight}>₹</Text>
+                <TextInput
+                  style={[styles.modalTextInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                  value={assignRentPayingNow}
+                  onChangeText={setAssignRentPayingNow}
+                  keyboardType="numeric"
+                  placeholder={`INR ${assignRentAmount || assigningBed?.rentRupees || 8500}`}
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
 
               {/* Dynamic Rent Due Indicator */}
               {(() => {
@@ -2931,6 +3060,22 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 }}
               >
                 <Text style={styles.occupiedCheckoutBtnText}>🚪 Check Out (Make Bed Available)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.occupiedPhotoBtn}
+                onPress={async () => {
+                  if (occupiedBedAction) {
+                    await handleUploadBedPhoto(
+                      occupiedBedAction.floorNum,
+                      occupiedBedAction.roomId,
+                      occupiedBedAction.bed.id
+                    );
+                    setOccupiedBedAction(null);
+                  }
+                }}
+              >
+                <Text style={styles.occupiedPhotoBtnText}>📷 Upload / Change Bed Photo</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -4512,6 +4657,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: '#ff7337',
+  },
+  bedBoxWithPhoto: {
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#0f172a',
+    borderColor: '#fed7aa',
+  },
+  bedBoxImageCover: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+  },
+  bedNumberHighlightBadge: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    zIndex: 2,
+  },
+  bedNumberHighlightText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  bedPhotoCameraBtn: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+    zIndex: 2,
+  },
+  bedPhotoCornerIcon: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    padding: 3,
+    opacity: 0.6,
+  },
+  bedTenantHighlightBar: {
+    position: 'absolute',
+    bottom: 5,
+    left: 5,
+    right: 5,
+    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    borderRadius: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.25)',
+    zIndex: 2,
+  },
+  bedTenantHighlightText: {
+    color: '#ffffff',
+    fontSize: 10.5,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  occupiedPhotoBtn: {
+    backgroundColor: '#eff6ff',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  occupiedPhotoBtnText: {
+    color: '#2563eb',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  currencyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+  },
+  currencyPrefixLight: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginRight: 4,
   },
   deleteBedRedBadge: {
     position: 'absolute',
