@@ -19,12 +19,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const { showToast } = useToast();
 
   const [mode, setMode] = useState<'login' | 'register'>(initialMode);
-  // Default shows username as lite color and password as well (Requirement 3)
+  // Default shows username as lite color and password as well
   const [email, setEmail] = useState('customer@staynest.in');
   const [password, setPassword] = useState('Password@123');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState<'ROLE_CUSTOMER' | 'ROLE_OWNER'>('ROLE_CUSTOMER');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,27 +40,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleDemoFill = (type: 'customer' | 'owner' | 'admin') => {
-    if (type === 'customer') {
-      setEmail('customer@staynest.in');
-      setPassword('Password@123');
-      setRole('ROLE_CUSTOMER');
-    } else if (type === 'owner') {
-      setEmail('saikrishnakrishna1997@gmail.com');
-      setPassword('Password@123');
-      setRole('ROLE_OWNER');
-    } else if (type === 'admin') {
-      setEmail('admin@staynest.in');
-      setPassword('Password@123');
-    }
-  };
-
   const handleSwitchMode = (newMode: 'login' | 'register') => {
     setMode(newMode);
     setError(null);
     if (newMode === 'login') {
-      if (!email || email === '') setEmail('customer@staynest.in');
-      if (!password || password === '') setPassword('Password@123');
+      if (!email) setEmail('customer@staynest.in');
+      if (!password) setPassword('Password@123');
     } else {
       setEmail('');
       setPassword('');
@@ -79,19 +63,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (mode === 'login') {
         await login({ username: email.trim(), password });
         showToast('Signed in successfully!');
+        if (onSuccessRole) onSuccessRole('ROLE_CUSTOMER');
       } else {
         await register({
           fullName: fullName.trim(),
           phone: phone.trim(),
           email: email.trim(),
           password,
-          role,
+          role: 'ROLE_CUSTOMER',
         });
         showToast('Account registered successfully!');
+        if (onSuccessRole) onSuccessRole('ROLE_CUSTOMER');
       }
 
       onClose();
-      if (onSuccessRole) onSuccessRole(role);
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please check your credentials.');
     } finally {
@@ -109,29 +94,31 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <i className="fa-solid fa-xmark text-sm"></i>
         </button>
 
-        {/* Modal Header */}
+        {/* Modal Header with Mobile App StayNest Logo */}
         <div className="text-center mb-5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white flex items-center justify-center text-xl mx-auto mb-3 shadow-lg shadow-brand-500/30">
-            <i className={mode === 'login' ? 'fa-solid fa-right-to-bracket' : 'fa-solid fa-user-plus'}></i>
-          </div>
+          <img
+            src="/logo.png"
+            alt="StayNest"
+            className="h-10 w-auto mx-auto mb-3 object-contain"
+          />
           <h3 className="text-xl font-extrabold text-slate-900 tracking-tight">
-            {mode === 'login' ? 'Welcome to StayNest' : 'Create Customer Account'}
+            {mode === 'login' ? 'Sign In to StayNest' : 'Create Account'}
           </h3>
           <p className="text-xs text-slate-500 mt-1">
             {mode === 'login'
-              ? 'Sign in to hold beds, reserve rooms & manage stays'
-              : 'Register as a verified customer or hostel guest'}
+              ? 'Enter your credentials to hold beds and manage stays'
+              : 'Sign up to reserve rooms and lock your bed'}
           </p>
         </div>
 
-        {/* Mode Switcher Tabs */}
-        <div className="flex bg-slate-100 p-1.5 rounded-xl mb-4 text-xs font-bold">
+        {/* Mode Switcher Tabs (Sign In / Register) */}
+        <div className="flex bg-slate-100 p-1.5 rounded-xl mb-5 text-xs font-bold">
           <button
             type="button"
             onClick={() => handleSwitchMode('login')}
             className={`flex-1 py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${
               mode === 'login'
-                ? 'bg-white text-brand-600 shadow-sm font-extrabold'
+                ? 'bg-white text-[#6c5ce7] shadow-sm font-extrabold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
@@ -142,49 +129,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             onClick={() => handleSwitchMode('register')}
             className={`flex-1 py-2 rounded-lg transition flex items-center justify-center gap-1.5 ${
               mode === 'register'
-                ? 'bg-white text-brand-600 shadow-sm font-extrabold'
+                ? 'bg-white text-[#6c5ce7] shadow-sm font-extrabold'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <i className="fa-solid fa-user-plus text-xs"></i> Register
           </button>
         </div>
-
-        {/* 1-Click Quick Demo Sign In Pills */}
-        {mode === 'login' && (
-          <div className="bg-indigo-50/60 p-3 rounded-2xl border border-indigo-100 mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] font-extrabold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
-                <i className="fa-solid fa-bolt text-amber-500"></i> 1-Click Instant Login:
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium">Auto-fills boxes</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleDemoFill('customer')}
-                className={`text-xs font-bold py-2 px-3 rounded-xl border transition flex items-center justify-center gap-1.5 shadow-sm ${
-                  email === 'customer@staynest.in'
-                    ? 'bg-brand-600 text-white border-brand-600'
-                    : 'bg-white border-slate-200 text-slate-700 hover:border-brand-500'
-                }`}
-              >
-                <i className="fa-solid fa-user"></i> Customer Demo
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDemoFill('owner')}
-                className={`text-xs font-bold py-2 px-3 rounded-xl border transition flex items-center justify-center gap-1.5 shadow-sm ${
-                  email === 'saikrishnakrishna1997@gmail.com'
-                    ? 'bg-brand-600 text-white border-brand-600'
-                    : 'bg-white border-slate-200 text-slate-700 hover:border-brand-500'
-                }`}
-              >
-                <i className="fa-solid fa-building"></i> Owner Demo
-              </button>
-            </div>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {mode === 'register' && (
@@ -198,8 +149,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
-                  placeholder="e.g. Ramesh Kumar"
+                  className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#6c5ce7] focus:ring-2 focus:ring-[#6c5ce7]/20 outline-none transition"
+                  placeholder="e.g. Karthik Reddy"
                 />
               </div>
 
@@ -212,36 +163,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
-                  placeholder="e.g. 9888811111"
+                  className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#6c5ce7] focus:ring-2 focus:ring-[#6c5ce7]/20 outline-none transition"
+                  placeholder="e.g. 9876543210"
                 />
-              </div>
-
-              <div>
-                <label className="block font-bold text-slate-600 uppercase tracking-wider text-[10px] mb-1.5">
-                  Account Role *
-                </label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as any)}
-                  className="w-full bg-slate-50/80 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none transition"
-                >
-                  <option value="ROLE_CUSTOMER">Tenant / Customer (Search & Hold Bed)</option>
-                  <option value="ROLE_OWNER">PG Owner (Manage Hostel)</option>
-                </select>
               </div>
             </>
           )}
 
-          {/* USERNAME BOX (LITE COLOR) - Requirement 3 */}
+          {/* USERNAME / EMAIL BOX (LITE COLOR) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px]">
                 Username / Email *
               </label>
-              {mode === 'login' && (
-                <span className="text-[10px] font-semibold text-brand-600">Lite Box Preview</span>
-              )}
             </div>
             <div className="relative">
               <input
@@ -249,8 +183,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-slate-50/90 border border-slate-200/90 rounded-xl py-3 px-3.5 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none shadow-sm transition"
-                placeholder="customer@staynest.in"
+                className="w-full bg-slate-50/90 border border-slate-200/90 rounded-xl py-3 px-3.5 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#6c5ce7] focus:ring-2 focus:ring-[#6c5ce7]/20 outline-none shadow-sm transition"
+                placeholder="Username or email"
               />
               <span className="absolute right-3.5 top-3.5 text-slate-400 text-xs">
                 <i className="fa-regular fa-envelope"></i>
@@ -258,7 +192,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
           </div>
 
-          {/* PASSWORD BOX (LITE COLOR) - Requirement 3 */}
+          {/* PASSWORD BOX (LITE COLOR) */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block font-bold text-slate-700 uppercase tracking-wider text-[10px]">
@@ -272,7 +206,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-slate-50/90 border border-slate-200/90 rounded-xl py-3 px-3.5 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 outline-none shadow-sm transition"
+                className="w-full bg-slate-50/90 border border-slate-200/90 rounded-xl py-3 px-3.5 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-[#6c5ce7] focus:ring-2 focus:ring-[#6c5ce7]/20 outline-none shadow-sm transition"
                 placeholder="••••••••"
               />
               <span className="absolute right-3.5 top-3.5 text-slate-400 text-xs">
@@ -291,10 +225,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white font-extrabold py-3.5 rounded-xl shadow-lg shadow-brand-500/30 transition flex items-center justify-center gap-2 text-sm mt-2"
+            className="w-full bg-[#6c5ce7] hover:bg-[#5e4ee3] disabled:opacity-50 text-white font-extrabold py-3.5 rounded-xl shadow-lg shadow-[#6c5ce7]/30 transition flex items-center justify-center gap-2 text-sm mt-2"
           >
             {loading && <i className="fa-solid fa-spinner fa-spin"></i>}
-            <span>{mode === 'login' ? 'Sign In & Continue' : 'Create Account'}</span>
+            <span>{mode === 'login' ? 'Sign In' : 'Create Account'}</span>
           </button>
         </form>
 
@@ -302,10 +236,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <button
             type="button"
             onClick={() => handleSwitchMode(mode === 'login' ? 'register' : 'login')}
-            className="text-xs font-bold text-brand-600 hover:underline"
+            className="text-xs font-bold text-[#6c5ce7] hover:underline"
           >
             {mode === 'login'
-              ? "New to StayNest? Register as Customer"
+              ? "Don't have an account? Register here"
               : 'Already have an account? Sign in'}
           </button>
         </div>

@@ -230,24 +230,24 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
 
   return (
     <div className="flex-grow">
-      {/* ─── HERO SEARCH & FILTERS BANNER (Requirement 4) ─── */}
-      <div className="bg-gradient-to-b from-brand-950 via-indigo-900 to-slate-900 text-white pt-12 pb-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:20px_20px]"></div>
+      {/* ─── HERO SEARCH & FILTERS BANNER (Mobile App Theme: Lavender #6c5ce7) ─── */}
+      <div className="bg-gradient-to-b from-[#6c5ce7] via-[#5e4ee3] to-[#7c3aed] text-white pt-12 pb-24 px-4 sm:px-6 lg:px-8 relative overflow-hidden rounded-b-[40px] shadow-lg">
+        <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:20px_20px]"></div>
 
         <div className="max-w-5xl mx-auto text-center relative z-10">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-200 border border-brand-400/30 mb-4 backdrop-blur-sm">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full text-xs font-bold bg-white/20 text-white border border-white/30 mb-4 backdrop-blur-md shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
             Verified PG Accommodations • Free 15-Min Bed Hold
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3">
+          <h1 className="text-3xl sm:text-5xl font-black tracking-tight mb-3 text-white">
             Find Your Ideal PG. <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-brand-200 to-emerald-300">
+            <span className="text-[#fed7aa]">
               Hold Your Bed in Seconds.
             </span>
           </h1>
 
-          <p className="text-xs sm:text-sm text-indigo-200/90 max-w-2xl mx-auto mb-8 font-normal">
+          <p className="text-xs sm:text-sm text-purple-100/90 max-w-2xl mx-auto mb-8 font-medium">
             Transparent room inventories across Hyderabad, Bengaluru, Pune, and Delhi NCR. Browse real photos, check live bed availability, and lock your spot with zero advance fees.
           </p>
 
@@ -458,7 +458,7 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
                       </span>
                       <button
                         onClick={() => onSelectProperty(p.id)}
-                        className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-extrabold text-xs shadow-md shadow-brand-500/25 transition flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl bg-[#6c5ce7] hover:bg-[#5e4ee3] text-white font-extrabold text-xs shadow-md shadow-[#6c5ce7]/25 transition flex items-center gap-1.5"
                       >
                         <i className="fa-solid fa-bed text-xs"></i>
                         <span>View Rooms & Hold</span>

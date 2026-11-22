@@ -30,7 +30,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-800">
+    <div className="min-h-screen flex flex-col bg-[#f8fafc] text-slate-800">
       {/* Top Navbar */}
       <Navbar
         activeTab={activeTab as any}
