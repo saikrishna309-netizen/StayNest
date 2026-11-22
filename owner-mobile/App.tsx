@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
@@ -10,6 +11,47 @@ import { TenantsScreen } from './src/screens/TenantsScreen';
 import { ManagementScreen } from './src/screens/ManagementScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { Property } from './src/types';
+
+// ─── TRENDY MODERN SVG ICONS (MATCHING SCREENSHOT) ───
+const NavHomeIcon = ({ color }: { color: string }) => (
+  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 01-1.5 1.5h-4A1.5 1.5 0 0114 20v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4a1.5 1.5 0 01-1.5 1.5h-4A1.5 1.5 0 013 20v-9.5z"
+      fill={color}
+    />
+  </Svg>
+);
+
+const NavGridIcon = ({ color }: { color: string }) => (
+  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    <Rect x="3" y="3" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
+    <Rect x="13.5" y="3" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
+    <Rect x="3" y="13.5" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
+    <Rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
+  </Svg>
+);
+
+const NavPlusIcon = ({ color }: { color: string }) => (
+  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth="2.8" strokeLinecap="round" />
+  </Svg>
+);
+
+const NavChartIcon = ({ color }: { color: string }) => (
+  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    <Rect x="3" y="3" width="18" height="18" rx="5" stroke={color} strokeWidth="2.2" />
+    <Path d="M7 16l3-3 2.5 2 4.5-5" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M14 10h3v3" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    <Path d="M7 17v-1M11 17v-3M15 17v-5" stroke={color} strokeWidth="2" strokeLinecap="round" />
+  </Svg>
+);
+
+const NavUserIcon = ({ color }: { color: string }) => (
+  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    <Circle cx="12" cy="7.5" r="4.5" stroke={color} strokeWidth="2.2" />
+    <Path d="M4.5 19.5c0-4 3.5-6.5 7.5-6.5s7.5 2.5 7.5 6.5" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+  </Svg>
+);
 
 const MainNavigator: React.FC = () => {
   const { isAuthenticated, user } = useAuth();
@@ -145,87 +187,54 @@ const MainNavigator: React.FC = () => {
             />
           )}
 
-          {/* Bottom Navigation Bar (5 Standalone Tabs with Vibrant Orange Active Highlight) */}
-          <View style={styles.bottomNav}>
-            <TouchableOpacity
-              style={[styles.navItem, currentTab === 'dashboard' && styles.navItemActive]}
-              onPress={() => setCurrentTab('dashboard')}
-            >
-              <Text style={[styles.navIcon, currentTab === 'dashboard' && styles.navIconActive]}>📊</Text>
-              <Text
-                style={[
-                  styles.navLabel,
-                  currentTab === 'dashboard' && styles.navLabelActive,
-                ]}
+          {/* ─── FLOATING TRENDY BOTTOM NAVIGATION BAR (MATCHING SCREENSHOT) ─── */}
+          <View style={styles.floatingBarOuter}>
+            <View style={styles.floatingPillBar}>
+              {/* Tab 1: Dashboard / Home */}
+              <TouchableOpacity
+                style={[styles.floatingTabCircle, currentTab === 'dashboard' && styles.floatingTabCircleActive]}
+                onPress={() => setCurrentTab('dashboard')}
+                activeOpacity={0.8}
               >
-                Dashboard
-              </Text>
-              {currentTab === 'dashboard' && <View style={styles.activeIndicatorDot} />}
-            </TouchableOpacity>
+                <NavHomeIcon color={currentTab === 'dashboard' ? '#ffffff' : '#9a3412'} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.navItem, currentTab === 'properties' && styles.navItemActive]}
-              onPress={() => setCurrentTab('properties')}
-            >
-              <Text style={[styles.navIcon, currentTab === 'properties' && styles.navIconActive]}>🏢</Text>
-              <Text
-                style={[
-                  styles.navLabel,
-                  currentTab === 'properties' && styles.navLabelActive,
-                ]}
+              {/* Tab 2: Properties / Grid */}
+              <TouchableOpacity
+                style={[styles.floatingTabCircle, currentTab === 'properties' && styles.floatingTabCircleActive]}
+                onPress={() => setCurrentTab('properties')}
+                activeOpacity={0.8}
               >
-                Properties
-              </Text>
-              {currentTab === 'properties' && <View style={styles.activeIndicatorDot} />}
-            </TouchableOpacity>
+                <NavGridIcon color={currentTab === 'properties' ? '#ffffff' : '#9a3412'} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.navItem, currentTab === 'tenants' && styles.navItemActive]}
-              onPress={() => setCurrentTab('tenants')}
-            >
-              <Text style={[styles.navIcon, currentTab === 'tenants' && styles.navIconActive]}>👥</Text>
-              <Text
-                style={[
-                  styles.navLabel,
-                  currentTab === 'tenants' && styles.navLabelActive,
-                ]}
+              {/* Tab 3: Quick Add / Tenants (+) */}
+              <TouchableOpacity
+                style={[styles.floatingTabCircle, currentTab === 'tenants' && styles.floatingTabCircleActive]}
+                onPress={() => setCurrentTab('tenants')}
+                activeOpacity={0.8}
               >
-                Tenants
-              </Text>
-              {currentTab === 'tenants' && <View style={styles.activeIndicatorDot} />}
-            </TouchableOpacity>
+                <NavPlusIcon color={currentTab === 'tenants' ? '#ffffff' : '#9a3412'} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.navItem, currentTab === 'management' && styles.navItemActive]}
-              onPress={() => setCurrentTab('management')}
-            >
-              <Text style={[styles.navIcon, currentTab === 'management' && styles.navIconActive]}>📋</Text>
-              <Text
-                style={[
-                  styles.navLabel,
-                  currentTab === 'management' && styles.navLabelActive,
-                ]}
+              {/* Tab 4: Analytics / Reports */}
+              <TouchableOpacity
+                style={[styles.floatingTabCircle, currentTab === 'management' && styles.floatingTabCircleActive]}
+                onPress={() => setCurrentTab('management')}
+                activeOpacity={0.8}
               >
-                Management
-              </Text>
-              {currentTab === 'management' && <View style={styles.activeIndicatorDot} />}
-            </TouchableOpacity>
+                <NavChartIcon color={currentTab === 'management' ? '#ffffff' : '#9a3412'} />
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.navItem, currentTab === 'profile' && styles.navItemActive]}
-              onPress={() => setCurrentTab('profile')}
-            >
-              <Text style={[styles.navIcon, currentTab === 'profile' && styles.navIconActive]}>👤</Text>
-              <Text
-                style={[
-                  styles.navLabel,
-                  currentTab === 'profile' && styles.navLabelActive,
-                ]}
+              {/* Tab 5: User Profile */}
+              <TouchableOpacity
+                style={[styles.floatingTabCircle, currentTab === 'profile' && styles.floatingTabCircleActive]}
+                onPress={() => setCurrentTab('profile')}
+                activeOpacity={0.8}
               >
-                Profile
-              </Text>
-              {currentTab === 'profile' && <View style={styles.activeIndicatorDot} />}
-            </TouchableOpacity>
+                <NavUserIcon color={currentTab === 'profile' ? '#ffffff' : '#9a3412'} />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -314,6 +323,46 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 15,
+  },
+  // ─── Floating Trendy Bottom Bar (Light Orange Pill + White Icon on Active Circle) ───
+  floatingBarOuter: {
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
+    paddingTop: 6,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+  },
+  floatingPillBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff7ed', // Sleek Light Orange / Warm Cream
+    borderRadius: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    width: '100%',
+    maxWidth: 420,
+    borderWidth: 1.5,
+    borderColor: '#fed7aa', // Light Orange Accent Border
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.12,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  floatingTabCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  floatingTabCircleActive: {
+    backgroundColor: '#f97316', // Vibrant Orange fill when selected
+    shadowColor: '#f97316',
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
   },
   bottomNav: {
     flexDirection: 'row',
