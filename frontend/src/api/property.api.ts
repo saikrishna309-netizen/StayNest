@@ -25,6 +25,7 @@ export interface CreatePropertyPayload {
   startingPricePaise: number;
   foodIncluded: boolean;
   description: string;
+  rules?: string;
   amenities: string[];
 }
 

@@ -114,3 +114,23 @@ export interface Expense {
   paidTo?: string;
   propertyId?: string;
 }
+
+export interface ResidentEnquiry {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail?: string;
+  propertyId: string;
+  propertyName: string;
+  roomId: string;
+  roomNumber: string;
+  bedId: string;
+  bedLabel: string;
+  monthlyRentPaise: number;
+  depositPaise: number;
+  checkInDate: string;
+  status: 'PENDING_HOLD' | 'CONFIRMED' | 'REJECTED' | 'EXPIRED';
+  holdExpiresAt: string;
+  notes?: string;
+  createdAt: string;
+}
