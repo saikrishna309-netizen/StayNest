@@ -84,24 +84,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const waUrl = `https://api.whatsapp.com/send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
       setWhatsappUrl(waUrl);
 
-      // 3. Inform backend endpoint if reachable
+      // 3. Inform backend endpoint to send real OTP
       try {
         await sendPhoneOtp(cleanPhone);
       } catch {
         // local offline fallback works seamlessly
       }
 
-      // 4. Open WhatsApp in new tab for customer to receive and inspect the OTP directly
-      if (typeof window !== 'undefined' && window.open) {
-        try {
-          window.open(waUrl, '_blank');
-        } catch { }
-      }
-
       setOtpStep('OTP');
       setResendTimer(30);
       setResendActive(true);
-      showToast(`💬 WhatsApp OTP sent to +91 ${cleanPhone}!`, 'success');
+      showToast(`Verification code sent for +91 ${cleanPhone}!`, 'success');
     } catch (err: any) {
       setError(err.message || 'Could not generate WhatsApp OTP. Please try again.');
     } finally {
