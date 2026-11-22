@@ -25,6 +25,18 @@ export const authApi = {
   logout: () => 
     apiClient<{ message: string }>('/auth/logout', { method: 'POST' }),
 
+  sendOtp: (phone: string, role = 'ROLE_CUSTOMER') =>
+    apiClient<{ message: string; otp?: string; demoOtp?: string }>('/auth/otp/send', {
+      method: 'POST',
+      body: JSON.stringify({ phone, role }),
+    }),
+
+  verifyOtp: (phone: string, otp: string) =>
+    apiClient<AuthResponse>('/auth/otp/verify', {
+      method: 'POST',
+      body: JSON.stringify({ phone, otp }),
+    }),
+
   getCurrentUser: () => 
     apiClient<User>('/users/me'),
 };

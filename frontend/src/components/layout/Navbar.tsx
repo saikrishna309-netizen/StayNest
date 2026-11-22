@@ -81,15 +81,16 @@ export const Navbar: React.FC<NavbarProps> = ({ activeTab, setActiveTab, openAut
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => openAuthModal('login')}
-                className="text-xs font-extrabold px-3.5 py-2 text-slate-700 hover:text-[#6c5ce7] hover:bg-slate-100 rounded-xl transition"
+                className="text-xs font-extrabold px-3 py-2 text-slate-700 hover:text-[#6c5ce7] hover:bg-slate-100 rounded-xl transition"
               >
                 Sign In
               </button>
               <button
                 onClick={() => openAuthModal('register')}
-                className="text-xs font-extrabold px-4 py-2 rounded-xl bg-[#6c5ce7] hover:bg-[#5e4ee3] text-white shadow-sm shadow-[#6c5ce7]/30 transition flex items-center gap-1.5"
+                className="text-xs font-extrabold px-3.5 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white shadow-sm shadow-emerald-500/25 transition flex items-center gap-1.5"
               >
-                <i className="fa-solid fa-user-plus text-xs"></i> Register
+                <i className="fa-brands fa-whatsapp text-sm"></i>
+                <span>WhatsApp Login</span>
               </button>
             </div>
           ) : (

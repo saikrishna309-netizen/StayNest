@@ -473,27 +473,29 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
           {/* Floor & Bed Inventory (Requirement 1 & 4) */}
           <div className="border-t border-slate-200 pt-5">
-            {/* Unauthenticated Quick Banner (Requirement 3: When click hold bed show signin/register) */}
+            {/* Unauthenticated Quick Banner (WhatsApp OTP Login) */}
             {!isAuthenticated && (
-              <div className="mb-4 p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+              <div className="mb-4 p-3 bg-gradient-to-r from-emerald-50 to-purple-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center text-purple-700 flex-shrink-0">
-                    <i className="fa-solid fa-user-lock text-sm"></i>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
+                    <i className="fa-brands fa-whatsapp text-base"></i>
                   </div>
                   <div>
-                    <p className="text-xs font-black text-slate-800">
-                      Sign In or Register to Hold Beds
+                    <p className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                      <span>Instant WhatsApp Login to Hold Beds</span>
+                      <span className="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 uppercase tracking-wider">Free</span>
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      Reserve any available bed instantly with a 15-minute lock.
+                      Enter your mobile number to get a WhatsApp OTP & lock your bed instantly.
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={onOpenAuth}
-                  className="px-4 py-2 rounded-xl bg-[#6c5ce7] hover:bg-[#5e4ee3] text-white text-xs font-black shadow-md shadow-[#6c5ce7]/25 transition self-start sm:self-auto"
+                  className="px-4 py-2 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white text-xs font-black shadow-md shadow-emerald-500/25 transition flex items-center gap-1.5 self-start sm:self-auto active:scale-95"
                 >
-                  Sign In / Register
+                  <i className="fa-brands fa-whatsapp text-sm"></i>
+                  <span>WhatsApp Login</span>
                 </button>
               </div>
             )}
