@@ -581,6 +581,44 @@ public class TenantFinanceService {
         return ExpenseResponse.from(exp);
     }
 
+    @Transactional
+    public ExpenseResponse updateExpense(UUID ownerId, UUID expenseId, CreateExpenseRequest request) {
+        ExpenseRecord exp = expenseRecordRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("ExpenseRecord", expenseId));
+        if (!exp.getOwnerId().equals(ownerId)) {
+            throw new ForbiddenException("You do not own this expense record");
+        }
+        if (request.getTitle() != null && !request.getTitle().isBlank()) {
+            exp.setNotes(request.getTitle().trim());
+        } else if (request.getNotes() != null) {
+            exp.setNotes(request.getNotes().trim());
+        }
+        if (request.getAmountPaise() != null) {
+            exp.setAmountPaise(request.getAmountPaise());
+        }
+        if (request.getCategory() != null && !request.getCategory().isBlank()) {
+            exp.setCategory(request.getCategory().toUpperCase());
+        }
+        if (request.getTransactionDate() != null) {
+            exp.setTransactionDate(request.getTransactionDate());
+        }
+        if (request.getAttachmentKey() != null) {
+            exp.setAttachmentKey(request.getAttachmentKey());
+        }
+        exp = expenseRecordRepository.save(exp);
+        return ExpenseResponse.from(exp);
+    }
+
+    @Transactional
+    public void deleteExpense(UUID ownerId, UUID expenseId) {
+        ExpenseRecord exp = expenseRecordRepository.findById(expenseId)
+                .orElseThrow(() -> new ResourceNotFoundException("ExpenseRecord", expenseId));
+        if (!exp.getOwnerId().equals(ownerId)) {
+            throw new ForbiddenException("You do not own this expense record");
+        }
+        expenseRecordRepository.delete(exp);
+    }
+
     @Transactional(readOnly = true)
     public PageResponse<ExpenseResponse> listExpenses(UUID ownerId, Pageable pageable) {
         Page<ExpenseRecord> page = expenseRecordRepository.findByOwnerId(ownerId, pageable);

@@ -198,6 +198,24 @@ public class OwnerTenantFinanceController {
         return ResponseEntity.ok(tenantFinanceService.listExpenses(user.getId(), pageable));
     }
 
+    @PutMapping("/expenses/{id}")
+    @Operation(summary = "Update recorded expense entry")
+    public ResponseEntity<ExpenseResponse> updateExpense(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id,
+            @Valid @RequestBody CreateExpenseRequest request) {
+        return ResponseEntity.ok(tenantFinanceService.updateExpense(user.getId(), id, request));
+    }
+
+    @DeleteMapping("/expenses/{id}")
+    @Operation(summary = "Delete recorded expense entry")
+    public ResponseEntity<Void> deleteExpense(
+            @AuthenticationPrincipal UserPrincipal user,
+            @PathVariable UUID id) {
+        tenantFinanceService.deleteExpense(user.getId(), id);
+        return ResponseEntity.noContent().build();
+    }
+
     // --- Reports ---
 
     @GetMapping("/reports/monthly")
