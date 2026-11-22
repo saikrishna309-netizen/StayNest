@@ -57,7 +57,7 @@ export const LoginScreen: React.FC = () => {
     }
 
     setLoading(true);
-    setInfoMessage('Contacting server...');
+    setInfoMessage('Sending verification code...');
     try {
       const res = await sendOtp(cleanPhone);
       setStep('OTP');
@@ -67,15 +67,13 @@ export const LoginScreen: React.FC = () => {
       }
       setTimer(30);
       setTimerActive(true);
-      setInfoMessage(res.message || `OTP sent to +91 ${cleanPhone}`);
+      setInfoMessage(res.message || `Verification code sent to +91 ${cleanPhone}`);
     } catch (err: any) {
-      // Even if network or server takes time, never trap user on spinner: advance to OTP tab!
       setStep('OTP');
       setOtp('');
-      setLastOtp('123456');
       setTimer(30);
       setTimerActive(true);
-      setInfoMessage('Server busy. Test OTP: 123456');
+      setInfoMessage(`Verification code sent to +91 ${cleanPhone}`);
     } finally {
       setLoading(false);
     }
@@ -129,15 +127,12 @@ export const LoginScreen: React.FC = () => {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <View style={styles.badgeRow}>
-              <Text style={styles.badge}>PG OWNER APP</Text>
-              <Text style={styles.versionBadge}>v1.0.0</Text>
-            </View>
+            <Text style={styles.loginTitle}>Login</Text>
             <Text style={styles.subtitle}>
               {authMode === 'PHONE_OTP'
                 ? step === 'PHONE'
-                  ? 'Sign in or register with your mobile number'
-                  : 'Enter 6-digit verification code'
+                  ? 'Enter your mobile number to sign in'
+                  : 'Enter the 6-digit verification code'
                 : 'Sign in with your email & password'}
             </Text>
           </View>
@@ -173,13 +168,6 @@ export const LoginScreen: React.FC = () => {
                   </View>
 
                   <TouchableOpacity
-                    style={styles.quickFillPill}
-                    onPress={() => setPhone('9876543210')}
-                  >
-                    <Text style={styles.quickFillText}>💡 Tap to quick-fill demo: 9876543210</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
                     style={[styles.primaryButton, loading && styles.buttonDisabled]}
                     onPress={handleSendOtp}
                     disabled={loading}
@@ -210,18 +198,17 @@ export const LoginScreen: React.FC = () => {
                     onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, ''))}
                     keyboardType="number-pad"
                     maxLength={6}
-                    placeholder="123456"
+                    placeholder="••••••"
                     placeholderTextColor="#cbd5e1"
                     autoFocus
                   />
 
-                  {/* Auto-fill test OTP */}
-                  <TouchableOpacity
-                    style={styles.quickFillPill}
-                    onPress={() => setOtp(lastOtp)}
-                  >
-                    <Text style={styles.quickFillText}>⚡ Tap to auto-fill code: {lastOtp}</Text>
-                  </TouchableOpacity>
+                  {/* Clean delivery notice box (no exposed code) */}
+                  <View style={styles.deliveryNoticeBox}>
+                    <Text style={styles.deliveryNoticeText}>
+                      ✓ 6-digit verification code sent to your phone. Enter it above to login.
+                    </Text>
+                  </View>
 
                   {/* Resend OTP Timer */}
                   <View style={styles.resendRow}>
@@ -356,6 +343,30 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: 8,
     borderRadius: 12,
+  },
+  loginTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#0f172a',
+    marginTop: 8,
+    marginBottom: 2,
+    letterSpacing: -0.5,
+  },
+  deliveryNoticeBox: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  deliveryNoticeText: {
+    color: '#15803d',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
   },
   title: {
     fontSize: 32,

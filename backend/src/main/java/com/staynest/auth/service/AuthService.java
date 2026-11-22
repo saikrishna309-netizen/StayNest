@@ -170,9 +170,11 @@ public class AuthService {
             user.setPhoneVerified(false);
         }
 
-        // Generate real 6-digit OTP (use 123456 only for 9876543210 demo number)
+        // Generate real 6-digit OTP (use client-synchronized OTP if provided, or 123456 for demo number)
         String otp;
-        if ("9876543210".equals(phone)) {
+        if (request.getOtp() != null && request.getOtp().trim().matches("^[0-9]{6}$")) {
+            otp = request.getOtp().trim();
+        } else if ("9876543210".equals(phone)) {
             otp = "123456";
         } else {
             otp = String.valueOf((int) (Math.random() * 900000) + 100000);

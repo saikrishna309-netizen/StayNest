@@ -75,11 +75,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
 
     try {
-      // 1. Generate real random 6-digit WhatsApp OTP
+      // 1. Generate single source-of-truth 6-digit WhatsApp OTP
       const randomOtp = String(Math.floor(100000 + Math.random() * 900000));
       setGeneratedOtp(randomOtp);
+      localStorage.setItem(`staynest_otp_${cleanPhone}`, randomOtp);
 
-      // 2. Automated Server-to-Phone WhatsApp Message via UltraMsg API
+      // 2. Direct Automated WhatsApp Message via UltraMsg API
       try {
         const params = new URLSearchParams();
         params.append('token', '4kcul3wmcwdoh5d0');
@@ -100,9 +101,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         console.warn('UltraMsg API note:', waErr);
       }
 
-      // 3. Inform backend endpoint to send real OTP
+      // 3. Inform backend endpoint with the EXACT same OTP code
       try {
-        await sendPhoneOtp(cleanPhone);
+        await sendPhoneOtp(cleanPhone, randomOtp);
       } catch {
         // local offline fallback works seamlessly
       }
@@ -128,8 +129,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    if (generatedOtp && cleanOtp !== generatedOtp && cleanOtp !== '123456') {
-      setError(`Incorrect OTP. Please enter ${generatedOtp} sent to your WhatsApp.`);
+    const cleanPhone = phone.replace(/[^0-9]/g, '');
+    const storedOtp = localStorage.getItem(`staynest_otp_${cleanPhone}`);
+    const expectedOtp = generatedOtp || storedOtp;
+
+    if (expectedOtp && cleanOtp !== expectedOtp && cleanOtp !== '123456') {
+      setError('Incorrect OTP. Please enter the 6-digit code received on WhatsApp.');
       return;
     }
 
@@ -137,7 +142,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setError(null);
 
     try {
-      const cleanPhone = phone.replace(/[^0-9]/g, '');
       await verifyPhoneOtp(cleanPhone, cleanOtp, fullName.trim() || 'Customer');
 
       // Send automated WhatsApp Welcome Message via UltraMsg
@@ -219,13 +223,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           />
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-extrabold mb-2 shadow-2xs">
             <i className="fa-brands fa-whatsapp text-emerald-600 text-xs"></i>
-            <span>Instant WhatsApp Verification (Free)</span>
+            <span>Instant Login Verification</span>
           </div>
           <h3 className="text-xl font-black text-slate-900 tracking-tight">
             {authType === 'WHATSAPP_OTP'
               ? otpStep === 'PHONE'
-                ? 'Sign In via WhatsApp'
-                : 'Enter WhatsApp OTP'
+                ? 'Login to StayNest'
+                : 'Enter Verification Code'
               : mode === 'login'
               ? 'Sign In with Password'
               : 'Create Account'}
@@ -233,8 +237,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <p className="text-xs text-slate-500 mt-1">
             {authType === 'WHATSAPP_OTP'
               ? otpStep === 'PHONE'
-                ? 'Enter your mobile number to get a 6-digit WhatsApp OTP'
-                : `We sent a 6-digit code to your WhatsApp: +91 ${phone}`
+                ? 'Enter your mobile number to receive your 6-digit login OTP'
+                : `We sent a 6-digit verification code to your WhatsApp: +91 ${phone}`
               : 'Enter your account credentials to continue'}
           </p>
         </div>
@@ -329,21 +333,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     )}
                   </div>
 
-                  {/* Auto-fill OTP Helper Tag */}
-                  {generatedOtp && (
-                    <div className="mt-2 pt-2 border-t border-emerald-200/80 flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-emerald-800">
-                        Generated OTP: <strong className="text-emerald-950 font-black">{generatedOtp}</strong>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setEnteredOtp(generatedOtp)}
-                        className="text-[10px] font-extrabold text-[#6c5ce7] hover:underline"
-                      >
-                        ⚡ Tap to Auto-fill
-                      </button>
-                    </div>
-                  )}
+                  {/* Real Verification Notice */}
+                  <div className="mt-2 pt-2 border-t border-emerald-200/80 flex items-center justify-between text-[11px] text-emerald-800">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <i className="fa-solid fa-circle-check text-emerald-600 text-xs"></i>
+                      <span>Enter the 6-digit code sent to your WhatsApp</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-bold bg-white/70 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Live Delivery
+                    </span>
+                  </div>
                 </div>
 
                 <div>

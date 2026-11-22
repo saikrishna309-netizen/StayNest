@@ -11,12 +11,20 @@ public class SendOtpRequest {
 
     private String role; // Optional: ROLE_OWNER (default) or ROLE_CUSTOMER
 
+    private String otp; // Optional: client-synchronized OTP code
+
     public SendOtpRequest() {
     }
 
     public SendOtpRequest(String phone, String role) {
         this.phone = phone;
         this.role = role;
+    }
+
+    public SendOtpRequest(String phone, String role, String otp) {
+        this.phone = phone;
+        this.role = role;
+        this.otp = otp;
     }
 
     public String getPhone() {
@@ -33,5 +41,13 @@ public class SendOtpRequest {
 
     public void setRole(String role) {
         this.role = role;
+    }
+
+    public String getOtp() {
+        return otp;
+    }
+
+    public void setOtp(String otp) {
+        this.otp = otp;
     }
 }
