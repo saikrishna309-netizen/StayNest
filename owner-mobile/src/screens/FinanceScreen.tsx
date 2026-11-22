@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { RentInvoice, Expense, Property } from '../types';
@@ -18,10 +19,22 @@ interface FinanceScreenProps {
 
 export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
   const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadFinanceData();
+    } catch {
+      // ignore
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   // Log Expense Form
   const [showExpenseForm, setShowExpenseForm] = useState(false);
@@ -135,7 +148,17 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#ea580c', '#3b82f6']}
+            tintColor="#ea580c"
+          />
+        }
+      >
         {/* Quick Add Standard Expenses */}
         <View style={styles.quickExpensesCard}>
           <Text style={styles.quickExpensesTitle}>⚡ QUICK ADD DAILY EXPENSE</Text>

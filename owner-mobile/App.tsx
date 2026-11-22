@@ -31,9 +31,14 @@ const NavGridIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
-const NavPlusIcon = ({ color }: { color: string }) => (
-  <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth="2.8" strokeLinecap="round" />
+const NavTenantsIcon = ({ color }: { color: string }) => (
+  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+    {/* Primary / Left Person */}
+    <Circle cx="9" cy="8" r="3.8" stroke={color} strokeWidth="2.2" />
+    <Path d="M3 19.5c0-3.5 2.7-5.5 6-5.5s6 2 6 5.5" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+    {/* Secondary / Right Person (Behind) */}
+    <Path d="M15.5 5.2a3.8 3.8 0 010 5.6" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
+    <Path d="M17.5 14.5c2.2.5 3.5 2 3.5 5" stroke={color} strokeWidth="2.2" strokeLinecap="round" />
   </Svg>
 );
 
@@ -208,13 +213,13 @@ const MainNavigator: React.FC = () => {
                 <NavGridIcon color={currentTab === 'properties' ? '#ffffff' : '#9a3412'} />
               </TouchableOpacity>
 
-              {/* Tab 3: Quick Add / Tenants (+) */}
+              {/* Tab 3: Tenants (Multiple People Logo) */}
               <TouchableOpacity
                 style={[styles.floatingTabCircle, currentTab === 'tenants' && styles.floatingTabCircleActive]}
                 onPress={() => setCurrentTab('tenants')}
                 activeOpacity={0.8}
               >
-                <NavPlusIcon color={currentTab === 'tenants' ? '#ffffff' : '#9a3412'} />
+                <NavTenantsIcon color={currentTab === 'tenants' ? '#ffffff' : '#9a3412'} />
               </TouchableOpacity>
 
               {/* Tab 4: Analytics / Reports */}

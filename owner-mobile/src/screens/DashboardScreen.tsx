@@ -17,6 +17,7 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Property, Tenant, RentInvoice, Expense, Room, Bed, ResidentEnquiry } from '../types';
+import { GooglePayLogo, PhonePeLogo, PaytmLogo, BhimUpiLogo, CardPaymentLogo } from '../components/PaymentLogos';
 
 interface DashboardScreenProps {
   onSelectPropertyForRooms: (property: Property) => void;
@@ -115,27 +116,41 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setSubscriptionActive(true);
       setShowSubscriptionModal(false);
 
-      // Automated WhatsApp Confirmation via UltraMsg to Owner
+      // Deep link directly to selected internal payment application
+      const upiId = 'staynest.subscription@okaxis';
+      const payeeName = encodeURIComponent('StayNest Technologies');
+      const note = encodeURIComponent(`StayNest AutoPay ${planName}`);
+      let targetUrl = `upi://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+
+      if (autoPayMethod === 'PHONEPE') {
+        targetUrl = `phonepe://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+      } else if (autoPayMethod === 'GPAY') {
+        targetUrl = `gpay://upi/pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+      } else if (autoPayMethod === 'PAYTM') {
+        targetUrl = `paytmmp://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+      }
+
       try {
-        const cleanPhone = (user?.phone || '9515614331').replace(/[^0-9]/g, '');
-        const params = new URLSearchParams();
-        params.append('token', '4kcul3wmcwdoh5d0');
-        params.append('to', `+91${cleanPhone}`);
-        params.append(
-          'body',
-          `🎉 *StayNest Subscription Activated!* 👑\n\nHello PG Owner!\nYour 30-Day Free Trial of the *${planName}* is active with Auto-Pay.\n• Charged Today: *₹0*\n• Next Billing Date: 22 Dec 2026\n• Included: Unlimited WhatsApp Reminders, 1-Click Calls & Full Financial Analytics.\n\nThank you for choosing StayNest!`
-        );
+        const canOpen = await Linking.canOpenURL(targetUrl);
+        if (canOpen) {
+          await Linking.openURL(targetUrl);
+        } else {
+          const genericUpi = `upi://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+          const canUpi = await Linking.canOpenURL(genericUpi);
+          if (canUpi) {
+            await Linking.openURL(genericUpi);
+          } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.href = genericUpi;
+          }
+        }
+      } catch (e) {
+        console.log('Direct payment app launch error:', e);
+      }
 
-        fetch('https://api.ultramsg.com/instance197383/messages/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-        }).catch(() => {});
-      } catch {}
-
+      const appLabel = autoPayMethod === 'PHONEPE' ? 'PhonePe' : autoPayMethod === 'GPAY' ? 'Google Pay' : autoPayMethod === 'PAYTM' ? 'Paytm' : 'Payment App';
       Alert.alert(
-        'Subscription Activated! 🎉',
-        `₹0 Auto-Pay setup successfully for ${planName}!\n\nYou now have unlimited automated WhatsApp reminders, calls, and full platform facilities.`
+        'Redirecting to ' + appLabel + ' 💳',
+        `Opening ${appLabel} to authorize ₹0 Auto-Pay for ${planName}!\n\nYour StayNest Unlimited Plan will activate instantly upon authorization.`
       );
     } finally {
       setSubscribing(false);
@@ -248,9 +263,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  // Bed Hold Enquiries & Notifications State (Requirement 1)
+  // Bed Hold Enquiries & Notifications State (Requirement 1 & Requirement 5)
   const [enquiries, setEnquiries] = useState<ResidentEnquiry[]>([]);
-  const [showEnquiriesModal, setShowEnquiriesModal] = useState(false);
+  const [showNotificationsPage, setShowNotificationsPage] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await Promise.all([
+        loadData(),
+        Promise.resolve(loadEnquiries()),
+      ]);
+    } catch (err) {
+      console.log('Refresh error:', err);
+    } finally {
+      setTimeout(() => {
+        setIsRefreshing(false);
+      }, 600);
+    }
+  };
 
   // Load enquiries from backend & localStorage
   const loadEnquiries = () => {
@@ -1080,11 +1112,250 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const activePropertyName = properties.find((p) => p.id === selectedPropId)?.name || properties[0]?.name || 'Sanika Hostel';
 
+  // ─── DEDICATED NOTIFICATIONS & ACTIVITIES FULL PAGE (REQUIREMENT 5) ───
+  if (showNotificationsPage) {
+    return (
+      <View style={styles.notifPageContainer}>
+        {/* Top Header with Prominent Exit / Back Button (Requirement 5) */}
+        <View style={styles.notifPageHeader}>
+          <TouchableOpacity
+            style={styles.notifExitBtn}
+            onPress={() => setShowNotificationsPage(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.notifExitIcon}>←</Text>
+            <Text style={styles.notifExitBtnText}>Exit to Dashboard</Text>
+          </TouchableOpacity>
+
+          <View style={styles.notifHeaderMainRow}>
+            <View>
+              <Text style={styles.notifPageTitle}>Notifications & Activity</Text>
+              <Text style={styles.notifPageSub}>
+                Website Bed Holds, Rent Reminders & Resident Updates
+              </Text>
+            </View>
+            {pendingEnquiriesCount > 0 && (
+              <View style={styles.notifBadgePill}>
+                <Text style={styles.notifBadgeText}>{pendingEnquiriesCount} New</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 110 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              colors={['#ea580c', '#3b82f6']}
+              tintColor="#ea580c"
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Section 1: Website Bed Hold Requests */}
+          <Text style={styles.notifSectionHeader}>🛏️ WEBSITE BED HOLD REQUESTS</Text>
+          {enquiries.length === 0 ? (
+            <View style={styles.notifEmptyCard}>
+              <Text style={{ fontSize: 28, marginBottom: 6 }}>📭</Text>
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#1e293b' }}>No Pending Enquiries</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
+                When visitors book or hold a bed on the website, their details appear here instantly.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 12, marginBottom: 20 }}>
+              {enquiries.map((enq) => {
+                const isPending = enq.status === 'PENDING_HOLD';
+                const rent = (enq.monthlyRentPaise / 100).toLocaleString('en-IN');
+                const dep = (enq.depositPaise / 100).toLocaleString('en-IN');
+
+                return (
+                  <View key={enq.id} style={styles.enquiryCardBox}>
+                    <View style={styles.enquiryCardTopRow}>
+                      <View>
+                        <Text style={styles.enquiryCustName}>{enq.customerName}</Text>
+                        <Text style={styles.enquiryCustPhone}>📱 +91 {enq.customerPhone}</Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.enquiryStatusTag,
+                          isPending
+                            ? { backgroundColor: '#fef3c7', borderColor: '#fde68a' }
+                            : enq.status === 'CONFIRMED'
+                            ? { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }
+                            : { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' },
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.enquiryStatusTagText,
+                            isPending
+                              ? { color: '#b45309' }
+                              : enq.status === 'CONFIRMED'
+                              ? { color: '#16a34a' }
+                              : { color: '#64748b' },
+                          ]}
+                        >
+                          {isPending ? '⏳ Bed Hold' : enq.status === 'CONFIRMED' ? '✓ Allocated' : 'Declined'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.enquiryInfoRow}>
+                      <Text style={styles.enquiryInfoLabel}>Property:</Text>
+                      <Text style={styles.enquiryInfoVal}>{enq.propertyName}</Text>
+                    </View>
+                    <View style={styles.enquiryInfoRow}>
+                      <Text style={styles.enquiryInfoLabel}>Allocated Bed:</Text>
+                      <Text style={[styles.enquiryInfoVal, { color: '#4f46e5', fontWeight: '800' }]}>
+                        Room {enq.roomNumber} • {enq.bedLabel}
+                      </Text>
+                    </View>
+                    <View style={styles.enquiryInfoRow}>
+                      <Text style={styles.enquiryInfoLabel}>Check-in Date:</Text>
+                      <Text style={styles.enquiryInfoVal}>{enq.checkInDate}</Text>
+                    </View>
+                    <View style={styles.enquiryInfoRow}>
+                      <Text style={styles.enquiryInfoLabel}>Rent / Deposit:</Text>
+                      <Text style={styles.enquiryInfoVal}>₹{rent}/mo (Dep: ₹{dep})</Text>
+                    </View>
+
+                    {enq.notes ? (
+                      <View style={styles.enquiryNotesBox}>
+                        <Text style={styles.enquiryNotesText}>💬 {enq.notes}</Text>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.enquiryActionRow}>
+                      <TouchableOpacity
+                        style={styles.enquiryCallBtn}
+                        onPress={() => handleCallCustomer(enq.customerPhone)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.enquiryCallBtnText}>📞 Call</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.enquiryWaBtn}
+                        onPress={() => handleWhatsAppCustomer(enq)}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.enquiryWaBtnText}>💬 WhatsApp</Text>
+                      </TouchableOpacity>
+
+                      {isPending && (
+                        <>
+                          <TouchableOpacity
+                            style={styles.enquiryAcceptBtn}
+                            onPress={() => handleAcceptEnquiry(enq)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.enquiryAcceptBtnText}>✓ Allocate</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={styles.enquiryDeclineBtn}
+                            onPress={() => handleRejectEnquiry(enq.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={styles.enquiryDeclineBtnText}>✕</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Section 2: Rent Due Alerts */}
+          {dueTenants.length > 0 && (
+            <>
+              <Text style={styles.notifSectionHeader}>💰 RENT DUE NOTICES ({dueTenants.length})</Text>
+              <View style={{ gap: 10, marginBottom: 20 }}>
+                {dueTenants.map((t) => {
+                  const bal = (t.outstandingPaise ? t.outstandingPaise / 100 : (t.monthlyRentPaise ? t.monthlyRentPaise / 100 : 8500));
+                  return (
+                    <View key={t.id} style={styles.notifDueCard}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View>
+                          <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }}>{t.fullName}</Text>
+                          <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                            Room {t.roomNumber || '101'} • {t.bedLabel || 'Bed 1'}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#dc2626' }}>₹{bal.toLocaleString('en-IN')}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#b91c1c', backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 2 }}>
+                            RENT DUE
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                        <TouchableOpacity
+                          style={styles.notifWaPayBtn}
+                          onPress={() => handleSendWhatsAppWithPaymentLink(t)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.notifWaPayBtnText}>💬 Send WhatsApp Pay Link</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.notifCollectBtn}
+                          onPress={() => {
+                            setShowNotificationsPage(false);
+                            setSelectedTenantForGateway(t);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.notifCollectBtnText}>💳 Pay / Collect</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {/* Section 3: Platform & Subscription Status */}
+          <Text style={styles.notifSectionHeader}>👑 SUBSCRIPTION STATUS</Text>
+          <View style={styles.notifSubCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={styles.notifSubIconBox}>
+                <Text style={{ fontSize: 20 }}>👑</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>
+                  {subscriptionActive ? 'StayNest Pro (Active)' : 'Free Trial Active'}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>
+                  {subscriptionActive ? 'Unlimited WhatsApp rent reminders & auto-pay active.' : 'Free tier up to 10 tenants. Setup Auto-Pay to unlock unlimited.'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.mainScrollContent}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={loadData} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#ea580c', '#3b82f6']}
+            tintColor="#ea580c"
+          />
+        }
         showsVerticalScrollIndicator={false}
       >
         {/* ─── 1. LAVENDER/PURPLE CURVED HERO HEADER (SCREENSHOT STYLE) ─── */}
@@ -1118,7 +1389,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <View style={styles.heroRightActions}>
               <TouchableOpacity
                 style={styles.heroBellBtn}
-                onPress={() => setShowEnquiriesModal(true)}
+                onPress={() => setShowNotificationsPage(true)}
               >
                 <Text style={{ fontSize: 18 }}>🔔</Text>
                 {pendingEnquiriesCount > 0 ? (
@@ -1343,7 +1614,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         {pendingEnquiriesCount > 0 && (
           <TouchableOpacity
             style={styles.enquiryAlertBanner}
-            onPress={() => setShowEnquiriesModal(true)}
+            onPress={() => setShowNotificationsPage(true)}
             activeOpacity={0.85}
           >
             <View style={styles.enquiryAlertIconCircle}>
@@ -1460,7 +1731,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           {/* 7. Enquiry */}
           <TouchableOpacity
             style={styles.quickGridBox}
-            onPress={() => setShowEnquiriesModal(true)}
+            onPress={() => setShowNotificationsPage(true)}
             activeOpacity={0.75}
           >
             <View style={styles.quickIconCircle}>
@@ -2181,18 +2452,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
               </View>
 
-              {/* Select Payment App with Official Logos */}
+              {/* Select Payment App with Official SVG Logos */}
               <Text style={[styles.fieldLabel, { marginTop: 12, marginBottom: 8 }]}>
                 SELECT PAYMENT APP / METHOD
               </Text>
 
               <View style={styles.gatewayAppsGrid}>
                 {[
-                  { id: 'GPAY', name: 'Google Pay', icon: '🟢', sub: 'Instant 0% UPI' },
-                  { id: 'PHONEPE', name: 'PhonePe', icon: '🟣', sub: 'Instant 0% UPI' },
-                  { id: 'PAYTM', name: 'Paytm UPI', icon: '🔵', sub: 'Instant 0% UPI' },
-                  { id: 'BHIM', name: 'BHIM UPI', icon: '🇮🇳', sub: 'Direct Bank Pay' },
-                  { id: 'CARD', name: 'Debit/Credit Card', icon: '💳', sub: 'Visa, Master, RuPay' },
+                  { id: 'GPAY', name: 'Google Pay', logo: <GooglePayLogo size={24} />, sub: 'Instant 0% UPI' },
+                  { id: 'PHONEPE', name: 'PhonePe', logo: <PhonePeLogo size={24} />, sub: 'Instant 0% UPI' },
+                  { id: 'PAYTM', name: 'Paytm UPI', logo: <PaytmLogo size={24} />, sub: 'Instant 0% UPI' },
+                  { id: 'BHIM', name: 'BHIM UPI', logo: <BhimUpiLogo size={24} />, sub: 'Direct Bank Pay' },
+                  { id: 'CARD', name: 'Debit/Credit Card', logo: <CardPaymentLogo size={24} />, sub: 'Visa, Master, RuPay' },
                 ].map((app) => (
                   <TouchableOpacity
                     key={app.id}
@@ -2204,7 +2475,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     activeOpacity={0.8}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <Text style={{ fontSize: 22 }}>{app.icon}</Text>
+                      <View style={{ width: 28, alignItems: 'center' }}>{app.logo}</View>
                       <View>
                         <Text style={styles.gatewayAppName}>{app.name}</Text>
                         <Text style={styles.gatewayAppSub}>{app.sub}</Text>
@@ -2467,174 +2738,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </Modal>
 
-      {/* ─── MODAL 3: WEBSITE RESIDENT ENQUIRIES & BED HOLDS (Requirement 1) ─── */}
-      <Modal
-        visible={showEnquiriesModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowEnquiriesModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '88%', paddingBottom: 16 }]}>
-            {/* Modal Header */}
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.modalTitle}>Website Enquiries & Holds</Text>
-                  {pendingEnquiriesCount > 0 && (
-                    <View style={styles.enquiryModalCountBadge}>
-                      <Text style={styles.enquiryModalCountText}>{pendingEnquiriesCount} New</Text>
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.modalSub}>
-                  Real-time bed hold requests from customer portal
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setShowEnquiriesModal(false)}
-                style={styles.modalCloseIcon}
-              >
-                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 480 }}>
-              {enquiries.length === 0 ? (
-                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
-                  <Text style={{ fontSize: 32, marginBottom: 8 }}>📭</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#1e293b' }}>
-                    No Enquiries Right Now
-                  </Text>
-                  <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4, paddingHorizontal: 20 }}>
-                    When visitors hold a bed on the website, their reservation details and phone number will show up here instantly.
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 12 }}>
-                  {enquiries.map((enq) => {
-                    const isPending = enq.status === 'PENDING_HOLD';
-                    const rent = (enq.monthlyRentPaise / 100).toLocaleString('en-IN');
-                    const dep = (enq.depositPaise / 100).toLocaleString('en-IN');
-
-                    return (
-                      <View key={enq.id} style={styles.enquiryCardBox}>
-                        {/* Top Row: Customer Name & Status */}
-                        <View style={styles.enquiryCardTopRow}>
-                          <View>
-                            <Text style={styles.enquiryCustName}>{enq.customerName}</Text>
-                            <Text style={styles.enquiryCustPhone}>📱 +91 {enq.customerPhone}</Text>
-                          </View>
-
-                          <View
-                            style={[
-                              styles.enquiryStatusTag,
-                              isPending
-                                ? { backgroundColor: '#fef3c7', borderColor: '#fde68a' }
-                                : enq.status === 'CONFIRMED'
-                                ? { backgroundColor: '#dcfce7', borderColor: '#bbf7d0' }
-                                : { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.enquiryStatusTagText,
-                                isPending
-                                  ? { color: '#b45309' }
-                                  : enq.status === 'CONFIRMED'
-                                  ? { color: '#16a34a' }
-                                  : { color: '#64748b' },
-                              ]}
-                            >
-                              {isPending ? '⏳ Bed Hold' : enq.status === 'CONFIRMED' ? '✓ Allocated' : 'Declined'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Room & Property Info */}
-                        <View style={styles.enquiryInfoRow}>
-                          <Text style={styles.enquiryInfoLabel}>Property:</Text>
-                          <Text style={styles.enquiryInfoVal}>{enq.propertyName}</Text>
-                        </View>
-
-                        <View style={styles.enquiryInfoRow}>
-                          <Text style={styles.enquiryInfoLabel}>Allocated Bed:</Text>
-                          <Text style={[styles.enquiryInfoVal, { color: '#4f46e5', fontWeight: '800' }]}>
-                            Room {enq.roomNumber} • {enq.bedLabel}
-                          </Text>
-                        </View>
-
-                        <View style={styles.enquiryInfoRow}>
-                          <Text style={styles.enquiryInfoLabel}>Check-in Date:</Text>
-                          <Text style={styles.enquiryInfoVal}>{enq.checkInDate}</Text>
-                        </View>
-
-                        <View style={styles.enquiryInfoRow}>
-                          <Text style={styles.enquiryInfoLabel}>Rent / Deposit:</Text>
-                          <Text style={styles.enquiryInfoVal}>₹{rent}/mo (Dep: ₹{dep})</Text>
-                        </View>
-
-                        {enq.notes ? (
-                          <View style={styles.enquiryNotesBox}>
-                            <Text style={styles.enquiryNotesText}>💬 {enq.notes}</Text>
-                          </View>
-                        ) : null}
-
-                        {/* Action Buttons: Call, WhatsApp, Accept, Reject */}
-                        <View style={styles.enquiryActionRow}>
-                          <TouchableOpacity
-                            style={styles.enquiryCallBtn}
-                            onPress={() => handleCallCustomer(enq.customerPhone)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.enquiryCallBtnText}>📞 Call</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            style={styles.enquiryWaBtn}
-                            onPress={() => handleWhatsAppCustomer(enq)}
-                            activeOpacity={0.8}
-                          >
-                            <Text style={styles.enquiryWaBtnText}>💬 WhatsApp</Text>
-                          </TouchableOpacity>
-
-                          {isPending && (
-                            <>
-                              <TouchableOpacity
-                                style={styles.enquiryAcceptBtn}
-                                onPress={() => handleAcceptEnquiry(enq)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.enquiryAcceptBtnText}>✓ Allocate</Text>
-                              </TouchableOpacity>
-
-                              <TouchableOpacity
-                                style={styles.enquiryDeclineBtn}
-                                onPress={() => handleRejectEnquiry(enq.id)}
-                                activeOpacity={0.8}
-                              >
-                                <Text style={styles.enquiryDeclineBtnText}>✕</Text>
-                              </TouchableOpacity>
-                            </>
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              )}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.enquiryModalCloseBtn}
-              onPress={() => setShowEnquiriesModal(false)}
-            >
-              <Text style={styles.enquiryModalCloseBtnText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       {/* ─── MODAL 4: MONTH & YEAR SELECTOR DROPDOWN (Requirements 6 & 7) ─── */}
       <Modal
         visible={showMonthPicker}
@@ -2777,14 +2880,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
               </View>
 
-              {/* Select Auto-Pay Payment Method */}
+              {/* Select Auto-Pay Payment Method with Actual Official Logos */}
               <Text style={[styles.label, { marginTop: 12 }]}>SELECT AUTO-PAY METHOD</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                 {[
-                  { id: 'GPAY', label: 'Google Pay', icon: '🟢' },
-                  { id: 'PHONEPE', label: 'PhonePe UPI', icon: '🟣' },
-                  { id: 'PAYTM', label: 'Paytm UPI', icon: '🔵' },
-                  { id: 'CARD', label: 'Debit / Credit Card', icon: '💳' },
+                  { id: 'GPAY', label: 'Google Pay', logo: <GooglePayLogo size={20} /> },
+                  { id: 'PHONEPE', label: 'PhonePe UPI', logo: <PhonePeLogo size={20} /> },
+                  { id: 'PAYTM', label: 'Paytm UPI', logo: <PaytmLogo size={20} /> },
+                  { id: 'CARD', label: 'Debit / Credit Card', logo: <CardPaymentLogo size={20} /> },
                 ].map((m) => (
                   <TouchableOpacity
                     key={m.id}
@@ -2793,8 +2896,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                       autoPayMethod === m.id && styles.payMethodPillSelected,
                     ]}
                     onPress={() => setAutoPayMethod(m.id as any)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={{ fontSize: 13 }}>{m.icon}</Text>
+                    <View style={{ marginRight: 2 }}>{m.logo}</View>
                     <Text
                       style={[
                         styles.payMethodPillText,
@@ -2930,129 +3034,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   );
                 })
               )}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ─── MODAL 7: SECURE PAYMENT GATEWAY (DIRECT TO OWNER ACCOUNT - REQUIREMENTS 4, 5, 6) ─── */}
-      <Modal
-        visible={!!selectedTenantForGateway}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setSelectedTenantForGateway(null)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={{ fontSize: 18 }}>🛡️</Text>
-                  <Text style={styles.modalTitle}>StayNest Payment Gateway</Text>
-                </View>
-                <Text style={styles.modalSub}>
-                  Direct 0% fee credit into Owner bank account via UPI
-                </Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setSelectedTenantForGateway(null)}
-                style={styles.modalCloseIcon}
-              >
-                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Payment Bill Summary Card */}
-              <View style={styles.gatewayBillSummaryCard}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={styles.gatewayBillLabel}>Paying Resident:</Text>
-                  <Text style={styles.gatewayBillVal}>{selectedTenantForGateway?.fullName}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={styles.gatewayBillLabel}>Room & Property:</Text>
-                  <Text style={styles.gatewayBillVal}>
-                    Room {selectedTenantForGateway?.roomNumber || '101'} • {selectedTenantForGateway?.propertyName || 'Ramesh PG'}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={styles.gatewayBillLabel}>Owner Beneficiary:</Text>
-                  <Text style={[styles.gatewayBillVal, { color: '#0f172a', fontWeight: '800' }]}>
-                    {user?.fullName || 'Ramesh Kumar'} (9876543210@upi)
-                  </Text>
-                </View>
-                <View style={{ height: 1, backgroundColor: '#e2e8f0', marginVertical: 6 }} />
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: '#0f172a' }}>Amount to Pay:</Text>
-                  <Text style={{ fontSize: 24, fontWeight: '900', color: '#16a34a' }}>
-                    ₹{((selectedTenantForGateway?.outstandingPaise ? selectedTenantForGateway.outstandingPaise / 100 : (selectedTenantForGateway?.monthlyRentPaise ? selectedTenantForGateway.monthlyRentPaise / 100 : 8500))).toLocaleString('en-IN')}
-                  </Text>
-                </View>
-                <View style={styles.zeroFeePill}>
-                  <Text style={styles.zeroFeePillText}>⚡ 0% Transaction Fee: 100% credited to Owner Account</Text>
-                </View>
-              </View>
-
-              {/* Select Payment App with Official Logos */}
-              <Text style={[styles.fieldLabel, { marginTop: 12, marginBottom: 8 }]}>
-                SELECT PAYMENT APP / METHOD
-              </Text>
-
-              <View style={styles.gatewayAppsGrid}>
-                {[
-                  { id: 'GPAY', name: 'Google Pay', icon: '🟢', sub: 'Instant 0% UPI' },
-                  { id: 'PHONEPE', name: 'PhonePe', icon: '🟣', sub: 'Instant 0% UPI' },
-                  { id: 'PAYTM', name: 'Paytm UPI', icon: '🔵', sub: 'Instant 0% UPI' },
-                  { id: 'BHIM', name: 'BHIM UPI', icon: '🇮🇳', sub: 'Direct Bank Pay' },
-                  { id: 'CARD', name: 'Debit/Credit Card', icon: '💳', sub: 'Visa, Master, RuPay' },
-                ].map((app) => (
-                  <TouchableOpacity
-                    key={app.id}
-                    style={[
-                      styles.gatewayAppOption,
-                      selectedGatewayApp === app.id && styles.gatewayAppOptionSelected,
-                    ]}
-                    onPress={() => setSelectedGatewayApp(app.id as any)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <Text style={{ fontSize: 22 }}>{app.icon}</Text>
-                      <View>
-                        <Text style={styles.gatewayAppName}>{app.name}</Text>
-                        <Text style={styles.gatewayAppSub}>{app.sub}</Text>
-                      </View>
-                    </View>
-                    <View style={[styles.radioCircle, selectedGatewayApp === app.id && styles.radioCircleActive]} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Action Buttons */}
-              <TouchableOpacity
-                style={[styles.confirmGatewayPayBtn, gatewayProcessing && { opacity: 0.7 }]}
-                onPress={() => handleProcessGatewayPayment(true)}
-                disabled={gatewayProcessing}
-                activeOpacity={0.85}
-              >
-                {gatewayProcessing ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.confirmGatewayPayBtnText}>
-                    Confirm & Update Payment (Auto-Credit Owner) →
-                  </Text>
-                )}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.cancelGatewayPayBtn}
-                onPress={() => handleProcessGatewayPayment(false)}
-                disabled={gatewayProcessing}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cancelGatewayPayBtnText}>
-                  Cancel / Record Failed Payment (No Balance Change)
-                </Text>
-              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -5389,5 +5370,134 @@ const styles = StyleSheet.create({
     color: '#64748b',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  // ─── Notification & Activity Full Page Styles (Requirement 5) ───
+  notifPageContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  notifPageHeader: {
+    backgroundColor: '#ffffff',
+    paddingTop: 50,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+  },
+  notifExitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    backgroundColor: '#fff7ed',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+    marginBottom: 12,
+  },
+  notifExitIcon: {
+    fontSize: 16,
+    color: '#ea580c',
+    fontWeight: '900',
+    marginRight: 6,
+  },
+  notifExitBtnText: {
+    fontSize: 12,
+    color: '#c2410c',
+    fontWeight: '800',
+  },
+  notifHeaderMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  notifPageTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  notifPageSub: {
+    fontSize: 12,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  notifBadgePill: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  notifBadgeText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  notifSectionHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 16,
+    marginBottom: 10,
+  },
+  notifEmptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  notifDueCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  notifWaPayBtn: {
+    flex: 1,
+    backgroundColor: '#25D366',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  notifWaPayBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  notifCollectBtn: {
+    flex: 1,
+    backgroundColor: '#16a34a',
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  notifCollectBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#ffffff',
+  },
+  notifSubCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  notifSubIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#fef3c7',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -11,9 +11,11 @@ import {
   Modal,
   Platform,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
+import { GooglePayLogo, PhonePeLogo, PaytmLogo, CardPaymentLogo } from '../components/PaymentLogos';
 
 interface ProfileScreenProps {
   onBackToDashboard: () => void;
@@ -113,7 +115,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
     }
   };
 
-  // Confirm Auto-Pay Mandate (Requirements 6, 7, 8)
+  // Confirm Auto-Pay Mandate (Direct to payment app, no WhatsApp message)
   const handleConfirmAutoPay = async () => {
     setSubscribing(true);
     try {
@@ -121,26 +123,41 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
       setIsSubscriptionActive(true);
       setIsSubscriptionModalOpen(false);
 
-      // Automated WhatsApp Confirmation via UltraMsg
-      try {
-        const cleanPhone = (phone || '9515614331').replace(/[^0-9]/g, '');
-        const params = new URLSearchParams();
-        params.append('token', '4kcul3wmcwdoh5d0');
-        params.append('to', `+91${cleanPhone}`);
-        params.append(
-          'body',
-          `🎉 *StayNest Auto-Pay Mandate Active!* 👑\n\nHello ${fullName}!\nYour 30-Day Free Trial for the *${planName}* has been activated successfully.\n• Charged Today: *₹0*\n• Next Billing: 15 Dec 2026\n• Unlimited WhatsApp rent reminders & calls enabled!\n\n— *Team StayNest*`
-        );
-        fetch('https://api.ultramsg.com/instance197383/messages/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: params.toString(),
-        }).catch(() => {});
-      } catch {}
+      // Deep link to direct internal payment application if available
+      const upiId = 'staynest.subscription@okaxis';
+      const payeeName = encodeURIComponent('StayNest Technologies');
+      const note = encodeURIComponent(`StayNest AutoPay ${planName}`);
+      let targetUrl = `upi://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
 
+      if (autoPayMethod === 'PHONEPE') {
+        targetUrl = `phonepe://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+      } else if (autoPayMethod === 'GPAY') {
+        targetUrl = `gpay://upi/pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+      } else if (autoPayMethod === 'PAYTM') {
+        targetUrl = `paytmmp://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+      }
+
+      try {
+        const canOpen = await Linking.canOpenURL(targetUrl);
+        if (canOpen) {
+          await Linking.openURL(targetUrl);
+        } else {
+          const genericUpi = `upi://pay?pa=${upiId}&pn=${payeeName}&am=0&cu=INR&tn=${note}`;
+          const canUpi = await Linking.canOpenURL(genericUpi);
+          if (canUpi) {
+            await Linking.openURL(genericUpi);
+          } else if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            window.location.href = genericUpi;
+          }
+        }
+      } catch (e) {
+        console.log('Payment app open error:', e);
+      }
+
+      const appLabel = autoPayMethod === 'PHONEPE' ? 'PhonePe' : autoPayMethod === 'GPAY' ? 'Google Pay' : autoPayMethod === 'PAYTM' ? 'Paytm' : 'Payment Gateway';
       Alert.alert(
-        'Auto-Pay Activated! 🎉',
-        `₹0 Auto-Pay setup successfully for ${planName}!\n\nYou have unlimited automated WhatsApp reminders, calls, and priority platform facilities.`
+        'Redirecting to ' + appLabel + ' 💳',
+        `Opening ${appLabel} to authorize ₹0 Auto-Pay for ${planName}!\n\nYour StayNest Unlimited Plan will activate instantly upon authorization.`
       );
     } finally {
       setSubscribing(false);
@@ -671,14 +688,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
                 </View>
               </View>
 
-              {/* Auto-Pay UPI Options */}
+              {/* Auto-Pay UPI Options with Actual Brand SVG Logos */}
               <Text style={styles.fieldLabel}>SELECT AUTO-PAY PAYMENT METHOD</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
                 {[
-                  { id: 'GPAY', label: 'Google Pay', icon: '🟢' },
-                  { id: 'PHONEPE', label: 'PhonePe', icon: '🟣' },
-                  { id: 'PAYTM', label: 'Paytm UPI', icon: '🔵' },
-                  { id: 'CARD', label: 'Debit / Credit Card', icon: '💳' },
+                  { id: 'GPAY', label: 'Google Pay', logo: <GooglePayLogo size={20} /> },
+                  { id: 'PHONEPE', label: 'PhonePe', logo: <PhonePeLogo size={20} /> },
+                  { id: 'PAYTM', label: 'Paytm UPI', logo: <PaytmLogo size={20} /> },
+                  { id: 'CARD', label: 'Debit / Credit Card', logo: <CardPaymentLogo size={20} /> },
                 ].map((m) => (
                   <TouchableOpacity
                     key={m.id}
@@ -687,8 +704,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
                       autoPayMethod === m.id && styles.methodPillActive,
                     ]}
                     onPress={() => setAutoPayMethod(m.id as any)}
+                    activeOpacity={0.8}
                   >
-                    <Text style={{ fontSize: 13 }}>{m.icon}</Text>
+                    <View style={{ marginRight: 2 }}>{m.logo}</View>
                     <Text
                       style={[
                         styles.methodPillText,

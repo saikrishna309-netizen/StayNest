@@ -12,6 +12,7 @@ import {
   Alert,
   Modal,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { Tenant, Property, Room, Bed } from '../types';
@@ -22,8 +23,20 @@ interface TenantsScreenProps {
 
 export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadData();
+    } catch {
+      // ignore
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 600);
+    }
+  };
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -748,7 +761,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack }) => {
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            colors={['#ea580c', '#3b82f6']}
+            tintColor="#ea580c"
+          />
+        }
+      >
         {/* Onboarding Form */}
         {showForm && (
           <View style={styles.formCard}>
