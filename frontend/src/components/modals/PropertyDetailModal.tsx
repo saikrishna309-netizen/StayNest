@@ -88,84 +88,227 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
         propertyBase = data;
         rawRooms = data.rooms || [];
       } catch {
-        // Fallback property detail if backend cold-starting
-        propertyBase = {
-          id,
-          ownerId: 'owner-default-1',
-          name: id.includes('prime') ? 'StayNest Prime PG (Building 02)' : 'StayNest Luxury PG (Building 01)',
-          propertyType: 'PG',
-          genderPolicy: 'BOYS',
-          cityId: 'hyd-1',
-          cityName: 'Hyderabad',
-          localityId: 'hitec-1',
-          localityName: 'Hitec City',
-          addressLine: 'Plot 42, Silicon Valley, Hitec City Road',
-          primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1000&q=80',
-          startingPricePaise: 850000,
-          foodIncluded: true,
-          approvalStatus: 'APPROVED',
-          published: true,
-          description: 'Premium luxury co-living PG with high-speed WiFi, 3-times homestyle food, daily housekeeping, 100% power backup and 24/7 security.',
-          pincode: '500081',
-          latitude: 17.4435,
-          longitude: 78.3772,
-          googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=17.4435,78.3772',
-          noticePeriodDays: 30,
-          depositMonths: 1,
-          payAtPropertyAllowed: true,
-          rules: 'Gate closes at 10:30 PM. Quiet hours 11:00 PM to 6:00 AM. Non-smoking premises.',
-          cancellationPolicy: 'Free cancellation up to 48 hours before check-in date.',
-          amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'AC_ROOMS', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'WASHING_MACHINE', 'CCTV_SECURITY'],
-          createdAt: new Date().toISOString(),
-          rooms: [],
-        };
+        // Fallback property detail tailored specifically for the requested PG ID
+        if (id === 'prop-pg-2') {
+          propertyBase = {
+            id: 'prop-pg-2',
+            ownerId: 'owner-default-0',
+            name: 'Sai Durga Executive Ladies PG',
+            propertyType: 'PG',
+            genderPolicy: 'GIRLS',
+            cityId: 'vja-1',
+            cityName: 'Vijayawada',
+            localityId: 'benzcircle-1',
+            localityName: 'Benz Circle',
+            addressLine: 'Near Benz Circle, Ring Road, Vijayawada',
+            primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=1000&q=80',
+            startingPricePaise: 950000,
+            foodIncluded: true,
+            approvalStatus: 'APPROVED',
+            published: true,
+            description: 'Exclusive premium ladies PG near Benz Circle Vijayawada with 3-times homestyle food, female warden, biometric entry, CCTV and high-speed WiFi.',
+            pincode: '520010',
+            latitude: 16.5062,
+            longitude: 80.6480,
+            googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=16.5062,80.6480',
+            noticePeriodDays: 30,
+            depositMonths: 1,
+            payAtPropertyAllowed: true,
+            rules: 'Gate closes at 10:00 PM. Female warden on premises. Non-smoking & strictly secure.',
+            cancellationPolicy: 'Free cancellation up to 48 hours before check-in date.',
+            amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'FEMALE_WARDEN', 'CCTV_SECURITY', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'BIKE_PARKING'],
+            createdAt: '2026-11-22T10:30:00Z',
+            rooms: [],
+          };
 
-        rawRooms = [
-          {
-            id: 'room-101',
-            roomNumber: '101',
-            sharingType: 'DOUBLE',
-            capacity: 2,
-            floorNumber: 1,
-            rentMonthlyPaise: 850000,
-            depositPaise: 250000,
-            status: 'AVAILABLE',
-            beds: [
-              { id: 'bed-101-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
-              { id: 'bed-101-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'room-102',
-            roomNumber: '102',
-            sharingType: 'FOUR_PLUS',
-            capacity: 4,
-            floorNumber: 1,
-            rentMonthlyPaise: 650000,
-            depositPaise: 200000,
-            status: 'AVAILABLE',
-            beds: [
-              { id: 'bed-102-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
-              { id: 'bed-102-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
-              { id: 'bed-102-3', bedLabel: 'Bed 3', active: true, status: 'OCCUPIED' },
-              { id: 'bed-102-4', bedLabel: 'Bed 4', active: true, status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'room-201',
-            roomNumber: '201',
-            sharingType: 'DOUBLE',
-            capacity: 2,
-            floorNumber: 2,
-            rentMonthlyPaise: 900000,
-            depositPaise: 250000,
-            status: 'AVAILABLE',
-            beds: [
-              { id: 'bed-201-1', bedLabel: 'Bed 1', active: true, status: 'AVAILABLE' },
-              { id: 'bed-201-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
-            ],
-          },
-        ];
+          rawRooms = [
+            {
+              id: 'rm-prop-pg-2-101',
+              roomNumber: '101',
+              sharingType: 'TRIPLE',
+              capacity: 3,
+              floorNumber: 1,
+              rentMonthlyPaise: 950000,
+              depositPaise: 950000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-2-101-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-2-101-2', bedLabel: 'Bed 2', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-2-101-3', bedLabel: 'Bed 3', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-102',
+              roomNumber: '102',
+              sharingType: 'TRIPLE',
+              capacity: 3,
+              floorNumber: 1,
+              rentMonthlyPaise: 950000,
+              depositPaise: 950000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-2-102-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-2-102-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-102-3', bedLabel: 'Bed 3', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-201',
+              roomNumber: '201',
+              sharingType: 'TRIPLE',
+              capacity: 3,
+              floorNumber: 2,
+              rentMonthlyPaise: 950000,
+              depositPaise: 950000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-2-201-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-2-201-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-201-3', bedLabel: 'Bed 3', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-202',
+              roomNumber: '202',
+              sharingType: 'TRIPLE',
+              capacity: 3,
+              floorNumber: 2,
+              rentMonthlyPaise: 950000,
+              depositPaise: 950000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-2-202-1', bedLabel: 'Bed 1', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-202-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-202-3', bedLabel: 'Bed 3', active: true, status: 'AVAILABLE' },
+              ],
+            },
+          ];
+        } else {
+          // Default: StayNest Elite Men's PG (prop-pg-1 / ramesh-pg-default)
+          propertyBase = {
+            id: 'prop-pg-1',
+            ownerId: 'owner-default-0',
+            name: 'StayNest Elite Men\'s PG',
+            propertyType: 'PG',
+            genderPolicy: 'BOYS',
+            cityId: 'vja-1',
+            cityName: 'Vijayawada',
+            localityId: 'mgroad-1',
+            localityName: 'MG Road',
+            addressLine: 'Opp. PVP Square Mall, MG Road, Vijayawada',
+            primaryPhotoUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1000&q=80',
+            startingPricePaise: 850000,
+            foodIncluded: true,
+            approvalStatus: 'APPROVED',
+            published: true,
+            description: 'Luxury executive boys PG located at MG Road Vijayawada opposite PVP Square Mall, offering high-speed WiFi, 3-times homestyle food, power backup and AC rooms.',
+            pincode: '520001',
+            latitude: 16.5062,
+            longitude: 80.6480,
+            googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=16.5062,80.6480',
+            noticePeriodDays: 30,
+            depositMonths: 1,
+            payAtPropertyAllowed: true,
+            rules: 'Gate closes at 10:30 PM. Quiet hours 11:00 PM to 6:00 AM. Non-smoking premises.',
+            cancellationPolicy: 'Free cancellation up to 48 hours before check-in date.',
+            amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'AC_ROOMS', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'WASHING_MACHINE', 'CCTV_SECURITY'],
+            createdAt: '2026-11-22T10:00:00Z',
+            rooms: [],
+          };
+
+          rawRooms = [
+            {
+              id: 'rm-prop-pg-1-101',
+              roomNumber: '101',
+              sharingType: 'SIX',
+              capacity: 6,
+              floorNumber: 1,
+              rentMonthlyPaise: 850000,
+              depositPaise: 250000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-1-101-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-1-101-2', bedLabel: 'Bed 2', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-1-101-3', bedLabel: 'Bed 3', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-1-101-4', bedLabel: 'Bed 4', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-101-5', bedLabel: 'Bed 5', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-101-6', bedLabel: 'Bed 6', active: true, status: 'OCCUPIED' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-1-102',
+              roomNumber: '102',
+              sharingType: 'DOUBLE',
+              capacity: 2,
+              floorNumber: 1,
+              rentMonthlyPaise: 850000,
+              depositPaise: 250000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-1-102-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-1-102-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-1-201',
+              roomNumber: '201',
+              sharingType: 'DOUBLE',
+              capacity: 2,
+              floorNumber: 2,
+              rentMonthlyPaise: 850000,
+              depositPaise: 250000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-1-201-1', bedLabel: 'Bed 1', active: true, status: 'OCCUPIED' },
+                { id: 'b-prop-pg-1-201-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-1-202',
+              roomNumber: '202',
+              sharingType: 'DOUBLE',
+              capacity: 2,
+              floorNumber: 2,
+              rentMonthlyPaise: 850000,
+              depositPaise: 250000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-1-202-1', bedLabel: 'Bed 1', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-202-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-1-301',
+              roomNumber: '301',
+              sharingType: 'TRIPLE',
+              capacity: 3,
+              floorNumber: 3,
+              rentMonthlyPaise: 850000,
+              depositPaise: 250000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-1-301-1', bedLabel: 'Bed 1', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-301-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-301-3', bedLabel: 'Bed 3', active: true, status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-1-302',
+              roomNumber: '302',
+              sharingType: 'TRIPLE',
+              capacity: 3,
+              floorNumber: 3,
+              rentMonthlyPaise: 850000,
+              depositPaise: 250000,
+              status: 'AVAILABLE',
+              beds: [
+                { id: 'b-prop-pg-1-302-1', bedLabel: 'Bed 1', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-302-2', bedLabel: 'Bed 2', active: true, status: 'AVAILABLE' },
+                { id: 'b-prop-pg-1-302-3', bedLabel: 'Bed 3', active: true, status: 'AVAILABLE' },
+              ],
+            },
+          ];
+        }
       }
 
       // Check if custom owner properties exist in localStorage (Requirement 5)
@@ -186,7 +329,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
         // Check if custom building photo exists in localStorage (Point 8)
         try {
-          const customBuildingPhoto = window.localStorage.getItem(`staynest_building_photo_${id}`);
+          const customBuildingPhoto =
+            window.localStorage.getItem(`staynest_building_photo_${id}`) ||
+            (id === 'ramesh-pg-default' || !id ? window.localStorage.getItem('staynest_building_photo_default') : null);
           if (customBuildingPhoto && propertyBase) {
             propertyBase = {
               ...propertyBase,
@@ -197,7 +342,9 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
 
         // Check if owner configured rooms in localStorage for this PG
         try {
-          const cachedFloors = window.localStorage.getItem(`staynest_floors_${id}`);
+          const cachedFloors =
+            window.localStorage.getItem(`staynest_floors_${id}`) ||
+            (id === 'ramesh-pg-default' || !id ? window.localStorage.getItem('staynest_floors_default') : null);
           if (cachedFloors) {
             const parsed = JSON.parse(cachedFloors);
             if (Array.isArray(parsed) && parsed.length > 0) {
@@ -630,19 +777,26 @@ export const PropertyDetailModal: React.FC<PropertyDetailModalProps> = ({
                                   : 'bg-white border-slate-200 text-slate-800 shadow-sm'
                               }`}
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-3">
                                 {(b as any).photo ? (
                                   <img
                                     src={(b as any).photo}
                                     alt={b.bedLabel}
-                                    className="w-6 h-6 rounded-md object-cover border border-slate-200"
+                                    className="w-11 h-11 rounded-lg object-cover border-2 border-orange-400 shadow-sm"
                                   />
                                 ) : (
-                                  <span className={isOccupied ? 'text-slate-400' : isHeld ? 'text-amber-500' : 'text-emerald-500'}>
+                                  <span className={isOccupied ? 'text-slate-400 text-lg' : isHeld ? 'text-amber-500 text-lg' : 'text-emerald-500 text-lg'}>
                                     🛏️
                                   </span>
                                 )}
-                                <span className="font-bold">{b.bedLabel}</span>
+                                <div>
+                                  <div className="font-extrabold text-sm text-slate-800">{b.bedLabel}</div>
+                                  {(b as any).photo && (
+                                    <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
+                                      ✓ Verified Bed Photo
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
                               {isOccupied ? (

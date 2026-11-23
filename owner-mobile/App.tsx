@@ -155,10 +155,11 @@ const MainNavigator: React.FC = () => {
             Platform.OS === 'web' && webDeviceMode === 'DESKTOP' && styles.desktopFrameWeb,
           ]}
         >
-          {/* Tab 1: Dashboard */}
-          {currentTab === 'dashboard' && (
+          {/* Tab 1: Dashboard (Fast Persistent Pane) */}
+          <View style={[styles.tabPane, currentTab === 'dashboard' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <DashboardScreen
               onSelectPropertyForRooms={handleOpenProperty}
+              onActivePropertyChange={(p) => setSelectedProperty(p)}
               onNavigateTab={(tab) => {
                 if (tab === 'rooms') setCurrentTab('properties');
                 else if (tab === 'tenants') setCurrentTab('tenants');
@@ -166,33 +167,36 @@ const MainNavigator: React.FC = () => {
                 else if (tab === 'profile') setCurrentTab('profile');
               }}
             />
-          )}
+          </View>
 
           {/* Tab 2: Properties (Combined Property, Floors, Rooms & Beds) */}
-          {currentTab === 'properties' && (
+          <View style={[styles.tabPane, currentTab === 'properties' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <PropertiesScreen
               initialProperty={selectedProperty}
               onBackToDashboard={() => setCurrentTab('dashboard')}
             />
-          )}
+          </View>
 
           {/* Tab 3: Tenants (Dedicated Standalone Screen for all Resident actions) */}
-          {currentTab === 'tenants' && (
-            <TenantsScreen onBack={() => setCurrentTab('dashboard')} />
-          )}
+          <View style={[styles.tabPane, currentTab === 'tenants' ? styles.tabPaneActive : styles.tabPaneHidden]}>
+            <TenantsScreen
+              selectedPropertyId={selectedProperty?.id}
+              onBack={() => setCurrentTab('dashboard')}
+            />
+          </View>
 
           {/* Tab 4: Management (Expenses, Finance & Reports) */}
-          {currentTab === 'management' && (
+          <View style={[styles.tabPane, currentTab === 'management' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <ManagementScreen onBackToDashboard={() => setCurrentTab('dashboard')} />
-          )}
+          </View>
 
           {/* Tab 5: Profile (PG Owner Account & Settings) */}
-          {currentTab === 'profile' && (
+          <View style={[styles.tabPane, currentTab === 'profile' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <ProfileScreen
               onBackToDashboard={() => setCurrentTab('dashboard')}
               onNavigateTab={(tab) => setCurrentTab(tab)}
             />
-          )}
+          </View>
 
           {/* ─── FLOATING TRENDY BOTTOM NAVIGATION BAR (MATCHING SCREENSHOT) ─── */}
           <View style={styles.floatingBarOuter}>
@@ -312,6 +316,17 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     backgroundColor: '#f8fafc',
+  },
+  tabPane: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  tabPaneActive: {
+    display: 'flex',
+  },
+  tabPaneHidden: {
+    display: 'none',
   },
   mobileFrameWeb: {
     maxWidth: 420,

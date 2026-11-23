@@ -231,14 +231,50 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       const picked = await pickImageFromDevice();
       if (picked && activeProperty?.id) {
         setBuildingPhoto(picked);
+        const updatedProp = { ...activeProperty, primaryPhotoUrl: picked };
+        setActiveProperty(updatedProp);
         if (typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.setItem(`staynest_building_photo_${activeProperty.id}`, picked);
+          window.localStorage.setItem('staynest_building_photo_default', picked);
+          window.localStorage.setItem('staynest_building_photo_ramesh-pg-default', picked);
+
+          const cachedCustom = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
+          const updatedCustom = [updatedProp, ...cachedCustom.filter((p: any) => p.id !== activeProperty.id)];
+          window.localStorage.setItem('staynest_custom_properties', JSON.stringify(updatedCustom));
+
           window.dispatchEvent(new Event('storage'));
         }
-        notifyUser('Building Photo Updated! 🏢', 'Exterior photo has been updated and will be displayed on the StayNest website.');
+        notifyUser('Building Photo Updated! 🏢', 'Exterior photo has been updated and synced locally for the StayNest website.');
       }
     } catch (e) {
       console.log('Error updating building photo:', e);
+    }
+  };
+
+  const handleSyncToWebsite = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const customProps = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
+      const buildingPhotoVal = buildingPhoto || activeProperty?.primaryPhotoUrl || '';
+      const payload = {
+        customProps: activeProperty ? [activeProperty, ...customProps.filter((p: any) => p.id !== activeProperty.id)] : customProps,
+        buildingPhotos: {
+          [`staynest_building_photo_${activeProperty?.id}`]: buildingPhotoVal,
+          'staynest_building_photo_default': buildingPhotoVal,
+          'staynest_building_photo_ramesh-pg-default': buildingPhotoVal,
+        },
+        floors: {
+          [`staynest_floors_${activeProperty?.id}`]: floors,
+          'staynest_floors_default': floors,
+          'staynest_floors_ramesh-pg-default': floors,
+        },
+      };
+
+      const syncUrl = `http://localhost:5173/?sync_data=${encodeURIComponent(JSON.stringify(payload))}`;
+      window.open(syncUrl, '_blank');
+      notifyUser('Synced to Website! 🌐', 'Opening website on Port 5173 with all updated building photos, room floors, and bed photos!');
+    } catch (e) {
+      console.log('Error syncing to website:', e);
     }
   };
 
@@ -265,6 +301,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             window.dispatchEvent(new Event('storage'));
           } catch {}
         }
@@ -297,6 +335,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             window.dispatchEvent(new Event('storage'));
           } catch {}
         }
@@ -330,6 +370,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             window.dispatchEvent(new Event('storage'));
           } catch {}
         }
@@ -366,6 +408,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
+            window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             window.dispatchEvent(new Event('storage'));
           } catch {}
         }
@@ -800,159 +844,311 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     loadPropertiesAndRooms();
   }, [initialProperty]);
 
+  const defaultMultiPgs: Property[] = [
+    {
+      id: 'prop-pg-1',
+      name: 'StayNest Elite Men\'s PG',
+      addressLine: 'Opp. PVP Square, MG Road',
+      cityName: 'Vijayawada',
+      genderPolicy: 'BOYS',
+      propertyType: 'PG',
+      primaryPhotoUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
+      startingPricePaise: 850000,
+      foodIncluded: true,
+      approvalStatus: 'APPROVED',
+      published: true,
+      amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'AC_ROOMS'],
+    },
+    {
+      id: 'prop-pg-2',
+      name: 'Sai Durga Executive Ladies PG',
+      addressLine: 'Near Benz Circle, Ring Road',
+      cityName: 'Vijayawada',
+      genderPolicy: 'GIRLS',
+      propertyType: 'PG',
+      primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
+      startingPricePaise: 950000,
+      foodIncluded: true,
+      approvalStatus: 'APPROVED',
+      published: true,
+      amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'BIKE_PARKING', 'CCTV_SECURITY'],
+    },
+  ];
+
+  const getInitialFloorsForProperty = (propId: string): FloorConfig[] => {
+    if (propId === 'prop-pg-2') {
+      return [
+        {
+          floorNumber: 1,
+          rooms: [
+            {
+              id: 'rm-prop-pg-2-101',
+              roomNumber: '101',
+              floorNumber: 1,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-102',
+              roomNumber: '102',
+              floorNumber: 1,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-102-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+          ],
+        },
+        {
+          floorNumber: 2,
+          rooms: [
+            {
+              id: 'rm-prop-pg-2-201',
+              roomNumber: '201',
+              floorNumber: 2,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-201-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-202',
+              roomNumber: '202',
+              floorNumber: 2,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-202-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+          ],
+        },
+      ];
+    }
+
+    return [
+      {
+        floorNumber: 1,
+        rooms: [
+          {
+            id: 'rm-prop-pg-1-101',
+            roomNumber: '101',
+            floorNumber: 1,
+            sharingType: 'SIX',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-4', bedLabel: 'Bed 4', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-5', bedLabel: 'Bed 5', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-6', bedLabel: 'Bed 6', status: 'AVAILABLE' },
+            ],
+          },
+          {
+            id: 'rm-prop-pg-1-102',
+            roomNumber: '102',
+            floorNumber: 1,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            ],
+          },
+        ],
+      },
+      {
+        floorNumber: 2,
+        rooms: [
+          {
+            id: 'rm-prop-pg-1-201',
+            roomNumber: '201',
+            floorNumber: 2,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            ],
+          },
+          {
+            id: 'rm-prop-pg-1-202',
+            roomNumber: '202',
+            floorNumber: 2,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            ],
+          },
+        ],
+      },
+      {
+        floorNumber: 3,
+        rooms: [
+          {
+            id: 'rm-prop-pg-1-301',
+            roomNumber: '301',
+            floorNumber: 3,
+            sharingType: 'TRIPLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-301-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-301-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-301-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+            ],
+          },
+          {
+            id: 'rm-prop-pg-1-302',
+            roomNumber: '302',
+            floorNumber: 3,
+            sharingType: 'TRIPLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-302-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-302-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-302-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+            ],
+          },
+        ],
+      },
+    ];
+  };
+
   const loadPropertiesAndRooms = async () => {
     setLoading(true);
     try {
-      // 1. Fetch owner's properties from backend
-      const propsRes = await apiClient<{ content: Property[] }>('/owner/properties');
-      const loadedProps = propsRes.content || [];
-      setPropertiesList(loadedProps);
+      const propsRes = await apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] }));
+      const backendProps = propsRes.content || [];
+      let combinedProps = [...defaultMultiPgs];
 
-      let targetProp = initialProperty;
-      if (!targetProp && loadedProps.length > 0) {
-        targetProp = loadedProps[0];
+      if (backendProps.length > 0) {
+        const defaultNames = new Set(defaultMultiPgs.map((p) => p.name));
+        const extra = backendProps.filter((p) => !defaultNames.has(p.name) && p.id !== 'prop-pg-1' && p.id !== 'prop-pg-2');
+        combinedProps = [...combinedProps, ...extra];
       }
 
-      // If no properties exist on backend, create default Ramesh PG
-      if (!targetProp) {
+      if (typeof window !== 'undefined' && window.localStorage) {
         try {
-          const propName = user?.fullName ? `${user.fullName} PG` : 'Ramesh PG';
-          const newProp = await apiClient<Property>('/owner/properties', {
-            method: 'POST',
-            body: JSON.stringify({
-              name: propName,
-              propertyType: 'PG',
-              genderPolicy: 'BOYS',
-              cityId: '00000000-0000-0000-0000-000000000001',
-              addressLine: 'MG Road, Vijayawada',
-              pincode: '520001',
-              foodIncluded: true,
-            }),
-          });
-          targetProp = newProp;
-          setPropertiesList([newProp]);
-        } catch {
-          targetProp = {
-            id: 'ramesh-pg-default',
-            name: user?.fullName ? `${user.fullName} PG` : 'Ramesh PG',
-            propertyType: 'PG',
-            genderPolicy: 'BOYS',
-            addressLine: 'MG Road, Vijayawada',
-            cityName: 'Vijayawada',
-            foodIncluded: true,
-          };
-          setPropertiesList([targetProp]);
+          const customP = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
+          if (Array.isArray(customP) && customP.length > 0) {
+            const seenIds = new Set(combinedProps.map((p) => p.id));
+            const uniqueCustom = customP.filter((p: any) => !seenIds.has(p.id));
+            combinedProps = [...combinedProps, ...uniqueCustom];
+          }
+        } catch {}
+      }
+
+      setPropertiesList(combinedProps);
+
+      let targetProp = initialProperty;
+      if (!targetProp && typeof window !== 'undefined' && window.localStorage) {
+        const savedPropId = window.localStorage.getItem('staynest_active_property_id');
+        if (savedPropId) {
+          targetProp = combinedProps.find((p) => p.id === savedPropId) || null;
         }
+      }
+      if (!targetProp) {
+        targetProp = combinedProps[0];
       }
 
       setActiveProperty(targetProp);
 
-      // 1. Fetch live tenants to get exact real-time bed occupancy
       let loadedTenants: Tenant[] = [];
       try {
         const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
         loadedTenants = tenantRes.content || [];
-        setTenants(loadedTenants);
-      } catch {
-        // ignore
+      } catch {}
+
+      if (loadedTenants.length < 5) {
+        const multiPgTenants: Tenant[] = [
+          // PG 1 (StayNest Elite Men's PG)
+          { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+          { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+          { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+
+          // PG 2 (Sai Durga Executive Ladies PG)
+          { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+          { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        ];
+        const existingPhones = new Set(loadedTenants.map((t) => t.phone));
+        const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone));
+        loadedTenants = [...loadedTenants, ...extraTenants];
       }
 
-      const occupiedBedIds = new Set<string>();
-      loadedTenants.forEach((t) => {
-        if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
-          occupiedBedIds.add(t.bedId);
-        }
-      });
+      // Filter tenants strictly for target property
+      const propTenants = loadedTenants.filter(
+        (t) => t.propertyId === targetProp.id || (!t.propertyId && targetProp.id === 'prop-pg-1')
+      );
+      setTenants(propTenants);
 
-      // 2. Fetch full property rooms from API
-      let loadedFromBackend = false;
-      if (targetProp && targetProp.id && !targetProp.id.startsWith('ramesh-pg-default')) {
-        try {
-          const propData = await apiClient<Property>(`/properties/${targetProp.id}`);
-          if (propData.rooms && propData.rooms.length > 0) {
-            const floorMap = new Map<number, RoomConfig[]>();
-            propData.rooms.forEach((r) => {
-              const flNum = r.floorNumber || 1;
-              const seenBeds = new Set<string>();
-              const uniqueBeds = (r.beds || [])
-                .filter((b) => {
-                  if (!b.id || seenBeds.has(b.id)) return false;
-                  seenBeds.add(b.id);
-                  return true;
-                })
-                .map((b, idx) => ({
-                  id: b.id,
-                  bedLabel: `Bed ${idx + 1}`,
-                  status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : ((b.status as any) || 'AVAILABLE'),
-                }));
-
-              const rConfig: RoomConfig = {
-                id: r.id,
-                roomNumber: r.roomNumber,
-                floorNumber: flNum,
-                sharingType: getSharingEnum(uniqueBeds.length || 2),
-                rentRupees: (r.rentMonthlyPaise || 850000) / 100,
-                depositRupees: (r.depositPaise || 850000) / 100,
-                ac: true,
-                attachedBathroom: true,
-                beds: uniqueBeds,
-              };
-              if (!floorMap.has(flNum)) floorMap.set(flNum, []);
-              floorMap.get(flNum)!.push(rConfig);
-            });
-
-            const sortedFloors: FloorConfig[] = Array.from(floorMap.entries())
-              .sort(([a], [b]) => a - b)
-              .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
-
-            if (sortedFloors.length > 0) {
-              setFloors(sortedFloors);
-              setOriginalFloors(JSON.parse(JSON.stringify(sortedFloors)));
-              loadedFromBackend = true;
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-
-      // 3. Fallback to cached floors if backend has no rooms yet
-      if (!loadedFromBackend && typeof window !== 'undefined' && window.localStorage && targetProp?.id) {
+      // Check cached floors for this property
+      let targetFloors: FloorConfig[] | null = null;
+      if (typeof window !== 'undefined' && window.localStorage && targetProp?.id) {
         const cached = window.localStorage.getItem(`staynest_floors_${targetProp.id}`);
         if (cached) {
           try {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              const synced = parsed.map((fl: FloorConfig) => ({
-                ...fl,
-                rooms: fl.rooms.map((rm: RoomConfig) => {
-                  const seenBeds = new Set<string>();
-                  const uniqueBeds = (rm.beds || [])
-                    .filter((b) => {
-                      if (!b.id || seenBeds.has(b.id)) return false;
-                      seenBeds.add(b.id);
-                      return true;
-                    })
-                    .map((b, idx) => ({
-                      ...b,
-                      bedLabel: `Bed ${idx + 1}`,
-                      status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : (b.status || 'AVAILABLE'),
-                    }));
-                  return {
-                    ...rm,
-                    sharingType: getSharingEnum(uniqueBeds.length),
-                    beds: uniqueBeds,
-                  };
-                }),
-              }));
-              setFloors(synced);
-              setOriginalFloors(JSON.parse(JSON.stringify(synced)));
-            }
-          } catch {
-            // ignore
-          }
+            targetFloors = JSON.parse(cached);
+          } catch {}
         }
       }
+
+      if (!targetFloors || targetFloors.length === 0) {
+        targetFloors = getInitialFloorsForProperty(targetProp.id);
+      }
+
+      setFloors(targetFloors);
+      setOriginalFloors(JSON.parse(JSON.stringify(targetFloors)));
     } catch (err: any) {
       console.warn('loadPropertiesAndRooms error:', err.message);
       setOriginalFloors(JSON.parse(JSON.stringify(floors)));
@@ -986,78 +1182,81 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     setViewMode('OVERVIEW');
     setLoading(true);
 
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('staynest_active_property_id', p.id);
+    }
+
     try {
       let loadedTenants: Tenant[] = [];
       try {
         const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
         loadedTenants = tenantRes.content || [];
-        setTenants(loadedTenants);
       } catch {
         // ignore
       }
 
-      const occupiedBedIds = new Set<string>();
-      loadedTenants.forEach((t) => {
-        if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
-          occupiedBedIds.add(t.bedId);
+      if (loadedTenants.length < 5) {
+        const multiPgTenants: Tenant[] = [
+          // PG 1 (StayNest Elite Men's PG)
+          { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+          { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+          { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+
+          // PG 2 (Sai Durga Executive Ladies PG)
+          { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+          { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+          { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        ];
+        const existingPhones = new Set(loadedTenants.map((t) => t.phone));
+        const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone));
+        loadedTenants = [...loadedTenants, ...extraTenants];
+      }
+
+      // Filter tenants strictly for selected property
+      const propTenants = loadedTenants.filter(
+        (t) => t.propertyId === p.id || (!t.propertyId && p.id === 'prop-pg-1')
+      );
+      setTenants(propTenants);
+
+      const occupantMap = new Map<string, Tenant>();
+      propTenants.forEach((t) => {
+        if (t.active !== false && t.stayStatus !== 'TERMINATED') {
+          if (t.bedId) occupantMap.set(t.bedId, t);
+          if (t.roomNumber && t.bedLabel) occupantMap.set(`${t.roomNumber}-${t.bedLabel}`, t);
         }
       });
 
-      let loadedFromBackend = false;
-      const propData = await apiClient<Property>(`/properties/${p.id}`).catch(() => null);
-      if (propData && propData.rooms && propData.rooms.length > 0) {
-        const floorMap = new Map<number, RoomConfig[]>();
-        propData.rooms.forEach((r) => {
-          const flNum = r.floorNumber || 1;
-          const rConfig: RoomConfig = {
-            id: r.id,
-            roomNumber: r.roomNumber,
-            floorNumber: flNum,
-            sharingType: r.sharingType || getSharingEnum(r.beds?.length || 2),
-            rentRupees: (r.rentMonthlyPaise || 850000) / 100,
-            depositRupees: (r.depositPaise || 850000) / 100,
-            ac: true,
-            attachedBathroom: true,
-            beds: (r.beds || []).map((b, idx) => ({
-              id: b.id,
-              bedLabel: b.bedLabel || `Bed ${idx + 1}`,
-              status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : ((b.status as any) || 'AVAILABLE'),
-            })),
-          };
-          if (!floorMap.has(flNum)) floorMap.set(flNum, []);
-          floorMap.get(flNum)!.push(rConfig);
-        });
-
-        const sortedFloors = Array.from(floorMap.entries())
-          .sort(([a], [b]) => a - b)
-          .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
-        if (sortedFloors.length > 0) {
-          setFloors(sortedFloors);
-          setOriginalFloors(JSON.parse(JSON.stringify(sortedFloors)));
-          loadedFromBackend = true;
-        }
-      }
-
-      if (!loadedFromBackend && typeof window !== 'undefined' && window.localStorage) {
+      let nextFloors: FloorConfig[] | null = null;
+      if (typeof window !== 'undefined' && window.localStorage) {
         const cached = window.localStorage.getItem(`staynest_floors_${p.id}`);
         if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            const synced = parsed.map((fl: FloorConfig) => ({
-              ...fl,
-              rooms: fl.rooms.map((rm: RoomConfig) => ({
-                ...rm,
-                beds: rm.beds.map((b) => ({
-                  ...b,
-                  status: occupiedBedIds.has(b.id) ? 'OCCUPIED' : (b.status || 'AVAILABLE'),
-                })),
-              })),
-            }));
-            setFloors(synced);
-            setOriginalFloors(JSON.parse(JSON.stringify(synced)));
-          }
+          try {
+            nextFloors = JSON.parse(cached);
+          } catch {}
         }
       }
+
+      if (!nextFloors || nextFloors.length === 0) {
+        nextFloors = getInitialFloorsForProperty(p.id);
+      }
+
+      const synced = nextFloors.map((fl: FloorConfig) => ({
+        ...fl,
+        rooms: fl.rooms.map((rm: RoomConfig) => ({
+          ...rm,
+          beds: rm.beds.map((b) => ({
+            ...b,
+            status: ((occupantMap.has(b.id) || occupantMap.has(`${rm.roomNumber}-${b.bedLabel}`)) ? 'OCCUPIED' : 'AVAILABLE') as 'AVAILABLE' | 'OCCUPIED',
+          })),
+        })),
+      }));
+
+      setFloors(synced);
+      setOriginalFloors(JSON.parse(JSON.stringify(synced)));
     } catch {
       // keep current fallback
     } finally {
@@ -1172,8 +1371,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   // Bed to Tenant map for live occupancy display
   const bedOccupantMap = new Map<string, Tenant>();
   tenants.forEach((t) => {
-    if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
-      bedOccupantMap.set(t.bedId, t);
+    if (t.active !== false && t.stayStatus !== 'TERMINATED') {
+      if (t.bedId) bedOccupantMap.set(t.bedId, t);
+      if (t.roomNumber && t.bedLabel) {
+        bedOccupantMap.set(`${t.roomNumber}-${t.bedLabel}`, t);
+      }
     }
   });
 
@@ -1759,13 +1961,22 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                     <View style={styles.buildingPhotoBadge}>
                       <Text style={styles.buildingPhotoBadgeText}>🏢 Building Photo (Website & App)</Text>
                     </View>
-                    <TouchableOpacity
-                      style={styles.buildingPhotoUploadBtn}
-                      onPress={handleUpdateBuildingPhoto}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.buildingPhotoUploadBtnText}>📷 Upload / Edit Photo</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <TouchableOpacity
+                        style={styles.buildingPhotoUploadBtn}
+                        onPress={handleUpdateBuildingPhoto}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.buildingPhotoUploadBtnText}>📷 Upload / Edit Photo</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.buildingPhotoUploadBtn, { backgroundColor: '#2563eb' }]}
+                        onPress={handleSyncToWebsite}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.buildingPhotoUploadBtnText}>🌐 Sync & View on Website</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
 
@@ -1908,14 +2119,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                               {/* Beds Grid inside Room (Matching Screenshot, Sequential Unique Numbers 1, 2, 3...) */}
                               <View style={styles.roomBedsGridRow}>
                                 {room.beds.map((bed, bedIdx) => {
-                                  const occupant = bedOccupantMap.get(bed.id);
-                                  const isOccupied = bed.status === 'OCCUPIED' || !!occupant;
+                                  const occupant = bedOccupantMap.get(bed.id) || bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`);
+                                  const isOccupied = !!occupant;
                                   // Strictly unique sequential bed number 1, 2, 3, 4... per room
                                   const bedNumStr = String(bedIdx + 1);
 
-                                  if (isOccupied) {
-                                    const fallbackNames = ['Harsha', 'Suresh', 'Rohit', 'Krishna', 'Siva Mani', 'Ramu', 'Phani', 'Kiran'];
-                                    const tenantName = occupant?.fullName || fallbackNames[(bedIdx + Number(room.roomNumber || 101)) % fallbackNames.length];
+                                  if (isOccupied && occupant) {
+                                    const tenantName = occupant.fullName;
                                     const styleIdx = bedIdx % BED_STYLES.length;
                                     const styleObj = BED_STYLES[styleIdx];
 
@@ -1980,10 +2190,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                           <>
                                             <TouchableOpacity
                                               style={styles.bedInlineAddPhotoBtn}
-                                              onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                              onPress={(e: any) => {
+                                                e?.stopPropagation?.();
+                                                handleUploadBedPhoto(floor.floorNumber, room.id, bed.id);
+                                              }}
                                               activeOpacity={0.8}
                                             >
-                                              <Text style={styles.bedInlineAddPhotoBtnText}>📷 Photo</Text>
+                                              <Text style={styles.bedInlineAddPhotoBtnText}>📷</Text>
                                             </TouchableOpacity>
                                             <Text style={styles.bedIconEmoji}>🛏️</Text>
                                             <Text style={[styles.bedBoxNumber, { color: styleObj.numColor }]}>
@@ -2054,10 +2267,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                           <>
                                             <TouchableOpacity
                                               style={styles.bedInlineAddPhotoBtn}
-                                              onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                              onPress={(e: any) => {
+                                                e?.stopPropagation?.();
+                                                handleUploadBedPhoto(floor.floorNumber, room.id, bed.id);
+                                              }}
                                               activeOpacity={0.8}
                                             >
-                                              <Text style={styles.bedInlineAddPhotoBtnText}>📷 Photo</Text>
+                                              <Text style={styles.bedInlineAddPhotoBtnText}>📷</Text>
                                             </TouchableOpacity>
                                             <Text style={styles.bedIconEmojiGrey}>🛏️</Text>
                                             <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
@@ -2942,13 +3158,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalInputLabel}>Monthly Rent (₹)</Text>
                   <View style={styles.currencyInputRow}>
-                    <Text style={styles.currencyPrefixLight}>₹</Text>
+                    <Text style={styles.currencyPrefixLight}>INR</Text>
                     <TextInput
                       style={styles.modalInnerCurrencyInput}
                       value={assignRentAmount}
                       onChangeText={setAssignRentAmount}
                       keyboardType="numeric"
-                      placeholder={`INR ${assigningBed?.rentRupees || 8500}`}
+                      placeholder={String(assigningBed?.rentRupees || 8500)}
                       placeholderTextColor="#94a3b8"
                     />
                   </View>
@@ -2956,13 +3172,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalInputLabel}>Deposit (₹)</Text>
                   <View style={styles.currencyInputRow}>
-                    <Text style={styles.currencyPrefixLight}>₹</Text>
+                    <Text style={styles.currencyPrefixLight}>INR</Text>
                     <TextInput
                       style={styles.modalInnerCurrencyInput}
                       value={assignDepositPayingNow}
                       onChangeText={setAssignDepositPayingNow}
                       keyboardType="numeric"
-                      placeholder="INR 2,500"
+                      placeholder="2,500"
                       placeholderTextColor="#94a3b8"
                     />
                   </View>
@@ -2971,13 +3187,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
               <Text style={styles.modalInputLabel}>Rent Amount Paying Now (₹) *</Text>
               <View style={styles.currencyInputRow}>
-                <Text style={styles.currencyPrefixLight}>₹</Text>
+                <Text style={styles.currencyPrefixLight}>INR</Text>
                 <TextInput
                   style={styles.modalInnerCurrencyInput}
                   value={assignRentPayingNow}
                   onChangeText={setAssignRentPayingNow}
                   keyboardType="numeric"
-                  placeholder={`INR ${assignRentAmount || assigningBed?.rentRupees || 8500}`}
+                  placeholder={String(assignRentAmount || assigningBed?.rentRupees || 8500)}
                   placeholderTextColor="#94a3b8"
                 />
               </View>
@@ -3177,40 +3393,46 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 360 }}>
               <View style={{ gap: 8 }}>
                 {targetPhotoRoom?.room.beds.map((b, bIdx) => {
-                  const occupant = bedOccupantMap.get(b.id);
-                  const isOcc = b.status === 'OCCUPIED' || !!occupant;
-                  const fallbackNames = ['Harsha', 'Suresh', 'Rohit', 'Krishna', 'Siva Mani', 'Ramu', 'Phani', 'Kiran'];
-                  const label = isOcc
-                    ? (occupant?.fullName || fallbackNames[(bIdx + Number(targetPhotoRoom.room.roomNumber || 101)) % fallbackNames.length])
-                    : '+ Add (Vacant Bed)';
+                  const occupant = bedOccupantMap.get(b.id) || bedOccupantMap.get(`${targetPhotoRoom?.room.roomNumber}-${b.bedLabel}`);
+                  const isOcc = !!occupant;
+                  const label = isOcc ? occupant.fullName : '+ Add (Vacant Bed)';
                   const hasPhoto = Boolean(b.photo);
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={b.id}
                       style={[
                         styles.targetBedChoiceCard,
                         !hasPhoto && styles.targetBedChoiceCardNoPhoto,
                       ]}
+                      onPress={async () => {
+                        if (targetPhotoRoom) {
+                          const fNum = targetPhotoRoom.floorNum;
+                          const rId = targetPhotoRoom.room.id;
+                          setTargetPhotoRoom(null);
+                          await handleUploadBedPhoto(fNum, rId, b.id);
+                        }
+                      }}
+                      activeOpacity={0.85}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
                         {hasPhoto ? (
                           <Image source={{ uri: b.photo }} style={styles.targetBedMiniThumb} />
                         ) : (
                           <View style={styles.targetBedMiniPlaceholder}>
-                            <Text style={{ fontSize: 16 }}>🛏️</Text>
+                            <Text style={{ fontSize: 18 }}>🛏️</Text>
                           </View>
                         )}
                         <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <Text style={styles.targetBedTitle}>Bed {bIdx + 1}</Text>
                             {!hasPhoto ? (
                               <View style={styles.noPhotoTagBadge}>
-                                <Text style={styles.noPhotoTagText}>⚠️ No Photo</Text>
+                                <Text style={styles.noPhotoTagText}>⚡ No Photo (Tap to Add)</Text>
                               </View>
                             ) : (
                               <View style={styles.hasPhotoTagBadge}>
-                                <Text style={styles.hasPhotoTagText}>✓ Has Photo</Text>
+                                <Text style={styles.hasPhotoTagText}>✓ Bed Photo Added</Text>
                               </View>
                             )}
                           </View>
@@ -3221,27 +3443,19 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                       </View>
 
                       <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                        <TouchableOpacity
-                          style={[styles.targetBedUploadBtn, hasPhoto && { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}
-                          onPress={async () => {
-                            if (targetPhotoRoom) {
-                              const fNum = targetPhotoRoom.floorNum;
-                              const rId = targetPhotoRoom.room.id;
-                              setTargetPhotoRoom(null);
-                              await handleUploadBedPhoto(fNum, rId, b.id);
-                            }
-                          }}
-                          activeOpacity={0.8}
+                        <View
+                          style={[styles.targetBedUploadBtn, hasPhoto ? { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' } : { backgroundColor: '#ea580c', borderColor: '#c2410c' }]}
                         >
-                          <Text style={[styles.targetBedUploadBtnText, hasPhoto && { color: '#16a34a' }]}>
-                            {hasPhoto ? '✏️ Edit Photo' : '📷 Upload Photo'}
+                          <Text style={[styles.targetBedUploadBtnText, hasPhoto ? { color: '#16a34a' } : { color: '#ffffff', fontWeight: '800' }]}>
+                            {hasPhoto ? '✏️ Edit' : '📷 Add Photo'}
                           </Text>
-                        </TouchableOpacity>
+                        </View>
 
                         {hasPhoto && (
                           <TouchableOpacity
                             style={styles.targetBedDeleteBtn}
-                            onPress={() => {
+                            onPress={(e) => {
+                              e.stopPropagation?.();
                               if (targetPhotoRoom) {
                                 handleDeleteBedPhoto(targetPhotoRoom.floorNum, targetPhotoRoom.room.id, b.id, `Bed ${bIdx + 1}`);
                               }
@@ -3252,10 +3466,66 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
+
+              {/* Assign existing Room Photos directly to Beds */}
+              {targetPhotoRoom?.room.photos && targetPhotoRoom.room.photos.length > 0 && (
+                <View style={{ marginTop: 14, padding: 10, backgroundColor: '#f8fafc', borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 8 }}>
+                    🖼️ Already Uploaded Room Photos — Tap to Assign to a Bed:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', gap: 8 }}>
+                    {targetPhotoRoom.room.photos.map((photoUri, pIdx) => (
+                      <View key={`existing-p-${pIdx}`} style={{ alignItems: 'center', marginRight: 10 }}>
+                        <Image source={{ uri: photoUri }} style={{ width: 56, height: 56, borderRadius: 8, marginBottom: 4 }} />
+                        <View style={{ flexDirection: 'row', gap: 4 }}>
+                          {targetPhotoRoom.room.beds.map((bd, bdIdx) => (
+                            <TouchableOpacity
+                              key={`assign-btn-${bd.id}-${pIdx}`}
+                              onPress={() => {
+                                const fNum = targetPhotoRoom.floorNum;
+                                const rId = targetPhotoRoom.room.id;
+                                setFloors((prev) => {
+                                  const nextFloors = prev.map((fl) => {
+                                    if (fl.floorNumber !== fNum) return fl;
+                                    return {
+                                      ...fl,
+                                      rooms: fl.rooms.map((rm) => {
+                                        if (rm.id !== rId) return rm;
+                                        return {
+                                          ...rm,
+                                          beds: rm.beds.map((b) => (b.id === bd.id ? { ...b, photo: photoUri } : b)),
+                                        };
+                                      }),
+                                    };
+                                  });
+                                  if (activeProperty?.id && typeof window !== 'undefined' && window.localStorage) {
+                                    try {
+                                      window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+                                      window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
+                                      window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
+                                      window.dispatchEvent(new Event('storage'));
+                                    } catch {}
+                                  }
+                                  return nextFloors;
+                                });
+                                setTargetPhotoRoom(null);
+                                notifyUser('Photo Assigned! 🛏️', `Photo assigned to Bed ${bdIdx + 1}`);
+                              }}
+                              style={{ paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: '#ea580c' }}
+                            >
+                              <Text style={{ fontSize: 10, color: '#ffffff', fontWeight: '800' }}>Bed {bdIdx + 1}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
 
               {/* General Room Gallery upload button */}
               <TouchableOpacity
@@ -3358,12 +3628,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             <Text style={styles.bedManageSectionTitle}>Beds in this Room</Text>
             <ScrollView style={{ maxHeight: 330, width: '100%' }}>
               {activeManagingRoom?.beds.map((bed, idx) => {
-                const occupant = bedOccupantMap.get(bed.id);
-                const isOcc = bed.status === 'OCCUPIED' || !!occupant;
+                const occupant = bedOccupantMap.get(bed.id) || bedOccupantMap.get(`${activeManagingRoom?.roomNumber}-${bed.bedLabel}`);
+                const isOcc = !!occupant;
                 const bedNum = idx + 1;
-                const fallbackNames = ['Harsha', 'Suresh', 'Rohit', 'Krishna', 'Siva Mani', 'Ramu', 'Phani', 'Kiran'];
-                const residentName = occupant?.fullName || fallbackNames[(idx + Number(activeManagingRoom.roomNumber || 101)) % fallbackNames.length];
-                const residentPhone = occupant?.phone || '9876543210';
+                const residentName = occupant?.fullName || 'Vacant';
+                const residentPhone = occupant?.phone || '';
 
                 return (
                   <View key={bed.id} style={styles.bedManageRowCard}>
@@ -4831,11 +5100,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#cbd5e1',
-    backgroundColor: '#ffffff',
+    borderColor: '#fed7aa',
+    backgroundColor: '#fffaf5',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 8,
+    position: 'relative',
   },
   bedIconEmojiGrey: {
     fontSize: 24,
@@ -4857,7 +5127,9 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#0f172a',
-    borderColor: '#fed7aa',
+    borderColor: '#f97316',
+    borderStyle: 'solid',
+    borderWidth: 2,
   },
   bedBoxImageCover: {
     position: 'absolute',
@@ -4867,18 +5139,19 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: '100%',
+    borderRadius: 14,
   },
   bedNumberHighlightBadge: {
     position: 'absolute',
-    top: 5,
-    left: 5,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-    zIndex: 2,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    zIndex: 10,
   },
   bedNumberHighlightText: {
     color: '#ffffff',
@@ -4897,7 +5170,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.3)',
-    zIndex: 2,
+    zIndex: 10,
   },
   bedPhotoCornerIcon: {
     position: 'absolute',
@@ -4908,22 +5181,23 @@ const styles = StyleSheet.create({
   },
   bedTenantHighlightBar: {
     position: 'absolute',
-    bottom: 5,
-    left: 5,
-    right: 5,
-    backgroundColor: 'rgba(15, 23, 42, 0.88)',
+    bottom: 4,
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(15, 23, 42, 0.94)',
     borderRadius: 8,
     paddingVertical: 3,
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.25)',
-    zIndex: 2,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    zIndex: 10,
   },
   bedTenantHighlightText: {
     color: '#ffffff',
-    fontSize: 10.5,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '900',
     textAlign: 'center',
   },
   occupiedPhotoBtn: {
@@ -4950,9 +5224,10 @@ const styles = StyleSheet.create({
     height: 42,
   },
   currencyPrefixLight: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#f97316',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#94a3b8',
+    letterSpacing: 0.5,
     marginRight: 6,
   },
   modalInnerCurrencyInput: {
@@ -4995,17 +5270,22 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff',
   },
   bedInlineAddPhotoBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     backgroundColor: '#fff7ed',
     borderWidth: 1,
     borderColor: '#fed7aa',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    marginBottom: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 3,
   },
   bedInlineAddPhotoBtnText: {
-    fontSize: 9,
-    fontWeight: '800',
+    fontSize: 10,
+    lineHeight: 12,
     color: '#ea580c',
   },
   targetBedInfoBanner: {
@@ -5035,6 +5315,7 @@ const styles = StyleSheet.create({
   targetBedChoiceCardNoPhoto: {
     backgroundColor: '#fffaf5',
     borderColor: '#fed7aa',
+    borderWidth: 1.5,
   },
   targetBedMiniThumb: {
     width: 44,
@@ -5046,11 +5327,11 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#fff7ed',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#fed7aa',
   },
   targetBedTitle: {
     fontSize: 13,

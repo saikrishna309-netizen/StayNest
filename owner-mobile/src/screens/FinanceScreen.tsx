@@ -192,6 +192,16 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
   useEffect(() => {
     loadFinanceData();
+
+    if (typeof window !== 'undefined') {
+      const handleExpenseAdded = () => loadFinanceData(true);
+      window.addEventListener('staynest_expense_added', handleExpenseAdded);
+      window.addEventListener('storage', handleExpenseAdded);
+      return () => {
+        window.removeEventListener('staynest_expense_added', handleExpenseAdded);
+        window.removeEventListener('storage', handleExpenseAdded);
+      };
+    }
   }, []);
 
   const handleRefresh = async () => {
@@ -205,8 +215,8 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     }
   };
 
-  const loadFinanceData = async () => {
-    setLoading(true);
+  const loadFinanceData = async (silent = false) => {
+    if (!silent && expenses.length === 0) setLoading(true);
     try {
       const [invRes, expRes, propRes] = await Promise.all([
         apiClient<{ content: RentInvoice[] }>('/owner/rent-invoices'),
@@ -224,6 +234,19 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
             const parsed = JSON.parse(cachedExp);
             if (Array.isArray(parsed) && parsed.length > 0) {
               loadedExpenses = parsed;
+            }
+          } catch {}
+        }
+
+        // Merge custom electricity and added expenses
+        const customExp = window.localStorage.getItem('staynest_custom_expenses');
+        if (customExp) {
+          try {
+            const parsedCustom = JSON.parse(customExp);
+            if (Array.isArray(parsedCustom) && parsedCustom.length > 0) {
+              const existingIds = new Set(loadedExpenses.map((e) => e.id));
+              const newItems = parsedCustom.filter((e: any) => !existingIds.has(e.id));
+              loadedExpenses = [...newItems, ...loadedExpenses];
             }
           } catch {}
         }

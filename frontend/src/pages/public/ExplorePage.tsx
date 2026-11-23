@@ -10,6 +10,44 @@ interface ExplorePageProps {
 // Fallback verified PG properties so a customer visiting always has verified PGs to explore & hold beds
 const VERIFIED_FALLBACK_PGS: PropertySummary[] = [
   {
+    id: 'prop-pg-1',
+    ownerId: 'owner-default-0',
+    name: 'StayNest Elite Men\'s PG',
+    propertyType: 'PG',
+    genderPolicy: 'BOYS',
+    cityId: 'vja-1',
+    cityName: 'Vijayawada',
+    localityId: 'mgroad-1',
+    localityName: 'MG Road',
+    addressLine: 'Opp. PVP Square Mall, MG Road, Vijayawada',
+    primaryPhotoUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
+    startingPricePaise: 850000,
+    foodIncluded: true,
+    approvalStatus: 'APPROVED',
+    published: true,
+    amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'AC_ROOMS'],
+    createdAt: '2026-11-22T10:00:00Z',
+  },
+  {
+    id: 'prop-pg-2',
+    ownerId: 'owner-default-0',
+    name: 'Sai Durga Executive Ladies PG',
+    propertyType: 'PG',
+    genderPolicy: 'GIRLS',
+    cityId: 'vja-1',
+    cityName: 'Vijayawada',
+    localityId: 'benzcircle-1',
+    localityName: 'Benz Circle',
+    addressLine: 'Near Benz Circle, Ring Road, Vijayawada',
+    primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
+    startingPricePaise: 950000,
+    foodIncluded: true,
+    approvalStatus: 'APPROVED',
+    published: true,
+    amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'BIKE_PARKING', 'CCTV_SECURITY'],
+    createdAt: '2026-11-22T10:30:00Z',
+  },
+  {
     id: 'staynest-pg-01',
     ownerId: 'owner-default-1',
     name: 'StayNest Luxury PG (Building 01)',
@@ -143,6 +181,49 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // 1. Check URL parameters for cross-origin sync payload from owner-mobile (Port 8081 -> Port 5173)
+    if (typeof window !== 'undefined') {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const syncPayload = urlParams.get('sync_data');
+        if (syncPayload) {
+          const decoded = JSON.parse(decodeURIComponent(syncPayload));
+          if (decoded.customProps) {
+            window.localStorage.setItem('staynest_custom_properties', JSON.stringify(decoded.customProps));
+          }
+          if (decoded.buildingPhotos) {
+            Object.keys(decoded.buildingPhotos).forEach((k) => {
+              window.localStorage.setItem(k, decoded.buildingPhotos[k]);
+            });
+          }
+          if (decoded.floors) {
+            Object.keys(decoded.floors).forEach((k) => {
+              window.localStorage.setItem(k, JSON.stringify(decoded.floors[k]));
+            });
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (err) {
+        console.log('Error parsing sync_data:', err);
+      }
+
+      // 2. Cross-tab/window postMessage listener
+      const handleSyncMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'STAYNEST_SYNC_DATA' && event.data.payload) {
+          const { customProps, buildingPhotos, floors } = event.data.payload;
+          if (customProps) window.localStorage.setItem('staynest_custom_properties', JSON.stringify(customProps));
+          if (buildingPhotos) {
+            Object.keys(buildingPhotos).forEach((k) => window.localStorage.setItem(k, buildingPhotos[k]));
+          }
+          if (floors) {
+            Object.keys(floors).forEach((k) => window.localStorage.setItem(k, JSON.stringify(floors[k])));
+          }
+          searchProperties();
+        }
+      };
+      window.addEventListener('message', handleSyncMessage);
+    }
+
     loadCities();
     searchProperties();
 
@@ -182,11 +263,13 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
   const searchProperties = async () => {
     setLoading(true);
     try {
-      let baseList: PropertySummary[] = VERIFIED_FALLBACK_PGS;
+      let baseList: PropertySummary[] = [...VERIFIED_FALLBACK_PGS];
       try {
         const res = await propertyApi.searchProperties({ size: 50 });
         if (res && res.content && res.content.length > 0) {
-          baseList = res.content;
+          const fallbackIds = new Set(VERIFIED_FALLBACK_PGS.map((p) => p.id));
+          const extraBackend = res.content.filter((p) => !fallbackIds.has(p.id));
+          baseList = [...VERIFIED_FALLBACK_PGS, ...extraBackend];
         }
       } catch {
         // use fallback list
@@ -199,12 +282,22 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
           if (cachedProps) {
             const parsed = JSON.parse(cachedProps);
             if (Array.isArray(parsed) && parsed.length > 0) {
+              const customMap = new Map(parsed.map((p: any) => [p.id, p]));
+              baseList = baseList.map((p) => (customMap.has(p.id) ? { ...p, ...customMap.get(p.id) } : p));
               const existingIds = new Set(baseList.map((p) => p.id));
               const newProps = parsed.filter((p: any) => !existingIds.has(p.id));
               baseList = [...newProps, ...baseList];
             }
           }
         } catch { }
+
+        // Also check if custom building photo exists for any property in baseList
+        baseList = baseList.map((p) => {
+          const customPhoto =
+            window.localStorage.getItem(`staynest_building_photo_${p.id}`) ||
+            (p.id === 'ramesh-pg-default' ? window.localStorage.getItem('staynest_building_photo_default') : null);
+          return customPhoto ? { ...p, primaryPhotoUrl: customPhoto } : p;
+        });
       }
 
       setProperties(baseList);
