@@ -39,12 +39,14 @@ interface DashboardScreenProps {
   onSelectPropertyForRooms: (property: Property) => void;
   onNavigateTab: (tab: 'rooms' | 'tenants' | 'finance' | 'profile') => void;
   onActivePropertyChange?: (property: Property) => void;
+  resetTrigger?: number;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onSelectPropertyForRooms,
   onNavigateTab,
   onActivePropertyChange,
+  resetTrigger,
 }) => {
   const { user, logout } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -332,6 +334,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   // Bed Hold Enquiries & Notifications State (Requirement 1 & Requirement 5)
   const [enquiries, setEnquiries] = useState<ResidentEnquiry[]>([]);
   const [showNotificationsPage, setShowNotificationsPage] = useState(false);
+
+  // Listen for Dashboard bottom icon press to dismiss notifications & return to dashboard
+  useEffect(() => {
+    if (resetTrigger) {
+      setShowNotificationsPage(false);
+    }
+  }, [resetTrigger]);
   const [showElectricityModal, setShowElectricityModal] = useState(false);
   const [electricityBoard, setElectricityBoard] = useState('BESCOM - Bengaluru');
   const [consumerNumber, setConsumerNumber] = useState('1029384756');
@@ -6569,12 +6578,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1.5,
+    borderColor: '#f97316',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   enquiryCardTopRow: {
     flexDirection: 'row',
@@ -6806,19 +6815,19 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 24,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#f97316',
   },
   notifDueCard: {
     backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1.5,
+    borderColor: '#f97316',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   notifWaPayBtn: {
     flex: 1,
@@ -6848,8 +6857,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#f97316',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
   notifSubIconBox: {
     width: 38,

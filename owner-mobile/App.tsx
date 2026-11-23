@@ -64,6 +64,7 @@ const MainNavigator: React.FC = () => {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [registrationSkipped, setRegistrationSkipped] = useState(false);
   const [webDeviceMode, setWebDeviceMode] = useState<'MOBILE' | 'DESKTOP'>('DESKTOP');
+  const [dashboardResetTrigger, setDashboardResetTrigger] = useState(0);
 
   // 1. If not authenticated -> Login Screen (Mobile + OTP)
   if (!isAuthenticated) {
@@ -153,6 +154,7 @@ const MainNavigator: React.FC = () => {
           {/* Tab 1: Dashboard (Fast Persistent Pane) */}
           <View style={[styles.tabPane, currentTab === 'dashboard' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <DashboardScreen
+              resetTrigger={dashboardResetTrigger}
               onSelectPropertyForRooms={handleOpenProperty}
               onActivePropertyChange={(p) => setSelectedProperty(p)}
               onNavigateTab={(tab) => {
@@ -199,7 +201,10 @@ const MainNavigator: React.FC = () => {
               {/* Tab 1: Dashboard / Home */}
               <TouchableOpacity
                 style={[styles.floatingTabCircle, currentTab === 'dashboard' && styles.floatingTabCircleActive]}
-                onPress={() => setCurrentTab('dashboard')}
+                onPress={() => {
+                  setCurrentTab('dashboard');
+                  setDashboardResetTrigger((prev) => prev + 1);
+                }}
                 activeOpacity={0.8}
               >
                 <NavHomeIcon color={currentTab === 'dashboard' ? '#ffffff' : '#9a3412'} />

@@ -1904,8 +1904,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             resizeMode="contain"
           />
 
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <Text style={styles.pageTitleHeader}>Room Management</Text>
+          <View style={styles.headerCenterAbsolute} pointerEvents="none">
+            <Text style={styles.pageTitleHeader} numberOfLines={1}>Room Management</Text>
           </View>
 
           <View style={styles.headerRightActions}>
@@ -3812,13 +3812,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    position: 'relative',
+    minHeight: 40,
+  },
+  headerCenterAbsolute: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
   },
   headerLogo: {
-    width: 120,
-    height: 40,
+    width: 95,
+    height: 38,
+    zIndex: 2,
   },
   pageTitleHeader: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     color: '#0f172a',
   },
@@ -3826,6 +3839,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    zIndex: 2,
   },
   headerIconBtn: {
     width: 34,
