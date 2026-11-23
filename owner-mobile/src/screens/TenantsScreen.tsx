@@ -15,6 +15,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { safeStorage } from '../utils/safeStorage';
 import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
 
@@ -209,6 +210,27 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         const existingPhones = new Set(loadedTenants.map((t) => t.phone));
         loadedTenants = [...loadedTenants, ...multiPgTenants.filter((mt) => !existingPhones.has(mt.phone))];
       }
+
+      // Merge locally onboarded custom tenants from safeStorage so they remain ACTIVE with assigned room & bed
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        if (storedCustomStr) {
+          const customList: Tenant[] = JSON.parse(storedCustomStr);
+          const customIds = new Set(customList.map((ct) => ct.id));
+          const customPhones = new Set(customList.map((ct) => ct.phone));
+          loadedTenants = [
+            ...customList,
+            ...loadedTenants.filter((lt) => !customIds.has(lt.id) && !customPhones.has(lt.phone)),
+          ];
+        }
+      } catch {}
+
+      // Ensure every resident without explicit termination is marked ACTIVE
+      loadedTenants = loadedTenants.map((t) => ({
+        ...t,
+        active: t.stayStatus === 'TERMINATED' ? false : t.active !== false,
+        stayStatus: t.stayStatus === 'TERMINATED' ? 'TERMINATED' : 'ACTIVE',
+      }));
 
       setTenants(loadedTenants);
 
@@ -467,8 +489,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         outstandingPaise: rentDue * 100,
         rentStatus: rentDue === 0 ? 'PAID' : (payingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
         active: true,
+        stayStatus: 'ACTIVE',
         createdAt: new Date().toISOString(),
       };
+
+      // Persist newly onboarded resident to local safeStorage
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
+        const mergedCustom = [newTenantRecord, ...customList.filter((ct) => ct.id !== createdTenantId && ct.phone !== phone.trim())];
+        await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(mergedCustom));
+      } catch {}
+
       setTenants((prev) => [newTenantRecord, ...prev.filter((t) => t.id !== createdTenantId)]);
 
       const alertMsg = rentDue > 0
@@ -640,6 +672,19 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       }
 
       // 2. Seamlessly update local state: mark tenant inactive & vacate bed
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        if (storedCustomStr) {
+          const customList: Tenant[] = JSON.parse(storedCustomStr);
+          const updatedCustom = customList.map((ct) =>
+            ct.id === tenant.id
+              ? { ...ct, active: false, stayStatus: 'TERMINATED', bedId: undefined, roomNumber: undefined }
+              : ct
+          );
+          await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(updatedCustom));
+        }
+      } catch {}
+
       setTenants((prev) =>
         prev.map((t) =>
           t.id === tenant.id

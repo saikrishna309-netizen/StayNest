@@ -19,7 +19,7 @@ import { apiClient } from '../api/client';
 import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -30,6 +30,13 @@ const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; siz
       strokeLinecap="round"
       strokeLinejoin="round"
     />
+  </Svg>
+);
+
+const OutlineSearchIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Circle cx="11" cy="11" r="7" stroke={color} strokeWidth="2" />
+    <Path d="M21 21l-4.35-4.35" stroke={color} strokeWidth="2" strokeLinecap="round" />
   </Svg>
 );
 
@@ -1891,30 +1898,22 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       {/* ─── TOP BRAND & ACTIONS HEADER (IMAGE 2 STYLE) ─── */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <Image
-              source={require('../../assets/logo.png')}
-              style={styles.headerLogo}
-              resizeMode="contain"
-            />
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={styles.pageTitleHeader}>Room Management</Text>
           </View>
 
           <View style={styles.headerRightActions}>
             <TouchableOpacity style={styles.headerIconBtn}>
-              <Text style={{ fontSize: 16 }}>🔍</Text>
+              <OutlineSearchIcon color="#475569" size={18} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerIconBtn}>
               <OutlineBellIcon color="#475569" size={18} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerAvatarCircle}>
-              <Text style={{ fontSize: 14 }}>👤</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.createTaskCoralBtn}
-              onPress={() => setShowAddPropertyModal(true)}
-            >
-              <Text style={styles.createTaskCoralBtnText}>+ Create Task</Text>
             </TouchableOpacity>
           </View>
         </View>

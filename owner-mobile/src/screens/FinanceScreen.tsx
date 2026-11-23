@@ -642,7 +642,11 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
           </View>
 
           {/* Bar Chart Visualization */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ minWidth: '100%', paddingHorizontal: 4 }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chartScrollContent}
+          >
             <View style={styles.chartBarsContainer}>
               {displayPnlRecords.map((item, idx) => {
                 const revH = Math.max(16, Math.min(100, Math.round((item.revenue / maxVal) * 95)));
@@ -1328,10 +1332,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#475569',
   },
+  chartScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
   chartBarsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'flex-end',
+    width: '100%',
+    minWidth: 320,
     height: 150,
     paddingTop: 20,
     borderBottomWidth: 1,
@@ -1340,7 +1352,9 @@ const styles = StyleSheet.create({
   },
   barGroup: {
     alignItems: 'center',
-    flex: 1,
+    justifyContent: 'flex-end',
+    minWidth: 46,
+    paddingHorizontal: 4,
   },
   barProfitBadge: {
     paddingHorizontal: 4,
@@ -1386,13 +1400,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 2,
+    borderColor: '#f97316',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   fixedBillsHeaderRow: {
     flexDirection: 'row',
@@ -1403,7 +1417,7 @@ const styles = StyleSheet.create({
   fixedBillsTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#334155',
   },
   fixedBillsSub: {
     fontSize: 11,
@@ -1460,11 +1474,11 @@ const styles = StyleSheet.create({
   billRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#fffaf5',
     borderRadius: 10,
     padding: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
   },
   billIconCircle: {
     width: 32,
@@ -1474,12 +1488,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#fed7aa',
   },
   billTitle: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#334155',
   },
   billDueInfo: {
     fontSize: 10,
@@ -1489,7 +1503,7 @@ const styles = StyleSheet.create({
   billAmount: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#334155',
   },
   billPerText: {
     fontSize: 9,
@@ -1519,9 +1533,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 2,
+    borderColor: '#f97316',
     marginBottom: 16,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   quickExpensesTitle: {
     fontSize: 11,
@@ -1541,12 +1559,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   templateChip: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#fffaf5',
     borderRadius: 8,
     paddingVertical: 7,
     paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
   },
   templateChipActive: {
     backgroundColor: '#fff7ed',
@@ -1616,7 +1634,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#0f172a',
+    color: '#334155',
     letterSpacing: 0.5,
   },
   sectionSub: {
@@ -1626,18 +1644,22 @@ const styles = StyleSheet.create({
   },
   expCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#f97316',
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
   },
   expTitle: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#334155',
   },
   expCategory: {
     fontSize: 10,
