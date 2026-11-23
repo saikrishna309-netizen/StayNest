@@ -21,6 +21,19 @@ import { GooglePayLogo, PhonePeLogo, PaytmLogo, BhimUpiLogo, CardPaymentLogo } f
 import { validateVerhoeffAadhaar, parseAadhaarQrPayload } from '../utils/aadhaar';
 import { ElectricityBillModal } from '../components/modals/ElectricityBillModal';
 import { fastDataCache } from '../services/dataCache';
+import Svg, { Path } from 'react-native-svg';
+
+const OutlineBellIcon = ({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
 interface DashboardScreenProps {
   onSelectPropertyForRooms: (property: Property) => void;
@@ -1946,7 +1959,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 style={styles.heroBellBtn}
                 onPress={() => setShowNotificationsPage(true)}
               >
-                <Text style={{ fontSize: 18 }}>🔔</Text>
+                <OutlineBellIcon color="#ffffff" size={20} />
                 {pendingEnquiriesCount > 0 ? (
                   <View style={styles.heroBellBadge}>
                     <Text style={styles.heroBellBadgeText}>{pendingEnquiriesCount}</Text>
@@ -2216,7 +2229,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             activeOpacity={0.85}
           >
             <View style={styles.enquiryAlertIconCircle}>
-              <Text style={{ fontSize: 18 }}>🔔</Text>
+              <OutlineBellIcon color="#ea580c" size={18} />
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -4792,7 +4805,7 @@ const styles = StyleSheet.create({
   // ─── Lavender Curved Hero Header (Screenshot Style) ───
   heroLavenderContainer: {
     backgroundColor: '#6c5ce7',
-    paddingTop: Platform.OS === 'ios' ? 44 : 20,
+    paddingTop: 16,
     paddingHorizontal: 16,
     paddingBottom: 22,
     borderBottomLeftRadius: 30,

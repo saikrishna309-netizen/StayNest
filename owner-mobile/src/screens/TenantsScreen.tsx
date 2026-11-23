@@ -435,7 +435,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                   ? `Partial onboarding rent paid ₹${payingNow}. Remaining ₹${rentDue} due.`
                   : 'Full rent paid at onboarding.',
               }),
-            }).catch(() => {});
+            }).catch(() => { });
           }
         } catch {
           if (payingNow > 0) {
@@ -522,7 +522,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           paymentDate: new Date().toISOString().split('T')[0],
           notes: newDue > 0 ? `Paid ₹${payAmount}. Remaining ₹${newDue} due.` : `Paid ₹${payAmount} in full.`,
         }),
-      }).catch(() => {});
+      }).catch(() => { });
 
       // Immediately update local state
       setTenants((prev) =>
@@ -936,7 +936,25 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         {/* Onboarding Form */}
         {showForm && (
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Onboard New Resident</Text>
+            <View style={styles.formHeaderRow}>
+              <View>
+                <Text style={styles.formTitle}>Onboard New Resident</Text>
+                <Text style={styles.formSubtitle}>Assign room & bed to resident</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.closeFormCircleBtn}
+                onPress={() => {
+                  setShowForm(false);
+                  setFullName('');
+                  setPhone('');
+                  setEmail('');
+                  setIdProofNumber('');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.closeFormCircleText}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Property Selector */}
             {properties.length > 1 && (
@@ -1128,15 +1146,30 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               </View>
             </View>
 
-            <TouchableOpacity
-              style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
-              onPress={handleOnboard}
-              disabled={submitting}
-            >
-              <Text style={styles.submitBtnText}>
-                {submitting ? 'Onboarding...' : 'Confirm & Allocate Bed'}
-              </Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+              <TouchableOpacity
+                style={styles.cancelFormBtn}
+                onPress={() => {
+                  setShowForm(false);
+                  setFullName('');
+                  setPhone('');
+                  setEmail('');
+                  setIdProofNumber('');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.cancelFormBtnText}>✕ Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]}
+                onPress={handleOnboard}
+                disabled={submitting}
+              >
+                <Text style={styles.submitBtnText}>
+                  {submitting ? 'Onboarding...' : 'Confirm & Allocate Bed'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -1212,19 +1245,19 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               tab === 'ALL'
                 ? tenants.length
                 : tab === 'DUE'
-                ? tenants.filter((t) => (t.active !== false && t.stayStatus !== 'TERMINATED') && ((typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0) || t.rentStatus === 'DUE' || t.rentStatus === 'OVERDUE' || t.rentStatus === 'PARTIALLY_PAID')).length
-                : tab === 'ACTIVE'
-                ? tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED').length
-                : tenants.filter((t) => t.active === false || t.stayStatus === 'TERMINATED').length;
+                  ? tenants.filter((t) => (t.active !== false && t.stayStatus !== 'TERMINATED') && ((typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0) || t.rentStatus === 'DUE' || t.rentStatus === 'OVERDUE' || t.rentStatus === 'PARTIALLY_PAID')).length
+                  : tab === 'ACTIVE'
+                    ? tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED').length
+                    : tenants.filter((t) => t.active === false || t.stayStatus === 'TERMINATED').length;
 
             const label =
               tab === 'ALL'
                 ? `All (${count})`
                 : tab === 'DUE'
-                ? `🔴 Rent Due (${count})`
-                : tab === 'ACTIVE'
-                ? `Active (${count})`
-                : `Vacated (${count})`;
+                  ? `🔴 Rent Due (${count})`
+                  : tab === 'ACTIVE'
+                    ? `Active (${count})`
+                    : `Vacated (${count})`;
 
             const isDueTab = tab === 'DUE';
             const isActiveTab = statusFilter === tab;
@@ -1264,8 +1297,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               {statusFilter === 'DUE'
                 ? 'All residents are up-to-date! No pending rent dues.'
                 : statusFilter === 'ACTIVE'
-                ? 'No active residents found. Tap "+ Onboard" to register a tenant.'
-                : 'No records matching your search/filter.'}
+                  ? 'No active residents found. Tap "+ Onboard" to register a tenant.'
+                  : 'No records matching your search/filter.'}
             </Text>
           </View>
         ) : (
@@ -1377,8 +1410,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                       {isPaidFull
                         ? '✓ Fully Paid'
                         : isPartial
-                        ? `Paid ${paidPercent}% • ₹${dueRent.toLocaleString('en-IN')} due`
-                        : `0% Paid • ₹${dueRent.toLocaleString('en-IN')} pending`}
+                          ? `Paid ${paidPercent}% • ₹${dueRent.toLocaleString('en-IN')} due`
+                          : `0% Paid • ₹${dueRent.toLocaleString('en-IN')} pending`}
                     </Text>
 
                     {dueRent > 0 && (
@@ -2043,16 +2076,59 @@ const styles = StyleSheet.create({
   formCard: {
     backgroundColor: '#ffffff',
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#c7d2fe',
+    borderWidth: 2,
+    borderColor: '#f97316',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  formHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
   formTitle: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#1e1b4b',
-    marginBottom: 12,
+    color: '#0f172a',
+  },
+  formSubtitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 1,
+  },
+  closeFormCircleBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#fee2e2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeFormCircleText: {
+    color: '#ef4444',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  cancelFormBtn: {
+    flex: 1,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+  },
+  cancelFormBtnText: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
   },
   label: {
     fontSize: 10,

@@ -19,6 +19,19 @@ import { apiClient } from '../api/client';
 import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
+import Svg, { Path } from 'react-native-svg';
+
+const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
 interface PropertiesScreenProps {
   initialProperty?: Property | null;
@@ -878,7 +891,188 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   ];
 
   const getInitialFloorsForProperty = (propId: string): FloorConfig[] => {
-    return getModularFloors(propId) as any as FloorConfig[];
+    if (propId === 'prop-pg-2') {
+      return [
+        {
+          floorNumber: 1,
+          rooms: [
+            {
+              id: 'rm-prop-pg-2-101',
+              roomNumber: '101',
+              floorNumber: 1,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-102',
+              roomNumber: '102',
+              floorNumber: 1,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-102-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+          ],
+        },
+        {
+          floorNumber: 2,
+          rooms: [
+            {
+              id: 'rm-prop-pg-2-201',
+              roomNumber: '201',
+              floorNumber: 2,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-201-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+            {
+              id: 'rm-prop-pg-2-202',
+              roomNumber: '202',
+              floorNumber: 2,
+              sharingType: 'TRIPLE',
+              rentRupees: 9500,
+              depositRupees: 9500,
+              ac: true,
+              attachedBathroom: true,
+              beds: [
+                { id: 'b-prop-pg-2-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+                { id: 'b-prop-pg-2-202-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              ],
+            },
+          ],
+        },
+      ];
+    }
+
+    return [
+      {
+        floorNumber: 1,
+        rooms: [
+          {
+            id: 'rm-prop-pg-1-101',
+            roomNumber: '101',
+            floorNumber: 1,
+            sharingType: 'SIX',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-4', bedLabel: 'Bed 4', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-5', bedLabel: 'Bed 5', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-101-6', bedLabel: 'Bed 6', status: 'AVAILABLE' },
+            ],
+          },
+          {
+            id: 'rm-prop-pg-1-102',
+            roomNumber: '102',
+            floorNumber: 1,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            ],
+          },
+        ],
+      },
+      {
+        floorNumber: 2,
+        rooms: [
+          {
+            id: 'rm-prop-pg-1-201',
+            roomNumber: '201',
+            floorNumber: 2,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            ],
+          },
+          {
+            id: 'rm-prop-pg-1-202',
+            roomNumber: '202',
+            floorNumber: 2,
+            sharingType: 'DOUBLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+            ],
+          },
+        ],
+      },
+      {
+        floorNumber: 3,
+        rooms: [
+          {
+            id: 'rm-prop-pg-1-301',
+            roomNumber: '301',
+            floorNumber: 3,
+            sharingType: 'TRIPLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-301-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-301-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-301-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+            ],
+          },
+          {
+            id: 'rm-prop-pg-1-302',
+            roomNumber: '302',
+            floorNumber: 3,
+            sharingType: 'TRIPLE',
+            rentRupees: 8500,
+            depositRupees: 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: [
+              { id: 'b-prop-pg-1-302-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-302-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
+              { id: 'b-prop-pg-1-302-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
+            ],
+          },
+        ],
+      },
+    ];
   };
 
   const loadPropertiesAndRooms = async () => {
@@ -1711,7 +1905,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               <Text style={{ fontSize: 16 }}>🔍</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerIconBtn}>
-              <Text style={{ fontSize: 16 }}>🔔</Text>
+              <OutlineBellIcon color="#475569" size={18} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.headerAvatarCircle}>
               <Text style={{ fontSize: 14 }}>👤</Text>
@@ -4882,65 +5076,69 @@ const styles = StyleSheet.create({
   roomBedsGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 6,
     alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   bedBoxCard: {
-    width: 96,
-    height: 104,
-    borderRadius: 16,
+    width: '31%',
+    height: 94,
+    borderRadius: 14,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    padding: 4,
     shadowColor: '#000',
     shadowOpacity: 0.03,
     shadowRadius: 4,
     elevation: 1,
+    marginVertical: 3,
   },
   bedIconEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
-  },
-  bedBoxNumber: {
-    fontSize: 15,
-    fontWeight: '900',
+    fontSize: 18,
     marginBottom: 2,
   },
+  bedBoxNumber: {
+    fontSize: 13,
+    fontWeight: '900',
+    marginBottom: 1,
+  },
   bedBoxTenantName: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
     textAlign: 'center',
   },
   bedBoxWrapper: {
     position: 'relative',
+    width: '31%',
   },
   bedBoxVacantCard: {
-    width: 96,
-    height: 104,
-    borderRadius: 16,
+    width: '31%',
+    height: 94,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: '#fed7aa',
     backgroundColor: '#fffaf5',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    padding: 4,
     position: 'relative',
+    marginVertical: 3,
   },
   bedIconEmojiGrey: {
-    fontSize: 24,
-    marginBottom: 4,
+    fontSize: 18,
+    marginBottom: 2,
     opacity: 0.4,
   },
   bedBoxVacantNumber: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900',
     color: '#64748b',
-    marginBottom: 2,
+    marginBottom: 1,
   },
   bedBoxAddText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '800',
     color: '#ff7337',
   },
@@ -5250,16 +5448,17 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   inlineAddBedCard: {
-    width: 96,
-    height: 104,
-    borderRadius: 16,
+    width: '31%',
+    height: 94,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: '#fed7aa',
     backgroundColor: '#fff7ed',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    padding: 4,
+    marginVertical: 3,
   },
   inlineAddBedPlus: {
     fontSize: 22,

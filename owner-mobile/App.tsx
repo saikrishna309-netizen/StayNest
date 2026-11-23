@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -113,7 +113,7 @@ const MainNavigator: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <View style={styles.webOuterWrapper}>
         {/* On Web: Switcher bar to toggle between Mobile Frame & Full Desktop Width */}
         {Platform.OS === 'web' && (
@@ -302,7 +302,8 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#6c5ce7',
+    paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0,
   },
   webOuterWrapper: {
     flex: 1,
@@ -386,7 +387,7 @@ const styles = StyleSheet.create({
   // ─── Floating Trendy Bottom Bar (Light Orange Pill + White Icon on Active Circle) ───
   floatingBarOuter: {
     paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 28,
+    paddingBottom: Platform.OS === 'android' ? 46 : 28,
     paddingTop: 8,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
