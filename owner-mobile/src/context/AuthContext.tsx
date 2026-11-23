@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorage } from '../utils/safeStorage';
 import { apiClient, setAuthToken } from '../api/client';
 import { User } from '../types';
 
@@ -27,8 +27,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const storedToken = await AsyncStorage.getItem('@staynest_owner_token');
-        const storedUser = await AsyncStorage.getItem('@staynest_owner_user');
+        const storedToken = await safeStorage.getItem('@staynest_owner_token');
+        const storedUser = await safeStorage.getItem('@staynest_owner_user');
         if (storedToken && storedUser) {
           setAuthToken(storedToken);
           setToken(storedToken);
@@ -119,18 +119,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(authenticatedToken);
       setUser(authenticatedUser);
 
-      // Persist session to AsyncStorage so owner stays logged in on reopen
+      // Persist session to safeStorage so owner stays logged in on reopen
       try {
-        await AsyncStorage.setItem('@staynest_owner_token', authenticatedToken);
-        await AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(authenticatedUser));
+        await safeStorage.setItem('@staynest_owner_token', authenticatedToken);
+        await safeStorage.setItem('@staynest_owner_user', JSON.stringify(authenticatedUser));
       } catch (storageErr) {
-        console.log('Storage save error:', storageErr);
+        console.log('Storage save note:', storageErr);
       }
 
       // ─── Send automated WhatsApp Welcome Message ONLY on first onboarding ───
       try {
         const welcomeKey = `@staynest_welcomed_${cleanPhone}`;
-        const hasBeenWelcomed = await AsyncStorage.getItem(welcomeKey);
+        const hasBeenWelcomed = await safeStorage.getItem(welcomeKey);
         if (!hasBeenWelcomed) {
           const welcomeParams = new URLSearchParams();
           welcomeParams.append('token', '4kcul3wmcwdoh5d0');
@@ -144,7 +144,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: welcomeParams.toString(),
           }).catch(() => {});
-          await AsyncStorage.setItem(welcomeKey, 'true');
+          await safeStorage.setItem(welcomeKey, 'true');
         }
       } catch {}
     }
@@ -158,14 +158,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setUser(updatedUser);
       if (updatedUser) {
-        await AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(updatedUser));
+        await safeStorage.setItem('@staynest_owner_user', JSON.stringify(updatedUser));
       }
     } catch {
       // Local fallback for smooth offline / demo experience
       setUser((prev) => {
         const updated = prev ? { ...prev, fullName: fullName.trim(), email: email.trim() } : null;
         if (updated) {
-          AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(updated)).catch(() => {});
+          safeStorage.setItem('@staynest_owner_user', JSON.stringify(updated)).catch(() => {});
         }
         return updated;
       });
@@ -181,13 +181,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthToken(res.accessToken);
     setToken(res.accessToken);
     setUser(res.user);
-    await AsyncStorage.setItem('@staynest_owner_token', res.accessToken);
-    await AsyncStorage.setItem('@staynest_owner_user', JSON.stringify(res.user));
+    await safeStorage.setItem('@staynest_owner_token', res.accessToken);
+    await safeStorage.setItem('@staynest_owner_user', JSON.stringify(res.user));
   };
 
   const logout = () => {
-    AsyncStorage.removeItem('@staynest_owner_token').catch(() => {});
-    AsyncStorage.removeItem('@staynest_owner_user').catch(() => {});
+    safeStorage.removeItem('@staynest_owner_token').catch(() => {});
+    safeStorage.removeItem('@staynest_owner_user').catch(() => {});
     setAuthToken(null);
     setToken(null);
     setUser(null);

@@ -13,7 +13,7 @@ import {
   ActivityIndicator,
   Linking,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { safeStorage } from '../utils/safeStorage';
 import { useAuth } from '../context/AuthContext';
 import { GooglePayLogo, PhonePeLogo, PaytmLogo, CardPaymentLogo } from '../components/PaymentLogos';
 import { pickImageFromDevice } from '../utils/imagePicker';
@@ -58,11 +58,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
   const [subscribing, setSubscribing] = useState(false);
   const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
 
-  // Load custom profile & banner from AsyncStorage
+  // Load custom profile & banner from safeStorage
   useEffect(() => {
     const loadSavedProfile = async () => {
       try {
-        const savedData = await AsyncStorage.getItem('@staynest_owner_custom_profile');
+        const savedData = await safeStorage.getItem('@staynest_owner_custom_profile');
         if (savedData) {
           const parsed = JSON.parse(savedData);
           if (parsed.fullName) setFullName(parsed.fullName);
@@ -104,7 +104,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
         bannerUrl: editBannerUrl.trim() || defaultBanner,
       };
 
-      await AsyncStorage.setItem('@staynest_owner_custom_profile', JSON.stringify(profilePayload));
+      await safeStorage.setItem('@staynest_owner_custom_profile', JSON.stringify(profilePayload));
       await updateProfile(editName.trim(), editEmail.trim());
 
       setIsEditModalOpen(false);
@@ -123,9 +123,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
       if (picked) {
         setAvatarUrl(picked);
         setEditAvatarUrl(picked);
-        const savedData = await AsyncStorage.getItem('@staynest_owner_custom_profile');
+        const savedData = await safeStorage.getItem('@staynest_owner_custom_profile');
         const parsed = savedData ? JSON.parse(savedData) : {};
-        await AsyncStorage.setItem(
+        await safeStorage.setItem(
           '@staynest_owner_custom_profile',
           JSON.stringify({ ...parsed, avatarUrl: picked })
         );
@@ -143,9 +143,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
       if (picked) {
         setBannerUrl(picked);
         setEditBannerUrl(picked);
-        const savedData = await AsyncStorage.getItem('@staynest_owner_custom_profile');
+        const savedData = await safeStorage.getItem('@staynest_owner_custom_profile');
         const parsed = savedData ? JSON.parse(savedData) : {};
-        await AsyncStorage.setItem(
+        await safeStorage.setItem(
           '@staynest_owner_custom_profile',
           JSON.stringify({ ...parsed, bannerUrl: picked })
         );
