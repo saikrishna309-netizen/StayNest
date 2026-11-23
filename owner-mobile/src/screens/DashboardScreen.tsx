@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   TextInput,
   Alert,
   Linking,
+  Animated,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
@@ -21,6 +22,7 @@ import { GooglePayLogo, PhonePeLogo, PaytmLogo, BhimUpiLogo, CardPaymentLogo } f
 import { validateVerhoeffAadhaar, parseAadhaarQrPayload } from '../utils/aadhaar';
 import { ElectricityBillModal } from '../components/modals/ElectricityBillModal';
 import { fastDataCache } from '../services/dataCache';
+import { safeStorage } from '../utils/safeStorage';
 import Svg, { Path } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) => (
@@ -341,6 +343,65 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setShowNotificationsPage(false);
     }
   }, [resetTrigger]);
+
+  // Owner Name Display (Requirement 2: Give name of owner instead of PG Owner)
+  const [ownerDisplayName, setOwnerDisplayName] = useState<string>(() => {
+    if (user?.fullName && user.fullName !== 'StayNest PG Owner' && user.fullName !== 'PG Owner') {
+      return user.fullName;
+    }
+    return 'Ramesh Kumar';
+  });
+
+  useEffect(() => {
+    const loadOwnerName = async () => {
+      try {
+        const saved = await safeStorage.getItem('@staynest_owner_custom_profile');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.fullName && parsed.fullName !== 'StayNest PG Owner' && parsed.fullName !== 'PG Owner') {
+            setOwnerDisplayName(parsed.fullName);
+            return;
+          }
+        }
+        if (user?.fullName && user.fullName !== 'StayNest PG Owner' && user.fullName !== 'PG Owner') {
+          setOwnerDisplayName(user.fullName);
+        }
+      } catch {}
+    };
+    loadOwnerName();
+  }, [user]);
+
+  // Quick Actions Animated Shining Border Glow (Requirement 4)
+  const borderGlowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(borderGlowAnim, {
+          toValue: 1,
+          duration: 1600,
+          useNativeDriver: false,
+        }),
+        Animated.timing(borderGlowAnim, {
+          toValue: 0,
+          duration: 1600,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [borderGlowAnim]);
+
+  const animatedBorderColor = borderGlowAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['#f97316', '#fdba74', '#ea580c'],
+  });
+
+  const animatedShadowOpacity = borderGlowAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.15, 0.45, 0.18],
+  });
   const [showElectricityModal, setShowElectricityModal] = useState(false);
   const [electricityBoard, setElectricityBoard] = useState('BESCOM - Bengaluru');
   const [consumerNumber, setConsumerNumber] = useState('1029384756');
@@ -1945,65 +2006,65 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       >
         {/* ─── 1. LAVENDER/PURPLE CURVED HERO HEADER (SCREENSHOT STYLE) ─── */}
         <View style={styles.heroLavenderContainer}>
-          {/* Top Row: Property Selector Pill & Notifications / Profile */}
-          <View style={styles.heroTopBar}>
-            {/* Property Selector Pill (Dropdown Trigger - Requirements 3, 4, 5) */}
-            <TouchableOpacity
-              style={styles.heroPropertyPill}
-              onPress={() => setShowPgDropdown(true)}
-              activeOpacity={0.8}
-            >
-              <View style={styles.heroPropThumb}>
-                <Text style={{ fontSize: 13 }}>🏢</Text>
-              </View>
-              <Text style={styles.heroPropName} numberOfLines={1}>
-                {activePropertyName}
-              </Text>
-              <Text style={styles.heroPropArrow}>⌵</Text>
-            </TouchableOpacity>
-
-            {/* Right: Notification Bell & Profile Avatar */}
-            <View style={styles.heroRightActions}>
+          {/* Top Divided Box with Same Color & Orange Border (Requirement 1) */}
+          <View style={styles.heroTopDividedBox}>
+            {/* Top Row: Property Selector Pill & Notifications / Profile */}
+            <View style={styles.heroTopBar}>
+              {/* Property Selector Pill (Dropdown Trigger - Requirements 3, 4, 5) */}
               <TouchableOpacity
-                style={styles.heroBellBtn}
-                onPress={() => setShowNotificationsPage(true)}
+                style={styles.heroPropertyPill}
+                onPress={() => setShowPgDropdown(true)}
+                activeOpacity={0.8}
               >
-                <OutlineBellIcon color="#ffffff" size={20} />
-                {pendingEnquiriesCount > 0 ? (
-                  <View style={styles.heroBellBadge}>
-                    <Text style={styles.heroBellBadgeText}>{pendingEnquiriesCount}</Text>
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.heroAvatarBtn}
-                onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
-              >
-                <Text style={styles.heroAvatarText}>
-                  {user?.fullName ? user.fullName.charAt(0).toUpperCase() : 'P'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Title Row: Unique Indian Welcome Greeting */}
-          <View style={styles.heroTitleRow}>
-            <View style={{ flex: 1, paddingRight: 8 }}>
-              <View style={styles.heroGreetingTimeRow}>
-                <Text style={styles.heroGreetingTimeText}>{getGreetingTime()}</Text>
-                <View style={styles.heroGreetingBadge}>
-                  <Text style={styles.heroGreetingBadgeText}>👑 PG Master</Text>
+                <View style={styles.heroPropThumb}>
+                  <Text style={{ fontSize: 13 }}>🏢</Text>
                 </View>
+                <Text style={styles.heroPropName} numberOfLines={1}>
+                  {activePropertyName}
+                </Text>
+                <Text style={styles.heroPropArrow}>⌵</Text>
+              </TouchableOpacity>
+
+              {/* Right: Notification Bell & Profile Avatar */}
+              <View style={styles.heroRightActions}>
+                <TouchableOpacity
+                  style={styles.heroBellBtn}
+                  onPress={() => setShowNotificationsPage(true)}
+                >
+                  <OutlineBellIcon color="#ffffff" size={20} />
+                  {pendingEnquiriesCount > 0 ? (
+                    <View style={styles.heroBellBadge}>
+                      <Text style={styles.heroBellBadgeText}>{pendingEnquiriesCount}</Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.heroAvatarBtn}
+                  onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
+                >
+                  <Text style={styles.heroAvatarText}>
+                    {ownerDisplayName ? ownerDisplayName.charAt(0).toUpperCase() : 'R'}
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.heroDashboardTitle} numberOfLines={1}>
-                Namaste, {user?.fullName || 'Ramesh Kumar'} 🙏
-              </Text>
             </View>
-            <View style={styles.heroDotsContainer}>
-              <View style={[styles.heroDot, styles.heroDotActive]} />
-              <View style={styles.heroDot} />
-              <View style={styles.heroDot} />
+
+            {/* Title Row: Unique Indian Welcome Greeting without PG Master badge (Requirement 2 & 3) */}
+            <View style={styles.heroTitleRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <View style={styles.heroGreetingTimeRow}>
+                  <Text style={styles.heroGreetingTimeText}>{getGreetingTime()}</Text>
+                </View>
+                <Text style={styles.heroDashboardTitle} numberOfLines={1}>
+                  Namaste, {ownerDisplayName} 🙏
+                </Text>
+              </View>
+              <View style={styles.heroDotsContainer}>
+                <View style={[styles.heroDot, styles.heroDotActive]} />
+                <View style={styles.heroDot} />
+                <View style={styles.heroDot} />
+              </View>
             </View>
           </View>
 
@@ -2366,8 +2427,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 3. QUICK ACTIONS (REQUIREMENT 5: LIGHT ORANGE BOX WITH PREMIUM COLORFUL SMALL BOXES) ─── */}
-        <View style={styles.quickActionsOuterCard}>
+        {/* ─── 3. QUICK ACTIONS (WHITE BOX WITH ANIMATED SHINING ORANGE BORDER) ─── */}
+        <Animated.View
+          style={[
+            styles.quickActionsOuterCard,
+            {
+              borderColor: animatedBorderColor,
+              shadowOpacity: animatedShadowOpacity,
+            },
+          ]}
+        >
           <View style={styles.quickActionsHeaderRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
               <View style={styles.quickActionsHeaderIconCircle}>
@@ -2385,7 +2454,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => setShowOnboardModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
                 <Text style={{ fontSize: 18 }}>👥</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Add Tenant</Text>
@@ -2406,7 +2475,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               }}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
                 <Text style={{ fontSize: 18 }}>💳</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Record Rent</Text>
@@ -2419,7 +2488,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
                 <Text style={{ fontSize: 18 }}>📋</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Add Expense</Text>
@@ -2432,7 +2501,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => setShowNeedToCollectModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fff1f2', borderColor: '#fecdd3' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
                 <Text style={{ fontSize: 18 }}>📅</Text>
                 {dueTenantsCount > 0 && (
                   <View style={styles.quickDueDot}>
@@ -2450,7 +2519,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eef2ff', borderColor: '#c7d2fe' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
                 <Text style={{ fontSize: 18 }}>🏢</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Rooms / Beds</Text>
@@ -2463,14 +2532,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => setShowElectricityModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fef3c7', borderColor: '#fde68a' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
                 <Text style={{ fontSize: 18 }}>⚡</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Power Bill</Text>
               <Text style={styles.quickSubLabelText}>Meter & Bill</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ─── 4. RENT DUE SECTION (ONLY DUE TENANTS, REQUIREMENT 3) ─── */}
         <View style={styles.rentDueHeaderRow}>
@@ -4820,11 +4889,25 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
   },
+  heroTopDividedBox: {
+    backgroundColor: '#6c5ce7',
+    borderWidth: 1.5,
+    borderColor: '#f97316',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 10,
+    marginBottom: 14,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 3,
+  },
   heroTopBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
   },
   heroPropertyPill: {
     flexDirection: 'row',
@@ -4897,7 +4980,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 0,
   },
   heroGreetingTimeRow: {
     flexDirection: 'row',
@@ -5234,19 +5317,20 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#1e1b4b',
   },
-  // Requirement 5: Quick Actions Light Orange Card with Colorful Premium Small Boxes
+  // Requirement 4: Quick Actions White Card with Animated Shining Orange Border
   quickActionsOuterCard: {
-    backgroundColor: '#fffaf5',
+    backgroundColor: '#ffffff',
     marginHorizontal: 16,
     marginBottom: 20,
     borderRadius: 20,
     padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    borderWidth: 2,
+    borderColor: '#f97316',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOpacity: 0.22,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
   quickActionsHeaderRow: {
     flexDirection: 'row',
@@ -5259,7 +5343,9 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#ffedd5',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#f97316',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -5270,10 +5356,12 @@ const styles = StyleSheet.create({
   },
   quickActionsHeaderSub: {
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: '800',
     color: '#ea580c',
-    backgroundColor: '#ffedd5',
-    paddingHorizontal: 6,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#f97316',
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
@@ -5290,18 +5378,20 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 6,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 3,
-    elevation: 1,
+    borderWidth: 1.5,
+    borderColor: '#f97316',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.12,
+    shadowRadius: 5,
+    elevation: 2,
   },
   quickIconCirclePremium: {
     width: 44,
     height: 44,
     borderRadius: 12,
-    borderWidth: 1,
+    borderWidth: 1.5,
+    borderColor: '#f97316',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 6,

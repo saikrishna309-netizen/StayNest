@@ -102,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cleanOtp === expected || cleanOtp === '123456') {
         authenticatedUser = {
           id: 'owner-' + cleanPhone,
-          fullName: 'StayNest PG Owner',
+          fullName: 'Ramesh Kumar',
           email: `owner_${cleanPhone}@staynest.in`,
           phone: cleanPhone,
           role: 'ROLE_OWNER',
