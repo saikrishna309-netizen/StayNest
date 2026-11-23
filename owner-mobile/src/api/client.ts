@@ -28,6 +28,9 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 45000);
 
+  const method = options.method || 'GET';
+  console.log(`🌐 [Backend API Call] ${method} ${url}`);
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -39,6 +42,7 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     });
 
     clearTimeout(timeoutId);
+    console.log(`✅ [Backend API Response ${response.status}] ${method} ${endpoint}`);
 
     const data = await response.json().catch(() => ({}));
 
