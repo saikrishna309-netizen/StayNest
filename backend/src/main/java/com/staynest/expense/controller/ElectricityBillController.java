@@ -2,7 +2,6 @@ package com.staynest.expense.controller;
 
 import com.staynest.expense.dto.CreateExpenseRequest;
 import com.staynest.expense.dto.ExpenseResponse;
-import com.staynest.expense.entity.ExpenseCategory;
 import com.staynest.rent.service.TenantFinanceService;
 import com.staynest.security.UserPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
@@ -122,18 +121,18 @@ public class ElectricityBillController {
         String consumerNumber = (String) data.getOrDefault("consumerNumber", "1029384756");
         String board = (String) data.getOrDefault("board", "BESCOM - Bengaluru");
 
-        CreateExpenseRequest expReq = new CreateExpenseRequest(
-                propertyId,
-                ExpenseCategory.UTILITIES,
-                amountPaise,
-                "Electricity Bill - " + board + " (Consumer #" + consumerNumber + ")",
-                LocalDate.now(),
-                "DISCOM_PORTAL"
-        );
+        CreateExpenseRequest expReq = new CreateExpenseRequest();
+        expReq.setPropertyId(propertyId);
+        expReq.setCategory("ELECTRICITY");
+        expReq.setAmountPaise(amountPaise);
+        expReq.setTitle("Electricity Bill - " + board + " (Consumer #" + consumerNumber + ")");
+        expReq.setNotes("Electricity Bill - " + board + " (Consumer #" + consumerNumber + ")");
+        expReq.setTransactionDate(LocalDate.now());
+        expReq.setAttachmentKey("DISCOM_PORTAL");
 
         ExpenseResponse createdExpense = tenantFinanceService.recordExpense(ownerId, expReq);
         data.put("status", "RECORDED_IN_EXPENSES");
-        data.put("expenseId", createdExpense.id());
+        data.put("expenseId", createdExpense != null ? createdExpense.getId() : null);
 
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Electricity bill successfully added to monthly expenses!");
