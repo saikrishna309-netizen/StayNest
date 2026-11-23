@@ -819,7 +819,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 130,
   },
 
   // ─── Top App Bar ───

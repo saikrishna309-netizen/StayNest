@@ -20,13 +20,13 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     'Content-Type': 'application/json',
   };
 
-  if (authToken) {
+  if (authToken && !authToken.startsWith('mock-jwt-token')) {
     defaultHeaders['Authorization'] = `Bearer ${authToken}`;
   }
 
-  // 10-second timeout to avoid infinite spinning during Render cold starts
+  // 45-second timeout to accommodate Render free tier server cold starts
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  const timeoutId = setTimeout(() => controller.abort(), 45000);
 
   try {
     const response = await fetch(url, {

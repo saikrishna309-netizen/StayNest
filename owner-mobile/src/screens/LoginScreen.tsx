@@ -21,7 +21,7 @@ export const LoginScreen: React.FC = () => {
   const [authMode, setAuthMode] = useState<'PHONE_OTP' | 'PASSWORD'>('PHONE_OTP');
 
   // Phone + OTP State
-  const [phone, setPhone] = useState('9876543210');
+  const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [lastOtp, setLastOtp] = useState('123456');
   const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
@@ -161,7 +161,7 @@ export const LoginScreen: React.FC = () => {
                       onChangeText={(val) => setPhone(val.replace(/[^0-9]/g, ''))}
                       keyboardType="number-pad"
                       maxLength={10}
-                      placeholder="9876543210"
+                      placeholder="Enter your mobile number"
                       placeholderTextColor="#94a3b8"
                       autoFocus
                     />

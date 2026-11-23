@@ -4786,7 +4786,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mainScrollContent: {
-    paddingBottom: 60,
+    paddingBottom: 130,
   },
 
   // ─── Lavender Curved Hero Header (Screenshot Style) ───
