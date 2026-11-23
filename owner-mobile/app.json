@@ -24,7 +24,10 @@
       "versionCode": 1
     },
     "extra": {
-      "apiUrl": "https://staynest-6ylx.onrender.com/api/v1"
+      "apiUrl": "https://staynest-6ylx.onrender.com/api/v1",
+      "eas": {
+        "projectId": "6c4155e5-d060-4475-ac4c-656032a38d1c"
+      }
     }
   }
 }

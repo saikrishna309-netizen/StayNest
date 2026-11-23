@@ -176,18 +176,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // Cross-Platform Confirmation Dialog (Works on Web & Native Mobile)
   const confirmAction = (title: string, message: string, onConfirm: () => void) => {
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       try {
-        if (typeof window.confirm === 'function') {
-          const ok = window.confirm(`${title}\n\n${message}`);
-          if (ok) {
-            onConfirm();
-          }
-          return;
+        const ok = window.confirm(`${title}\n\n${message}`);
+        if (ok) {
+          onConfirm();
         }
+        return;
       } catch {}
-      onConfirm();
-      return;
     }
 
     Alert.alert(title, message, [
@@ -198,16 +194,21 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // Cross-Platform Notification Dialog (Works on Web & Native Mobile)
   const notifyUser = (title: string, message?: string) => {
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
       try {
-        if (typeof window.alert === 'function') {
-          window.alert(message ? `${title}\n\n${message}` : title);
-          return;
-        }
+        window.alert(message ? `${title}\n\n${message}` : title);
+        return;
       } catch {}
-      return;
     }
     Alert.alert(title, message);
+  };
+
+  const safeDispatchStorageEvent = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+      try {
+        safeDispatchStorageEvent();
+      } catch {}
+    }
   };
 
   // Whole Building Photo State (Point 8)
@@ -242,7 +243,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           const updatedCustom = [updatedProp, ...cachedCustom.filter((p: any) => p.id !== activeProperty.id)];
           window.localStorage.setItem('staynest_custom_properties', JSON.stringify(updatedCustom));
 
-          window.dispatchEvent(new Event('storage'));
+          safeDispatchStorageEvent();
         }
         notifyUser('Building Photo Updated! 🏢', 'Exterior photo has been updated and synced locally for the StayNest website.');
       }
@@ -303,7 +304,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
-            window.dispatchEvent(new Event('storage'));
+            safeDispatchStorageEvent();
           } catch {}
         }
         return nextFloors;
@@ -337,7 +338,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
-            window.dispatchEvent(new Event('storage'));
+            safeDispatchStorageEvent();
           } catch {}
         }
         return nextFloors;
@@ -372,7 +373,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
-            window.dispatchEvent(new Event('storage'));
+            safeDispatchStorageEvent();
           } catch {}
         }
         return nextFloors;
@@ -410,7 +411,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
-            window.dispatchEvent(new Event('storage'));
+            safeDispatchStorageEvent();
           } catch {}
         }
         return nextFloors;
@@ -647,7 +648,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         ? `✓ ${assignTenantName} onboarded to ${assigningBed.bedLabel}! Received ₹${payingNow.toLocaleString('en-IN')}, Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
         : `✓ ${assignTenantName} onboarded to ${assigningBed.bedLabel}, Room ${assigningBed.roomNumber}! Full rent received.`;
 
-      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert(alertMsg);
       } else {
         Alert.alert('✓ Resident Assigned', alertMsg);
@@ -3507,7 +3508,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                       window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
                                       window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
                                       window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
-                                      window.dispatchEvent(new Event('storage'));
+                                      safeDispatchStorageEvent();
                                     } catch {}
                                   }
                                   return nextFloors;

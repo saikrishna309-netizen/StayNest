@@ -207,7 +207,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
 
   // Logout confirmation
   const handleLogout = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm('Are you sure you want to log out from StayNest?')) {
         logout();
       }

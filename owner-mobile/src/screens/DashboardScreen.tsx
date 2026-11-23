@@ -486,7 +486,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     loadData();
     loadEnquiries();
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleSync = () => loadEnquiries();
       window.addEventListener('staynest_new_enquiry', handleSync);
       window.addEventListener('staynest_enquiry_updated', handleSync);
@@ -1319,7 +1319,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
     };
 
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm(`Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`)) {
         doCheckout();
       }
@@ -1409,7 +1409,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
     };
 
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm(`⚠️ Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`)) {
         doDelete();
       }
@@ -1520,7 +1520,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         ? `${onboardFullName} onboarded! Rent received: ₹${rentPayingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
         : `${onboardFullName} successfully onboarded with full rent paid!`;
 
-      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert(`✓ ${alertMsg}`);
       } else {
         Alert.alert('✓ Success', alertMsg);

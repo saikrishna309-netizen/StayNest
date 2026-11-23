@@ -253,11 +253,54 @@ const MainNavigator: React.FC = () => {
   );
 };
 
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.log('StayNest ErrorBoundary caught:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#ffffff', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Text style={{ fontSize: 36, marginBottom: 12 }}>🏡</Text>
+          <Text style={{ fontSize: 20, fontWeight: '800', color: '#0f172a', textAlign: 'center', marginBottom: 8 }}>
+            StayNest PG Owner
+          </Text>
+          <Text style={{ fontSize: 13, color: '#64748b', textAlign: 'center', marginBottom: 20, lineHeight: 18 }}>
+            Session loaded. Tap below to refresh your dashboard.
+          </Text>
+          <TouchableOpacity
+            style={{ backgroundColor: '#ff7337', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+            onPress={() => this.setState({ hasError: false, error: null })}
+          >
+            <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 14 }}>Open Dashboard</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <MainNavigator />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <MainNavigator />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

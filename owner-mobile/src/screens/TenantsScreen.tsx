@@ -424,7 +424,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         ? `${fullName} onboarded! Rent received ₹${payingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
         : `${fullName} successfully onboarded as a resident!`;
 
-      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert(`✓ ${alertMsg}`);
       } else {
         Alert.alert('✓ Success', alertMsg);
@@ -489,7 +489,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         ? `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded! Rent for ${selectedTenantForAction.fullName} is fully paid.`
         : `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded! Remaining due for ${selectedTenantForAction.fullName} is ₹${newDue.toLocaleString('en-IN')}.`;
 
-      if (Platform.OS === 'web' || typeof window !== 'undefined') {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert(`✓ ${msg}`);
       } else {
         Alert.alert('✓ Payment Recorded!', msg);
@@ -591,7 +591,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       }
     };
 
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm(`Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`)) {
         doCheckout();
       }
@@ -678,7 +678,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       }
     };
 
-    if (Platform.OS === 'web' || typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm(`⚠️ Are you sure you want to permanently delete ${tenant.fullName}? This will delete their stay records and immediately release their bed back to available.`)) {
         doDelete();
       }

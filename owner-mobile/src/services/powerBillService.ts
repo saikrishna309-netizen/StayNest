@@ -174,7 +174,9 @@ export const powerBillService = {
         const cached = JSON.parse(window.localStorage.getItem('staynest_custom_expenses') || '[]');
         const updated = [created, ...cached];
         window.localStorage.setItem('staynest_custom_expenses', JSON.stringify(updated));
-        window.dispatchEvent(new Event('staynest_expense_added'));
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
+          window.dispatchEvent(new Event('staynest_expense_added'));
+        }
       } catch {}
     }
 

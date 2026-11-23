@@ -193,7 +193,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   useEffect(() => {
     loadFinanceData();
 
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleExpenseAdded = () => loadFinanceData(true);
       window.addEventListener('staynest_expense_added', handleExpenseAdded);
       window.addEventListener('storage', handleExpenseAdded);
@@ -415,7 +415,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
       }
     };
 
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm('Are you sure you want to delete this expense record?')) {
         doDelete();
       }
@@ -489,7 +489,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
       Alert.alert('Deleted', `Historical record for ${monthName} removed.`);
     };
 
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
       if (window.confirm(`Delete historical P&L record for ${monthName}?`)) {
         doDelete();
       }
