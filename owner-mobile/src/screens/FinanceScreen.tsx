@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   RefreshControl,
   Modal,
   Platform,
+  Animated,
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { RentInvoice, Expense, Property } from '../types';
@@ -540,6 +541,38 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   // Selected bar detail inspection
   const inspectedMonthData = displayPnlRecords.find((d) => d.month === selectedBarMonth) || displayPnlRecords[displayPnlRecords.length - 1];
 
+  // Light orange animated shining border glow (Requirement 4)
+  const borderGlowAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(borderGlowAnim, {
+          toValue: 1,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+        Animated.timing(borderGlowAnim, {
+          toValue: 0,
+          duration: 1800,
+          useNativeDriver: false,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [borderGlowAnim]);
+
+  const animatedBorderColor = borderGlowAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: ['#fed7aa', '#fb923c', '#fed7aa'],
+  });
+
+  const animatedShadowOpacity = borderGlowAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.06, 0.22, 0.06],
+  });
+
   return (
     <View style={styles.container}>
       {/* ─── 1. TOP HEADER ─── */}
@@ -594,7 +627,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         showsVerticalScrollIndicator={false}
       >
         {/* ─── 2. INTERACTIVE MONTHLY PROFIT & LOSS GRAPH (REQUIREMENT 1 & 4) ─── */}
-        <View style={styles.chartCard}>
+        <Animated.View style={[styles.chartCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
           <View style={styles.chartHeaderRow}>
             <View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -757,10 +790,10 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               💡 Tap any month bar to inspect revenue vs expenses, or add past years anytime.
             </Text>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ─── 3. FIXED MONTHLY MANDATORY BILLS (REQUIREMENT 4: "MUST PAY EVERY MONTH") ─── */}
-        <View style={styles.fixedBillsCard}>
+        <Animated.View style={[styles.fixedBillsCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
           <View style={styles.fixedBillsHeaderRow}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -862,10 +895,10 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               );
             })}
           </View>
-        </View>
+        </Animated.View>
 
         {/* ─── 4. QUICK ADD STANDARD EXPENSES TEMPLATES ─── */}
-        <View style={styles.quickExpensesCard}>
+        <Animated.View style={[styles.quickExpensesCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
           <Text style={styles.quickExpensesTitle}>⚡ QUICK ADD OPERATIONAL EXPENSE</Text>
           <Text style={styles.quickExpensesSub}>Tap any template to pre-fill expense amount & category:</Text>
           <View style={styles.templatesGrid}>
@@ -889,11 +922,11 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               </TouchableOpacity>
             ))}
           </View>
-        </View>
+        </Animated.View>
 
         {/* ─── 5. LOG EXPENSE FORM ─── */}
         {showExpenseForm && (
-          <View style={styles.formCard}>
+          <Animated.View style={[styles.formCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={styles.formTitle}>Log Operational Expense</Text>
               <TouchableOpacity onPress={() => setShowExpenseForm(false)}>
@@ -941,7 +974,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                 {submittingExpense ? 'Saving...' : 'Add Expense Record'}
               </Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         )}
 
         {/* ─── 6. RECENT EXPENSES WITH EDIT & DELETE BUTTONS (REQUIREMENT 4) ─── */}
@@ -964,7 +997,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
             const expDate = e.transactionDate || e.date || 'Recent';
 
             return (
-              <View key={e.id} style={styles.expCard}>
+              <Animated.View key={e.id} style={[styles.expCard, { borderColor: animatedBorderColor }]}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.expTitle}>{expTitle}</Text>
                   <Text style={styles.expCategory}>
@@ -996,7 +1029,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                     <Text style={{ fontSize: 13 }}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </Animated.View>
             );
           })
         )}
@@ -1289,13 +1322,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
   },
   chartHeaderRow: {
     flexDirection: 'row',
@@ -1400,13 +1433,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 16,
-    borderWidth: 2,
-    borderColor: '#f97316',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
     marginBottom: 16,
     shadowColor: '#ea580c',
     shadowOpacity: 0.1,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   fixedBillsHeaderRow: {
     flexDirection: 'row',
@@ -1533,13 +1566,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 14,
-    borderWidth: 2,
-    borderColor: '#f97316',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
     marginBottom: 16,
     shadowColor: '#ea580c',
     shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   quickExpensesTitle: {
     fontSize: 11,
@@ -1647,7 +1680,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 12,
     borderWidth: 1.5,
-    borderColor: '#f97316',
+    borderColor: '#fed7aa',
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,

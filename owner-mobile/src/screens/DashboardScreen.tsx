@@ -395,7 +395,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const animatedBorderColor = borderGlowAnim.interpolate({
     inputRange: [0, 0.5, 1],
-    outputRange: ['#f97316', '#fdba74', '#ea580c'],
+    outputRange: ['#fb923c', '#ffedd5', '#fb923c'],
   });
 
   const animatedShadowOpacity = borderGlowAnim.interpolate({
@@ -2004,70 +2004,70 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── 1. LAVENDER/PURPLE CURVED HERO HEADER (SCREENSHOT STYLE) ─── */}
-        <View style={styles.heroLavenderContainer}>
-          {/* Top Divided Box with Same Color & Orange Border (Requirement 1) */}
-          <View style={styles.heroTopDividedBox}>
-            {/* Top Row: Property Selector Pill & Notifications / Profile */}
-            <View style={styles.heroTopBar}>
-              {/* Property Selector Pill (Dropdown Trigger - Requirements 3, 4, 5) */}
+        {/* ─── 1. TOP OWNER & PROPERTY CARD (SEPARATE WHITE BOX WITH MEDIUM ORANGE BORDER) ─── */}
+        <View style={styles.heroTopDividedBox}>
+          {/* Top Row: Property Selector Pill & Notifications / Profile */}
+          <View style={styles.heroTopBar}>
+            {/* Property Selector Pill (Dropdown Trigger - Requirements 3, 4, 5) */}
+            <TouchableOpacity
+              style={styles.heroPropertyPill}
+              onPress={() => setShowPgDropdown(true)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.heroPropThumb}>
+                <Text style={{ fontSize: 13 }}>🏢</Text>
+              </View>
+              <Text style={styles.heroPropName} numberOfLines={1}>
+                {activePropertyName}
+              </Text>
+              <Text style={styles.heroPropArrow}>⌵</Text>
+            </TouchableOpacity>
+
+            {/* Right: Notification Bell & Profile Avatar */}
+            <View style={styles.heroRightActions}>
               <TouchableOpacity
-                style={styles.heroPropertyPill}
-                onPress={() => setShowPgDropdown(true)}
-                activeOpacity={0.8}
+                style={styles.heroBellBtn}
+                onPress={() => setShowNotificationsPage(true)}
               >
-                <View style={styles.heroPropThumb}>
-                  <Text style={{ fontSize: 13 }}>🏢</Text>
-                </View>
-                <Text style={styles.heroPropName} numberOfLines={1}>
-                  {activePropertyName}
-                </Text>
-                <Text style={styles.heroPropArrow}>⌵</Text>
+                <OutlineBellIcon color="#475569" size={20} />
+                {pendingEnquiriesCount > 0 ? (
+                  <View style={styles.heroBellBadge}>
+                    <Text style={styles.heroBellBadgeText}>{pendingEnquiriesCount}</Text>
+                  </View>
+                ) : null}
               </TouchableOpacity>
 
-              {/* Right: Notification Bell & Profile Avatar */}
-              <View style={styles.heroRightActions}>
-                <TouchableOpacity
-                  style={styles.heroBellBtn}
-                  onPress={() => setShowNotificationsPage(true)}
-                >
-                  <OutlineBellIcon color="#ffffff" size={20} />
-                  {pendingEnquiriesCount > 0 ? (
-                    <View style={styles.heroBellBadge}>
-                      <Text style={styles.heroBellBadgeText}>{pendingEnquiriesCount}</Text>
-                    </View>
-                  ) : null}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.heroAvatarBtn}
-                  onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
-                >
-                  <Text style={styles.heroAvatarText}>
-                    {ownerDisplayName ? ownerDisplayName.charAt(0).toUpperCase() : 'R'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Title Row: Unique Indian Welcome Greeting without PG Master badge (Requirement 2 & 3) */}
-            <View style={styles.heroTitleRow}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <View style={styles.heroGreetingTimeRow}>
-                  <Text style={styles.heroGreetingTimeText}>{getGreetingTime()}</Text>
-                </View>
-                <Text style={styles.heroDashboardTitle} numberOfLines={1}>
-                  Namaste, {ownerDisplayName} 🙏
+              <TouchableOpacity
+                style={styles.heroAvatarBtn}
+                onPress={() => onNavigateTab ? onNavigateTab('profile') : null}
+              >
+                <Text style={styles.heroAvatarText}>
+                  {ownerDisplayName ? ownerDisplayName.charAt(0).toUpperCase() : 'R'}
                 </Text>
-              </View>
-              <View style={styles.heroDotsContainer}>
-                <View style={[styles.heroDot, styles.heroDotActive]} />
-                <View style={styles.heroDot} />
-                <View style={styles.heroDot} />
-              </View>
+              </TouchableOpacity>
             </View>
           </View>
 
+          {/* Title Row: Unique Indian Welcome Greeting without PG Master badge (Requirement 2 & 3) */}
+          <View style={styles.heroTitleRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <View style={styles.heroGreetingTimeRow}>
+                <Text style={styles.heroGreetingTimeText}>{getGreetingTime()}</Text>
+              </View>
+              <Text style={styles.heroDashboardTitle} numberOfLines={1}>
+                Namaste, {ownerDisplayName} 🙏
+              </Text>
+            </View>
+            <View style={styles.heroDotsContainer}>
+              <View style={[styles.heroDot, styles.heroDotActive]} />
+              <View style={styles.heroDot} />
+              <View style={styles.heroDot} />
+            </View>
+          </View>
+        </View>
+
+        {/* ─── 2. PURPLE HERO CONTAINER (FROM NOVEMBER CALENDAR TO TOTAL SPENT STATS) ─── */}
+        <View style={styles.heroLavenderContainer}>
           {/* Month & Year Filter Bar & Report Download (Requirements 6 & 7) */}
           <View style={styles.heroMonthBar}>
             <TouchableOpacity
@@ -4886,22 +4886,25 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingHorizontal: 16,
     paddingBottom: 22,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    borderRadius: 26,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
   heroTopDividedBox: {
-    backgroundColor: '#6c5ce7',
+    backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#f97316',
+    borderColor: '#fb923c',
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingTop: 12,
-    paddingBottom: 10,
-    marginBottom: 14,
+    paddingHorizontal: 14,
+    paddingTop: 14,
+    paddingBottom: 12,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 12,
     shadowColor: '#ea580c',
-    shadowOpacity: 0.22,
+    shadowOpacity: 0.08,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   heroTopBar: {
     flexDirection: 'row',
@@ -4912,7 +4915,9 @@ const styles = StyleSheet.create({
   heroPropertyPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 20,
@@ -4923,20 +4928,20 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#ffedd5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   heroPropName: {
-    color: '#ffffff',
+    color: '#0f172a',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     flexShrink: 1,
   },
   heroPropArrow: {
-    color: '#ffffff',
+    color: '#64748b',
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   heroRightActions: {
     flexDirection: 'row',
@@ -4947,7 +4952,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -4965,16 +4972,16 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#fde047',
+    backgroundColor: '#ffedd5',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#ffffff',
+    borderColor: '#fb923c',
   },
   heroAvatarText: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#1e1b4b',
+    color: '#9a3412',
   },
   heroTitleRow: {
     flexDirection: 'row',
@@ -4991,7 +4998,7 @@ const styles = StyleSheet.create({
   heroGreetingTimeText: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#ffedd5',
+    color: '#ea580c',
     letterSpacing: 0.2,
   },
   heroGreetingBadge: {
@@ -5010,13 +5017,13 @@ const styles = StyleSheet.create({
   heroGreetingSub: {
     fontSize: 12,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.85)',
+    color: '#64748b',
     marginTop: 2,
   },
   heroDashboardTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#ffffff',
+    color: '#0f172a',
     letterSpacing: -0.3,
   },
   heroMonthBar: {
@@ -5317,7 +5324,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#1e1b4b',
   },
-  // Requirement 4: Quick Actions White Card with Animated Shining Orange Border
+  // Requirement 2: Quick Actions White Card with Medium Orange Animated Shining Border
   quickActionsOuterCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
@@ -5325,12 +5332,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 14,
     borderWidth: 2,
-    borderColor: '#f97316',
+    borderColor: '#fb923c',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.22,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   quickActionsHeaderRow: {
     flexDirection: 'row',
@@ -5345,14 +5352,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#ffffff',
     borderWidth: 1.5,
-    borderColor: '#f97316',
+    borderColor: '#fb923c',
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickActionsHeaderTitle: {
     fontSize: 14,
     fontWeight: '900',
-    color: '#9a3412',
+    color: '#c2410c',
   },
   quickActionsHeaderSub: {
     fontSize: 10,
@@ -5360,7 +5367,7 @@ const styles = StyleSheet.create({
     color: '#ea580c',
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#f97316',
+    borderColor: '#fb923c',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -5379,10 +5386,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#f97316',
+    borderColor: '#fb923c',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.12,
-    shadowRadius: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
     elevation: 2,
   },
   quickIconCirclePremium: {
@@ -5390,7 +5397,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#f97316',
+    borderColor: '#fdba74',
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
