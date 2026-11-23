@@ -105,12 +105,7 @@ const MainNavigator: React.FC = () => {
     );
   }
 
-  // 2. If newly registered via phone and profile incomplete -> Owner Registration Screen
-  const isProfileIncomplete = (!user?.fullName || user.fullName === 'PG Owner') && !registrationSkipped;
-  if (isProfileIncomplete) {
-    return <OwnerRegistrationScreen onComplete={() => setRegistrationSkipped(true)} />;
-  }
-
+  // Direct login straight to dashboard for all owners (no blocking onboarding wizard)
   const handleOpenProperty = (property: Property) => {
     setSelectedProperty(property);
     setCurrentTab('properties');
@@ -363,7 +358,6 @@ const styles = StyleSheet.create({
   tabPane: {
     flex: 1,
     width: '100%',
-    height: '100%',
   },
   tabPaneActive: {
     display: 'flex',
@@ -392,9 +386,11 @@ const styles = StyleSheet.create({
   // ─── Floating Trendy Bottom Bar (Light Orange Pill + White Icon on Active Circle) ───
   floatingBarOuter: {
     paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 12,
-    paddingTop: 6,
-    backgroundColor: 'transparent',
+    paddingBottom: Platform.OS === 'ios' ? 24 : 28,
+    paddingTop: 8,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#f1f5f9',
     alignItems: 'center',
   },
   floatingPillBar: {

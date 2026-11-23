@@ -18,6 +18,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
 import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
+import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
 
 interface PropertiesScreenProps {
   initialProperty?: Property | null;
@@ -183,7 +184,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           onConfirm();
         }
         return;
-      } catch {}
+      } catch { }
     }
 
     Alert.alert(title, message, [
@@ -198,7 +199,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       try {
         window.alert(message ? `${title}\n\n${message}` : title);
         return;
-      } catch {}
+      } catch { }
     }
     Alert.alert(title, message);
   };
@@ -207,7 +208,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.dispatchEvent === 'function' && typeof Event === 'function') {
       try {
         safeDispatchStorageEvent();
-      } catch {}
+      } catch { }
     }
   };
 
@@ -305,7 +306,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             safeDispatchStorageEvent();
-          } catch {}
+          } catch { }
         }
         return nextFloors;
       });
@@ -339,7 +340,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             safeDispatchStorageEvent();
-          } catch {}
+          } catch { }
         }
         return nextFloors;
       });
@@ -374,7 +375,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             safeDispatchStorageEvent();
-          } catch {}
+          } catch { }
         }
         return nextFloors;
       });
@@ -412,7 +413,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
             window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
             safeDispatchStorageEvent();
-          } catch {}
+          } catch { }
         }
         return nextFloors;
       });
@@ -449,7 +450,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-          } catch {}
+          } catch { }
         }
 
         return nextFloors;
@@ -483,7 +484,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-          } catch {}
+          } catch { }
         }
 
         return nextFloors;
@@ -580,7 +581,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   amountPaidPaise: payingNow * 100,
                   paymentMethod: assignPayMode,
                 }),
-              }).catch(() => {});
+              }).catch(() => { });
             }
           }
         }
@@ -877,188 +878,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   ];
 
   const getInitialFloorsForProperty = (propId: string): FloorConfig[] => {
-    if (propId === 'prop-pg-2') {
-      return [
-        {
-          floorNumber: 1,
-          rooms: [
-            {
-              id: 'rm-prop-pg-2-101',
-              roomNumber: '101',
-              floorNumber: 1,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              ac: true,
-              attachedBathroom: true,
-              beds: [
-                { id: 'b-prop-pg-2-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-            {
-              id: 'rm-prop-pg-2-102',
-              roomNumber: '102',
-              floorNumber: 1,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              ac: true,
-              attachedBathroom: true,
-              beds: [
-                { id: 'b-prop-pg-2-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-102-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-          ],
-        },
-        {
-          floorNumber: 2,
-          rooms: [
-            {
-              id: 'rm-prop-pg-2-201',
-              roomNumber: '201',
-              floorNumber: 2,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              ac: true,
-              attachedBathroom: true,
-              beds: [
-                { id: 'b-prop-pg-2-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-201-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-            {
-              id: 'rm-prop-pg-2-202',
-              roomNumber: '202',
-              floorNumber: 2,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              ac: true,
-              attachedBathroom: true,
-              beds: [
-                { id: 'b-prop-pg-2-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-202-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-          ],
-        },
-      ];
-    }
-
-    return [
-      {
-        floorNumber: 1,
-        rooms: [
-          {
-            id: 'rm-prop-pg-1-101',
-            roomNumber: '101',
-            floorNumber: 1,
-            sharingType: 'SIX',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            ac: true,
-            attachedBathroom: true,
-            beds: [
-              { id: 'b-prop-pg-1-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-4', bedLabel: 'Bed 4', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-5', bedLabel: 'Bed 5', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-6', bedLabel: 'Bed 6', status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'rm-prop-pg-1-102',
-            roomNumber: '102',
-            floorNumber: 1,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            ac: true,
-            attachedBathroom: true,
-            beds: [
-              { id: 'b-prop-pg-1-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-        ],
-      },
-      {
-        floorNumber: 2,
-        rooms: [
-          {
-            id: 'rm-prop-pg-1-201',
-            roomNumber: '201',
-            floorNumber: 2,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            ac: true,
-            attachedBathroom: true,
-            beds: [
-              { id: 'b-prop-pg-1-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'rm-prop-pg-1-202',
-            roomNumber: '202',
-            floorNumber: 2,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            ac: true,
-            attachedBathroom: true,
-            beds: [
-              { id: 'b-prop-pg-1-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-        ],
-      },
-      {
-        floorNumber: 3,
-        rooms: [
-          {
-            id: 'rm-prop-pg-1-301',
-            roomNumber: '301',
-            floorNumber: 3,
-            sharingType: 'TRIPLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            ac: true,
-            attachedBathroom: true,
-            beds: [
-              { id: 'b-prop-pg-1-301-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-301-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-301-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'rm-prop-pg-1-302',
-            roomNumber: '302',
-            floorNumber: 3,
-            sharingType: 'TRIPLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            ac: true,
-            attachedBathroom: true,
-            beds: [
-              { id: 'b-prop-pg-1-302-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-302-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-302-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-            ],
-          },
-        ],
-      },
-    ];
+    return getModularFloors(propId) as any as FloorConfig[];
   };
 
   const loadPropertiesAndRooms = async () => {
@@ -1082,7 +902,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             const uniqueCustom = customP.filter((p: any) => !seenIds.has(p.id));
             combinedProps = [...combinedProps, ...uniqueCustom];
           }
-        } catch {}
+        } catch { }
       }
 
       setPropertiesList(combinedProps);
@@ -1104,7 +924,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       try {
         const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
         loadedTenants = tenantRes.content || [];
-      } catch {}
+      } catch { }
 
       if (loadedTenants.length < 5) {
         const multiPgTenants: Tenant[] = [
@@ -1140,7 +960,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (cached) {
           try {
             targetFloors = JSON.parse(cached);
-          } catch {}
+          } catch { }
         }
       }
 
@@ -1237,7 +1057,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (cached) {
           try {
             nextFloors = JSON.parse(cached);
-          } catch {}
+          } catch { }
         }
       }
 
@@ -1488,7 +1308,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
         try {
           window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch {}
+        } catch { }
       }
       return nextFloors;
     });
@@ -1515,7 +1335,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
         try {
           window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch {}
+        } catch { }
       }
       return nextFloors;
     });
@@ -1555,7 +1375,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
         try {
           window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch {}
+        } catch { }
       }
 
       return nextFloors;
@@ -1620,7 +1440,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
         try {
           window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch {}
+        } catch { }
       }
 
       return nextFloors;
@@ -1694,7 +1514,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
         try {
           window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch {}
+        } catch { }
       }
 
       return nextFloors;
@@ -1718,7 +1538,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
           try {
             window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-          } catch {}
+          } catch { }
         }
 
         return nextFloors;
@@ -1789,7 +1609,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   await apiClient(`/owner/beds/${createdBed.id}`, {
                     method: 'PATCH',
                     body: JSON.stringify({ status: bed.status }),
-                  }).catch(() => {});
+                  }).catch(() => { });
                 }
               } catch {
                 // bed creation handled
@@ -3509,7 +3329,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                       window.localStorage.setItem('staynest_floors_default', JSON.stringify(nextFloors));
                                       window.localStorage.setItem('staynest_floors_ramesh-pg-default', JSON.stringify(nextFloors));
                                       safeDispatchStorageEvent();
-                                    } catch {}
+                                    } catch { }
                                   }
                                   return nextFloors;
                                 });

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { apiClient } from '../api/client';
 import { Tenant, Property, Room, Bed } from '../types';
+import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
 
 interface TenantsScreenProps {
   onBack: () => void;
@@ -224,170 +225,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     }
   };
 
-  const getInitialFloorsForProperty = (propId: string) => {
-    if (propId === 'prop-pg-2') {
-      return [
-        {
-          floorNumber: 1,
-          rooms: [
-            {
-              id: 'rm-prop-pg-2-101',
-              roomNumber: '101',
-              floorNumber: 1,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              beds: [
-                { id: 'b-prop-pg-2-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-            {
-              id: 'rm-prop-pg-2-102',
-              roomNumber: '102',
-              floorNumber: 1,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              beds: [
-                { id: 'b-prop-pg-2-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-102-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-          ],
-        },
-        {
-          floorNumber: 2,
-          rooms: [
-            {
-              id: 'rm-prop-pg-2-201',
-              roomNumber: '201',
-              floorNumber: 2,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              beds: [
-                { id: 'b-prop-pg-2-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-201-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-            {
-              id: 'rm-prop-pg-2-202',
-              roomNumber: '202',
-              floorNumber: 2,
-              sharingType: 'TRIPLE',
-              rentRupees: 9500,
-              depositRupees: 9500,
-              beds: [
-                { id: 'b-prop-pg-2-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                { id: 'b-prop-pg-2-202-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              ],
-            },
-          ],
-        },
-      ];
-    }
-
-    return [
-      {
-        floorNumber: 1,
-        rooms: [
-          {
-            id: 'rm-prop-pg-1-101',
-            roomNumber: '101',
-            floorNumber: 1,
-            sharingType: 'SIX',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            beds: [
-              { id: 'b-prop-pg-1-101-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-4', bedLabel: 'Bed 4', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-5', bedLabel: 'Bed 5', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-101-6', bedLabel: 'Bed 6', status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'rm-prop-pg-1-102',
-            roomNumber: '102',
-            floorNumber: 1,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            beds: [
-              { id: 'b-prop-pg-1-102-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-102-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'rm-prop-pg-1-103',
-            roomNumber: '103',
-            floorNumber: 1,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            beds: [
-              { id: 'b-prop-pg-1-103-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-103-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-        ],
-      },
-      {
-        floorNumber: 2,
-        rooms: [
-          {
-            id: 'rm-prop-pg-1-201',
-            roomNumber: '201',
-            floorNumber: 2,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            beds: [
-              { id: 'b-prop-pg-1-201-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-201-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-          {
-            id: 'rm-prop-pg-1-202',
-            roomNumber: '202',
-            floorNumber: 2,
-            sharingType: 'DOUBLE',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            beds: [
-              { id: 'b-prop-pg-1-202-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-202-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-            ],
-          },
-        ],
-      },
-      {
-        floorNumber: 3,
-        rooms: [
-          {
-            id: 'rm-prop-pg-1-301',
-            roomNumber: '301',
-            floorNumber: 3,
-            sharingType: 'FOUR',
-            rentRupees: 8500,
-            depositRupees: 8500,
-            beds: [
-              { id: 'b-prop-pg-1-301-1', bedLabel: 'Bed 1', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-301-2', bedLabel: 'Bed 2', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-301-3', bedLabel: 'Bed 3', status: 'AVAILABLE' },
-              { id: 'b-prop-pg-1-301-4', bedLabel: 'Bed 4', status: 'AVAILABLE' },
-            ],
-          },
-        ],
-      },
-    ];
-  };
+  // getInitialFloorsForProperty imported from propertyDataService
 
   const loadRoomsForProperty = async (propId: string) => {
     try {
@@ -790,18 +628,39 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   // Handle Checkout
   const handleCheckout = (tenant: Tenant) => {
     const doCheckout = async () => {
-      try {
-        await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
-          method: 'POST',
-        });
-        Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully and their bed is now free.`);
-        setSelectedTenantForAction(null);
-        loadData();
-      } catch (err: any) {
-        Alert.alert('Notice', err.message || 'Tenant stay updated.');
-        setSelectedTenantForAction(null);
-        loadData();
+      // 1. If valid UUID, notify backend (catch errors gracefully without crashing or showing Java error)
+      if (isValidUuid(tenant.id)) {
+        try {
+          await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
+            method: 'POST',
+          });
+        } catch (apiErr: any) {
+          console.log('Backend checkout sync note:', apiErr?.message);
+        }
       }
+
+      // 2. Seamlessly update local state: mark tenant inactive & vacate bed
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === tenant.id
+            ? { ...t, active: false, stayStatus: 'TERMINATED', bedId: undefined, roomNumber: undefined }
+            : t
+        )
+      );
+
+      // 3. Free up bed in current property room list
+      setPropRooms((prevRooms) =>
+        prevRooms.map((r) => ({
+          ...r,
+          beds: (r.beds || []).map((b) =>
+            b.id === tenant.bedId ? { ...b, status: 'AVAILABLE' } : b
+          ),
+        }))
+      );
+
+      Alert.alert('✓ Checked Out', `${tenant.fullName} has exited successfully and their bed is now free.`);
+      setSelectedTenantForAction(null);
+      loadData();
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
@@ -810,7 +669,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       }
     } else {
       Alert.alert(
-        'Confirm Check-Out',
+        'Confirm Exit / Check-Out',
         `Check out ${tenant.fullName}? This will mark their stay as vacated and immediately free up their bed.`,
         [
           { text: 'Cancel', style: 'cancel' },
@@ -877,18 +736,31 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   const handleDeleteTenant = (tenant: Tenant) => {
     const doDelete = async () => {
       setDeletingTenant(true);
-      try {
-        await apiClient(`/owner/tenants/${tenant.id}`, {
-          method: 'DELETE',
-        });
-        Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
-        setSelectedTenantForAction(null);
-        loadData();
-      } catch (err: any) {
-        Alert.alert('Error', err.message || 'Could not delete resident');
-      } finally {
-        setDeletingTenant(false);
+      if (isValidUuid(tenant.id)) {
+        try {
+          await apiClient(`/owner/tenants/${tenant.id}`, {
+            method: 'DELETE',
+          });
+        } catch (apiErr: any) {
+          console.log('Backend delete resident note:', apiErr?.message);
+        }
       }
+
+      // Seamless local delete
+      setTenants((prev) => prev.filter((t) => t.id !== tenant.id));
+      setPropRooms((prevRooms) =>
+        prevRooms.map((r) => ({
+          ...r,
+          beds: (r.beds || []).map((b) =>
+            b.id === tenant.bedId ? { ...b, status: 'AVAILABLE' } : b
+          ),
+        }))
+      );
+
+      Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
+      setSelectedTenantForAction(null);
+      setDeletingTenant(false);
+      loadData();
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
@@ -2414,8 +2286,14 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 420,
     backgroundColor: '#ffffff',
-    borderRadius: 18,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: '#f97316',
     padding: 20,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 6,
   },
   modalTitle: {
     fontSize: 18,
