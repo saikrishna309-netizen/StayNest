@@ -18,6 +18,7 @@ import { apiClient } from '../api/client';
 import { safeStorage } from '../utils/safeStorage';
 import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
+import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 
 interface TenantsScreenProps {
   onBack: () => void;
@@ -86,6 +87,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   const [email, setEmail] = useState('');
   const [idProofType, setIdProofType] = useState<'AADHAAR' | 'PAN'>('AADHAAR');
   const [idProofNumber, setIdProofNumber] = useState('');
+  const [showIdDropdown, setShowIdDropdown] = useState(false);
 
   // Selected Property & Rooms for bed allocation
   const [selectedPropId, setSelectedPropId] = useState<string>('');
@@ -115,6 +117,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   const [editMonthlyRent, setEditMonthlyRent] = useState('8500');
   const [editIdProofType, setEditIdProofType] = useState<'AADHAAR' | 'PAN'>('AADHAAR');
   const [editIdProofNumber, setEditIdProofNumber] = useState('');
+  const [showEditIdDropdown, setShowEditIdDropdown] = useState(false);
   const [savingTenantEdit, setSavingTenantEdit] = useState(false);
   const [deletingTenant, setDeletingTenant] = useState(false);
 
@@ -382,6 +385,29 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       return;
     }
 
+    const cleanId = idProofNumber.replace(/\s+/g, '');
+    if (idProofType === 'AADHAAR') {
+      if (!cleanId) {
+        Alert.alert('Aadhaar Required', 'Please enter 12-digit Aadhaar number for tenant KYC verification.');
+        return;
+      }
+      const aadhaarCheck = validateVerhoeffAadhaar(cleanId);
+      if (!aadhaarCheck.isValid) {
+        Alert.alert('Invalid Aadhaar Card', `Aadhaar verification failed: ${aadhaarCheck.message}. Please enter a valid 12-digit UIDAI Aadhaar number.`);
+        return;
+      }
+    } else if (idProofType === 'PAN') {
+      if (!cleanId) {
+        Alert.alert('PAN Required', 'Please enter 10-character PAN card number.');
+        return;
+      }
+      const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+      if (!panRegex.test(cleanId)) {
+        Alert.alert('Invalid PAN Card', 'Please enter a valid 10-character PAN format (e.g. ABCDE1234F).');
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const fixedRent = fixedRentAmount || 8500;
@@ -479,7 +505,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
 
       const createdTenantId = tenantId;
       const cleanId = idProofNumber.replace(/\s+/g, '');
-      const isAadhaarValid = idProofType === 'AADHAAR' && cleanId.length === 12 && /^\d{12}$/.test(cleanId);
+      const isAadhaarValid = idProofType === 'AADHAAR' && cleanId.length === 12 && validateVerhoeffAadhaar(cleanId).isValid;
       const isPanValid = idProofType === 'PAN' && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanId);
       const isKycVerified = isAadhaarValid || isPanValid;
 
@@ -762,7 +788,21 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     }
 
     const cleanEditId = editIdProofNumber.replace(/\s+/g, '');
-    const isEditAadhaarValid = editIdProofType === 'AADHAAR' && cleanEditId.length === 12 && /^\d{12}$/.test(cleanEditId);
+    if (editIdProofType === 'AADHAAR' && cleanEditId) {
+      const v = validateVerhoeffAadhaar(cleanEditId);
+      if (!v.isValid) {
+        Alert.alert('Invalid Aadhaar Card', `Aadhaar verification failed: ${v.message}. Please enter a valid 12-digit UIDAI Aadhaar number.`);
+        return;
+      }
+    } else if (editIdProofType === 'PAN' && cleanEditId) {
+      const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+      if (!panRegex.test(cleanEditId)) {
+        Alert.alert('Invalid PAN Card', 'Please enter a valid 10-character PAN format (e.g. ABCDE1234F).');
+        return;
+      }
+    }
+
+    const isEditAadhaarValid = editIdProofType === 'AADHAAR' && cleanEditId.length === 12 && validateVerhoeffAadhaar(cleanEditId).isValid;
     const isEditPanValid = editIdProofType === 'PAN' && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanEditId);
     const isEditVerified = isEditAadhaarValid || isEditPanValid;
 
@@ -1109,84 +1149,106 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               placeholderTextColor="#334155"
             />
 
-            <View style={styles.row}>
-              <View style={styles.col}>
-                <Text style={styles.label}>PHONE NUMBER *</Text>
-                <TextInput
-                  style={styles.input}
-                  value={phone}
-                  onChangeText={setPhone}
-                  keyboardType="phone-pad"
-                  placeholder="e.g. 9876543210"
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.label}>PHONE NUMBER *</Text>
+              <TextInput
+                style={styles.input}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                placeholder="e.g. 9876543210"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
 
-              <View style={styles.col}>
-                <Text style={styles.label}>ID PROOF TYPE *</Text>
-                <View style={styles.idProofDropdownRow}>
+            {/* Dropdown for Aadhaar and PAN (Initially shows Aadhaar; tap to select PAN) */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.label}>GOVERNMENT ID PROOF TYPE *</Text>
+              
+              <TouchableOpacity
+                style={styles.idDropdownTrigger}
+                onPress={() => setShowIdDropdown((prev) => !prev)}
+                activeOpacity={0.8}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={{ fontSize: 16 }}>{idProofType === 'AADHAAR' ? '🪪' : '💳'}</Text>
+                  <Text style={styles.idDropdownTriggerText}>
+                    {idProofType === 'AADHAAR' ? 'Aadhaar Card (12-Digit UIDAI)' : 'PAN Card (10-Char Income Tax ID)'}
+                  </Text>
+                </View>
+                <Text style={styles.idDropdownArrow}>{showIdDropdown ? '▴' : '▾'}</Text>
+              </TouchableOpacity>
+
+              {showIdDropdown && (
+                <View style={styles.idDropdownMenu}>
                   <TouchableOpacity
                     style={[
-                      styles.idProofOptionBtn,
-                      idProofType === 'AADHAAR' && styles.idProofOptionBtnActive,
+                      styles.idDropdownItem,
+                      idProofType === 'AADHAAR' && styles.idDropdownItemActive,
                     ]}
                     onPress={() => {
                       setIdProofType('AADHAAR');
                       setIdProofNumber('');
+                      setShowIdDropdown(false);
                     }}
-                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.idProofOptionText,
-                        idProofType === 'AADHAAR' && styles.idProofOptionTextActive,
-                      ]}
-                    >
-                      🪪 Aadhaar
-                    </Text>
+                    <Text style={{ fontSize: 16 }}>🪪</Text>
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <Text style={[styles.idDropdownItemTitle, idProofType === 'AADHAAR' && styles.idDropdownItemTitleActive]}>
+                        Aadhaar Card (Default)
+                      </Text>
+                      <Text style={styles.idDropdownItemSub}>12-digit UIDAI Government ID</Text>
+                    </View>
+                    {idProofType === 'AADHAAR' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
                   </TouchableOpacity>
 
                   <TouchableOpacity
                     style={[
-                      styles.idProofOptionBtn,
-                      idProofType === 'PAN' && styles.idProofOptionBtnActive,
+                      styles.idDropdownItem,
+                      idProofType === 'PAN' && styles.idDropdownItemActive,
                     ]}
                     onPress={() => {
                       setIdProofType('PAN');
                       setIdProofNumber('');
+                      setShowIdDropdown(false);
                     }}
-                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.idProofOptionText,
-                        idProofType === 'PAN' && styles.idProofOptionTextActive,
-                      ]}
-                    >
-                      💳 PAN Card
-                    </Text>
+                    <Text style={{ fontSize: 16 }}>💳</Text>
+                    <View style={{ flex: 1, marginLeft: 8 }}>
+                      <Text style={[styles.idDropdownItemTitle, idProofType === 'PAN' && styles.idDropdownItemTitleActive]}>
+                        PAN Card
+                      </Text>
+                      <Text style={styles.idDropdownItemSub}>10-character Income Tax ID</Text>
+                    </View>
+                    {idProofType === 'PAN' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
                   </TouchableOpacity>
                 </View>
-              </View>
+              )}
             </View>
 
-            <View style={{ marginBottom: 10 }}>
+            <View style={{ marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <Text style={styles.label}>
-                  {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS)' : 'PAN CARD NUMBER (10 CHARS)'}
+                  {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS) *' : 'PAN CARD NUMBER (10 CHARS) *'}
                 </Text>
                 {(() => {
                   const clean = idProofNumber.replace(/\s+/g, '');
-                  const isValid =
-                    idProofType === 'AADHAAR'
-                      ? clean.length === 12 && /^\d{12}$/.test(clean)
-                      : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
-                  if (!isValid) return null;
-                  return (
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>
-                      ✓ Valid {idProofType === 'AADHAAR' ? 'Aadhaar' : 'PAN'}
-                    </Text>
-                  );
+                  if (!clean) return null;
+                  if (idProofType === 'AADHAAR') {
+                    const v = validateVerhoeffAadhaar(clean);
+                    return (
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: v.isValid ? '#16a34a' : '#ea580c' }}>
+                        {v.isValid ? '✓ Valid Aadhaar' : `⚠️ ${v.message}`}
+                      </Text>
+                    );
+                  } else {
+                    const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean);
+                    return (
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: isValid ? '#16a34a' : '#ea580c' }}>
+                        {isValid ? '✓ Valid PAN' : (clean.length < 10 ? `⚠️ ${10 - clean.length} chars needed` : '⚠️ Invalid PAN')}
+                      </Text>
+                    );
+                  }
                 })()}
               </View>
 
@@ -1195,11 +1257,16 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                   styles.input,
                   (() => {
                     const clean = idProofNumber.replace(/\s+/g, '');
-                    const isValid =
-                      idProofType === 'AADHAAR'
-                        ? clean.length === 12 && /^\d{12}$/.test(clean)
-                        : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
-                    return isValid ? { borderColor: '#16a34a', borderWidth: 1.5 } : null;
+                    if (!clean) return null;
+                    if (idProofType === 'AADHAAR') {
+                      return validateVerhoeffAadhaar(clean).isValid
+                        ? { borderColor: '#16a34a', borderWidth: 1.5 }
+                        : { borderColor: '#ea580c', borderWidth: 1.5 };
+                    } else {
+                      return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean)
+                        ? { borderColor: '#16a34a', borderWidth: 1.5 }
+                        : { borderColor: '#ea580c', borderWidth: 1.5 };
+                    }
                   })(),
                 ]}
                 value={idProofNumber}
@@ -1213,7 +1280,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                     setIdProofNumber(pan);
                   }
                 }}
-                placeholder={idProofType === 'AADHAAR' ? 'XXXX XXXX XXXX' : 'ABCDE1234F'}
+                placeholder={idProofType === 'AADHAAR' ? 'e.g. 5489 1234 5678' : 'e.g. ABCDE1234F'}
                 placeholderTextColor="#94a3b8"
                 keyboardType={idProofType === 'AADHAAR' ? 'number-pad' : 'default'}
                 maxLength={idProofType === 'AADHAAR' ? 14 : 10}
@@ -1912,97 +1979,129 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                       placeholder="9876500000"
                     />
 
-                    <Text style={styles.label}>ID Proof Type</Text>
-                    <View style={styles.idProofDropdownRow}>
+                    {/* ID Proof Type Dropdown Selector */}
+                    <View style={{ marginBottom: 12 }}>
+                      <Text style={styles.label}>GOVERNMENT ID PROOF TYPE</Text>
                       <TouchableOpacity
-                        style={[
-                          styles.idProofOptionBtn,
-                          editIdProofType === 'AADHAAR' && styles.idProofOptionBtnActive,
-                        ]}
-                        onPress={() => {
-                          setEditIdProofType('AADHAAR');
-                          setEditIdProofNumber('');
-                        }}
+                        style={styles.idDropdownTrigger}
+                        onPress={() => setShowEditIdDropdown((prev) => !prev)}
                         activeOpacity={0.8}
                       >
-                        <Text
-                          style={[
-                            styles.idProofOptionText,
-                            editIdProofType === 'AADHAAR' && styles.idProofOptionTextActive,
-                          ]}
-                        >
-                          🪪 Aadhaar
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.idProofOptionBtn,
-                          editIdProofType === 'PAN' && styles.idProofOptionBtnActive,
-                        ]}
-                        onPress={() => {
-                          setEditIdProofType('PAN');
-                          setEditIdProofNumber('');
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Text
-                          style={[
-                            styles.idProofOptionText,
-                            editIdProofType === 'PAN' && styles.idProofOptionTextActive,
-                          ]}
-                        >
-                          💳 PAN Card
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                      <Text style={styles.label}>
-                        {editIdProofType === 'AADHAAR' ? 'Aadhaar Number (12 Digits)' : 'PAN Card Number (10 Chars)'}
-                      </Text>
-                      {(() => {
-                        const clean = editIdProofNumber.replace(/\s+/g, '');
-                        const isValid =
-                          editIdProofType === 'AADHAAR'
-                            ? clean.length === 12 && /^\d{12}$/.test(clean)
-                            : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
-                        if (!isValid) return null;
-                        return (
-                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>
-                            ✓ Valid {editIdProofType === 'AADHAAR' ? 'Aadhaar' : 'PAN'}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 16 }}>{editIdProofType === 'AADHAAR' ? '🪪' : '💳'}</Text>
+                          <Text style={styles.idDropdownTriggerText}>
+                            {editIdProofType === 'AADHAAR' ? 'Aadhaar Card (12-Digit UIDAI)' : 'PAN Card (10-Char Income Tax ID)'}
                           </Text>
-                        );
-                      })()}
+                        </View>
+                        <Text style={styles.idDropdownArrow}>{showEditIdDropdown ? '▴' : '▾'}</Text>
+                      </TouchableOpacity>
+
+                      {showEditIdDropdown && (
+                        <View style={styles.idDropdownMenu}>
+                          <TouchableOpacity
+                            style={[
+                              styles.idDropdownItem,
+                              editIdProofType === 'AADHAAR' && styles.idDropdownItemActive,
+                            ]}
+                            onPress={() => {
+                              setEditIdProofType('AADHAAR');
+                              setEditIdProofNumber('');
+                              setShowEditIdDropdown(false);
+                            }}
+                          >
+                            <Text style={{ fontSize: 16 }}>🪪</Text>
+                            <View style={{ flex: 1, marginLeft: 8 }}>
+                              <Text style={[styles.idDropdownItemTitle, editIdProofType === 'AADHAAR' && styles.idDropdownItemTitleActive]}>
+                                Aadhaar Card (Default)
+                              </Text>
+                              <Text style={styles.idDropdownItemSub}>12-digit UIDAI Government ID</Text>
+                            </View>
+                            {editIdProofType === 'AADHAAR' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[
+                              styles.idDropdownItem,
+                              editIdProofType === 'PAN' && styles.idDropdownItemActive,
+                            ]}
+                            onPress={() => {
+                              setEditIdProofType('PAN');
+                              setEditIdProofNumber('');
+                              setShowEditIdDropdown(false);
+                            }}
+                          >
+                            <Text style={{ fontSize: 16 }}>💳</Text>
+                            <View style={{ flex: 1, marginLeft: 8 }}>
+                              <Text style={[styles.idDropdownItemTitle, editIdProofType === 'PAN' && styles.idDropdownItemTitleActive]}>
+                                PAN Card
+                              </Text>
+                              <Text style={styles.idDropdownItemSub}>10-character Income Tax ID</Text>
+                            </View>
+                            {editIdProofType === 'PAN' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
+                          </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
-                    <TextInput
-                      style={[
-                        styles.input,
-                        (() => {
+
+                    <View style={{ marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={styles.label}>
+                          {editIdProofType === 'AADHAAR' ? 'Aadhaar Number (12 Digits)' : 'PAN Card Number (10 Chars)'}
+                        </Text>
+                        {(() => {
                           const clean = editIdProofNumber.replace(/\s+/g, '');
-                          const isValid =
-                            editIdProofType === 'AADHAAR'
-                              ? clean.length === 12 && /^\d{12}$/.test(clean)
-                              : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
-                          return isValid ? { borderColor: '#16a34a', borderWidth: 1.5 } : null;
-                        })(),
-                      ]}
-                      value={editIdProofNumber}
-                      onChangeText={(val) => {
-                        if (editIdProofType === 'AADHAAR') {
-                          const digits = val.replace(/\D/g, '').slice(0, 12);
-                          const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
-                          setEditIdProofNumber(formatted);
-                        } else {
-                          const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-                          setEditIdProofNumber(pan);
-                        }
-                      }}
-                      placeholder={editIdProofType === 'AADHAAR' ? 'XXXX XXXX XXXX' : 'ABCDE1234F'}
-                      keyboardType={editIdProofType === 'AADHAAR' ? 'number-pad' : 'default'}
-                      maxLength={editIdProofType === 'AADHAAR' ? 14 : 10}
-                      autoCapitalize={editIdProofType === 'PAN' ? 'characters' : 'none'}
-                    />
+                          if (!clean) return null;
+                          if (editIdProofType === 'AADHAAR') {
+                            const v = validateVerhoeffAadhaar(clean);
+                            return (
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: v.isValid ? '#16a34a' : '#ea580c' }}>
+                                {v.isValid ? '✓ Valid Aadhaar' : `⚠️ ${v.message}`}
+                              </Text>
+                            );
+                          } else {
+                            const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean);
+                            return (
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: isValid ? '#16a34a' : '#ea580c' }}>
+                                {isValid ? '✓ Valid PAN' : (clean.length < 10 ? `⚠️ ${10 - clean.length} chars needed` : '⚠️ Invalid PAN')}
+                              </Text>
+                            );
+                          }
+                        })()}
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.input,
+                          (() => {
+                            const clean = editIdProofNumber.replace(/\s+/g, '');
+                            if (!clean) return null;
+                            if (editIdProofType === 'AADHAAR') {
+                              return validateVerhoeffAadhaar(clean).isValid
+                                ? { borderColor: '#16a34a', borderWidth: 1.5 }
+                                : { borderColor: '#ea580c', borderWidth: 1.5 };
+                            } else {
+                              return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean)
+                                ? { borderColor: '#16a34a', borderWidth: 1.5 }
+                                : { borderColor: '#ea580c', borderWidth: 1.5 };
+                            }
+                          })(),
+                        ]}
+                        value={editIdProofNumber}
+                        onChangeText={(val) => {
+                          if (editIdProofType === 'AADHAAR') {
+                            const digits = val.replace(/\D/g, '').slice(0, 12);
+                            const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+                            setEditIdProofNumber(formatted);
+                          } else {
+                            const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                            setEditIdProofNumber(pan);
+                          }
+                        }}
+                        placeholder={editIdProofType === 'AADHAAR' ? 'e.g. 5489 1234 5678' : 'e.g. ABCDE1234F'}
+                        keyboardType={editIdProofType === 'AADHAAR' ? 'number-pad' : 'default'}
+                        maxLength={editIdProofType === 'AADHAAR' ? 14 : 10}
+                        autoCapitalize={editIdProofType === 'PAN' ? 'characters' : 'none'}
+                      />
+                    </View>
 
                     <TouchableOpacity
                       style={[styles.saveEditBtn, savingTenantEdit && { opacity: 0.6 }]}
@@ -2507,6 +2606,64 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     fontWeight: '700',
     marginBottom: 10,
+  },
+  idDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#fb923c',
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+  },
+  idDropdownTriggerText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  idDropdownArrow: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#ea580c',
+  },
+  idDropdownMenu: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    marginTop: 6,
+    overflow: 'hidden',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  idDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  idDropdownItemActive: {
+    backgroundColor: '#fff7ed',
+  },
+  idDropdownItemTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1e293b',
+  },
+  idDropdownItemTitleActive: {
+    color: '#ea580c',
+    fontWeight: '800',
+  },
+  idDropdownItemSub: {
+    fontSize: 10,
+    color: '#64748b',
+    marginTop: 1,
   },
   idProofDropdownRow: {
     flexDirection: 'row',

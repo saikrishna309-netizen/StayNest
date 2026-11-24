@@ -2455,37 +2455,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 3. QUICK ACTIONS (COMPACT HALF SIZE, ONLY ORANGE BORDERS, WHITE IN MIDDLE) ─── */}
-        <Animated.View
-          style={[
-            styles.quickActionsOuterCard,
-            {
-              borderColor: animatedBorderColor,
-              shadowOpacity: animatedShadowOpacity,
-            },
-          ]}
-        >
+        {/* ─── 3. QUICK ACTIONS (NO OUTSIDE BOX, COMPACT HALF SIZE, ONLY ORANGE BORDERS, MEDIUM NAMES) ─── */}
+        <View style={styles.quickActionsSectionWrap}>
           <View style={styles.quickActionsHeaderRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 15 }}>⚡</Text>
-              <Text style={styles.quickActionsHeaderTitle}>Quick Actions</Text>
-            </View>
+            <Text style={{ fontSize: 16, color: '#2563eb' }}>⚡</Text>
+            <Text style={styles.quickActionsSectionTitle}>Quick Actions</Text>
           </View>
 
-          <View style={styles.quickImageStyleRow}>
-            {/* 1. Add Tenant (Pasted image style: icon + title, white inside, orange border) */}
+          <View style={styles.quickGridContainer}>
+            {/* 1. Add Tenant */}
             <TouchableOpacity
-              style={styles.quickImageStyleCard}
+              style={styles.quickCompactCard}
               onPress={() => setShowOnboardModal(true)}
               activeOpacity={0.75}
             >
-              <Text style={[styles.quickImageActionIcon, { color: '#1d4ed8' }]}>👤⁺</Text>
-              <Text style={styles.quickImageActionTitle}>Add Tenant</Text>
+              <Text style={styles.quickCompactIcon}>👤⁺</Text>
+              <Text style={styles.quickCompactLabel}>Add Tenant</Text>
             </TouchableOpacity>
 
-            {/* 2. Record Rent (Pasted image style: ₹ icon + title, white inside, orange border) */}
+            {/* 2. Record Rent */}
             <TouchableOpacity
-              style={styles.quickImageStyleCard}
+              style={styles.quickCompactCard}
               onPress={() => {
                 if (dueTenants.length > 0) {
                   handleOpenTenantModal(dueTenants[0]);
@@ -2497,21 +2487,51 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               }}
               activeOpacity={0.75}
             >
-              <Text style={[styles.quickImageActionIcon, { fontSize: 26, fontWeight: '900', color: '#1d4ed8' }]}>₹</Text>
-              <Text style={styles.quickImageActionTitle}>Record Rent</Text>
+              <Text style={[styles.quickCompactIcon, { fontSize: 22, fontWeight: '900', color: '#1d4ed8' }]}>₹</Text>
+              <Text style={styles.quickCompactLabel}>Record Rent</Text>
             </TouchableOpacity>
 
-            {/* 3. Add Expense (Pasted image style: receipt icon + title, white inside, orange border) */}
+            {/* 3. Add Expense */}
             <TouchableOpacity
-              style={styles.quickImageStyleCard}
+              style={styles.quickCompactCard}
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
-              <Text style={[styles.quickImageActionIcon, { color: '#1d4ed8' }]}>🧾</Text>
-              <Text style={styles.quickImageActionTitle}>Add Expense</Text>
+              <Text style={styles.quickCompactIcon}>🧾</Text>
+              <Text style={styles.quickCompactLabel}>Add Expense</Text>
+            </TouchableOpacity>
+
+            {/* 4. View Reports / Pending Dues */}
+            <TouchableOpacity
+              style={styles.quickCompactCard}
+              onPress={() => setShowNeedToCollectModal(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.quickCompactIcon}>📊</Text>
+              <Text style={styles.quickCompactLabel}>View Reports</Text>
+            </TouchableOpacity>
+
+            {/* 5. Rooms / Beds */}
+            <TouchableOpacity
+              style={styles.quickCompactCard}
+              onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.quickCompactIcon}>🏢</Text>
+              <Text style={styles.quickCompactLabel}>Rooms / Beds</Text>
+            </TouchableOpacity>
+
+            {/* 6. Power Bill */}
+            <TouchableOpacity
+              style={styles.quickCompactCard}
+              onPress={() => setShowElectricityModal(true)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.quickCompactIcon}>⚡</Text>
+              <Text style={styles.quickCompactLabel}>Power Bill</Text>
             </TouchableOpacity>
           </View>
-        </Animated.View>
+        </View>
 
         {/* ─── 4. RENT DUE SECTION (ONLY DUE TENANTS, REQUIREMENT 3) ─── */}
         <View style={styles.rentDueHeaderRow}>
@@ -5301,43 +5321,34 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#1e1b4b',
   },
-  // Quick Actions: Half size, only orange borders, white inside (Image Style)
-  quickActionsOuterCard: {
-    backgroundColor: '#ffffff',
+  // Quick Actions: No outside box, compact half-size cards, orange borders, medium weight labels
+  quickActionsSectionWrap: {
     marginHorizontal: 16,
     marginBottom: 16,
-    borderRadius: 18,
-    paddingTop: 10,
-    paddingBottom: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    borderColor: '#fb923c',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.12,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
   quickActionsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 6,
+    marginBottom: 10,
     paddingHorizontal: 2,
   },
-  quickActionsHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '900',
+  quickActionsSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
     color: '#0f172a',
   },
-  quickImageStyleRow: {
+  quickGridContainer: {
     flexDirection: 'row',
-    gap: 8,
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 8,
   },
-  quickImageStyleCard: {
-    flex: 1,
+  quickCompactCard: {
+    width: '31.5%',
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingVertical: 10,
     paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
@@ -5345,17 +5356,17 @@ const styles = StyleSheet.create({
     borderColor: '#fb923c',
     shadowColor: '#ea580c',
     shadowOpacity: 0.04,
-    shadowRadius: 4,
+    shadowRadius: 3,
     elevation: 1,
   },
-  quickImageActionIcon: {
-    fontSize: 22,
-    marginBottom: 5,
+  quickCompactIcon: {
+    fontSize: 20,
+    marginBottom: 4,
   },
-  quickImageActionTitle: {
+  quickCompactLabel: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontWeight: '600',
+    color: '#475569',
     textAlign: 'center',
   },
   enquiryHoldBtn: {
