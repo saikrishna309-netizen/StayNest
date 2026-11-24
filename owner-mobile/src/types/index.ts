@@ -148,3 +148,24 @@ export interface ResidentEnquiry {
   notes?: string;
   createdAt: string;
 }
+
+export interface MaintenanceIssue {
+  id: string;
+  propertyId: string;
+  propertyName: string;
+  roomNumber?: string;
+  issueCategory: 'ELECTRICAL' | 'PLUMBING' | 'INTERNET' | 'HOUSEKEEPING' | 'OTHER';
+  selectedOption: string;
+  description?: string;
+  priority: 'LOW' | 'MEDIUM' | 'HIGH';
+  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
+  reportedDate: string;
+  resolvedDate?: string;
+}
+
+export interface DailyFoodMenu {
+  breakfast: string;
+  lunch: string;
+  snacks: string;
+  dinner: string;
+}
