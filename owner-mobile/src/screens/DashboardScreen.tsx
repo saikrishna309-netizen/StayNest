@@ -2549,15 +2549,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 3. QUICK ACTIONS (MATCHING EXACT REFERENCE DESIGN IMAGE) ─── */}
+        {/* ─── 3. QUICK ACTIONS (4 PER LINE: LINE 1 (4 ACTIONS) & LINE 2 (4 ACTIONS)) ─── */}
         <View style={styles.quickActionsSectionWrap}>
           <View style={styles.quickActionsHeaderRow}>
-            <Text style={{ fontSize: 20, color: '#2563eb' }}>⚡</Text>
+            <Text style={{ fontSize: 18, color: '#2563eb' }}>⚡</Text>
             <Text style={styles.quickActionsSectionTitle}>Quick Actions</Text>
           </View>
 
           <View style={styles.quickGridContainer}>
-            {/* 1. Add Tenant (Top-Left) */}
+            {/* ─── LINE 1: 4 ACTIONS ─── */}
+            {/* 1. Add Tenant */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => {
@@ -2570,16 +2571,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
                   <Path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" fill="#1d4ed8" />
                   <Circle cx="9" cy="7" r="4" fill="#1d4ed8" />
                   <Path d="M19 8v6m3-3h-6" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel}>Add Tenant</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Add Tenant</Text>
             </TouchableOpacity>
 
-            {/* 2. Record Rent (Top-Right) */}
+            {/* 2. Record Rent */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => {
@@ -2594,64 +2595,94 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Text style={{ fontSize: 32, fontWeight: '900', color: '#1d4ed8', lineHeight: 34 }}>₹</Text>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: '#1d4ed8', lineHeight: 22 }}>₹</Text>
               </View>
-              <Text style={styles.quickCompactLabel}>Record Rent</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Record Rent</Text>
             </TouchableOpacity>
 
-            {/* 3. Add Expense (Bottom-Left) */}
+            {/* 3. Add Expense */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
-                  <Path d="M9 12h6m-6 4h4m5 5l-2.5-1.5L15 21l-3-1.8L9 21l-3-1.8L3.5 21V5a2 2 0 012-2h13a2 2 0 012 2v16z" fill="#1d4ed8" />
-                  <Path d="M7 8h10M7 12h6M7 16h4" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="#1d4ed8" />
+                  <Path d="M14 2v6h6" fill="#1e40af" />
+                  <Path d="M8 13h8M8 17h5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel}>Add Expense</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Add Expense</Text>
             </TouchableOpacity>
 
-            {/* 4. View Reports (Bottom-Right) */}
+            {/* 4. View Reports */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowNeedToCollectModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
-                  <Rect x="3" y="13" width="5" height="8" rx="1.5" fill="#1d4ed8" />
-                  <Rect x="9.5" y="8" width="5" height="13" rx="1.5" fill="#1d4ed8" />
-                  <Rect x="16" y="3" width="5" height="18" rx="1.5" fill="#1d4ed8" />
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Rect x="4" y="13" width="4" height="8" rx="1.2" fill="#1d4ed8" />
+                  <Rect x="10" y="8" width="4" height="13" rx="1.2" fill="#1d4ed8" />
+                  <Rect x="16" y="3" width="4" height="18" rx="1.2" fill="#1d4ed8" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel}>View Reports</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>View Reports</Text>
             </TouchableOpacity>
 
-            {/* 5. Food Menu (Line 2) */}
+            {/* ─── LINE 2: 4 ACTIONS (FOOD MENU, LOG ISSUE, ROOMS/BEDS, POWER BILL) ─── */}
+            {/* 5. Food Menu */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowFoodMenuModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Text style={{ fontSize: 28 }}>🍲</Text>
+                <Text style={{ fontSize: 20 }}>🍲</Text>
               </View>
-              <Text style={styles.quickCompactLabel}>Food Menu</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Food Menu</Text>
             </TouchableOpacity>
 
-            {/* 6. Log Issue (Line 2) */}
+            {/* 6. Log Issue */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowLogIssueModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Text style={{ fontSize: 28 }}>🛠️</Text>
+                <Text style={{ fontSize: 20 }}>🛠️</Text>
               </View>
-              <Text style={styles.quickCompactLabel}>Log Issue</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Log Issue</Text>
+            </TouchableOpacity>
+
+            {/* 7. Rooms / Beds */}
+            <TouchableOpacity
+              style={styles.quickCompactCard}
+              onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
+              activeOpacity={0.75}
+            >
+              <View style={styles.quickIconCircle}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 9h2M13 9h2M9 13h2M13 13h2" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Rooms / Beds</Text>
+            </TouchableOpacity>
+
+            {/* 8. Power Bill */}
+            <TouchableOpacity
+              style={styles.quickCompactCard}
+              onPress={() => setShowElectricityModal(true)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.quickIconCircle}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#1d4ed8" />
+                </Svg>
+              </View>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>Power Bill</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -5482,38 +5513,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 14,
+    rowGap: 10,
   },
   quickCompactCard: {
-    width: '48.5%',
+    width: '23.2%',
     backgroundColor: '#ffffff',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 12,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#fb923c', // Orange border with pure white center
-    shadowColor: '#2563eb',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
+    borderColor: '#fb923c', // Orange border, pure white inside
   },
   quickIconCircle: {
-    height: 38,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  quickCompactIcon: {
-    fontSize: 26,
     marginBottom: 4,
   },
+  quickCompactIcon: {
+    fontSize: 18,
+    marginBottom: 2,
+  },
   quickCompactLabel: {
-    fontSize: 14,
+    fontSize: 10,
     fontWeight: '700',
     color: '#0f172a',
     textAlign: 'center',
+    lineHeight: 13,
   },
   enquiryHoldBtn: {
     backgroundColor: '#fff7ed',
