@@ -236,7 +236,7 @@ const MainNavigator: React.FC = () => {
                 </Text>
               </TouchableOpacity>
 
-              {/* Tab 2: Properties / Grid */}
+              {/* Tab 2: Rooms */}
               <TouchableOpacity
                 style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('properties')}
@@ -245,11 +245,11 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'properties' && <View style={styles.navActiveTopLine} />}
                 <NavGridIcon color={currentTab === 'properties' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'properties' && styles.bottomNavLabelActive]}>
-                  Dashboard Grid
+                  Rooms
                 </Text>
               </TouchableOpacity>
 
-              {/* Tab 3: Tenants / Residents */}
+              {/* Tab 3: Tenants */}
               <TouchableOpacity
                 style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('tenants')}
@@ -258,11 +258,11 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'tenants' && <View style={styles.navActiveTopLine} />}
                 <NavTenantsIcon color={currentTab === 'tenants' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'tenants' && styles.bottomNavLabelActive]}>
-                  Users/Residents
+                  Tenants
                 </Text>
               </TouchableOpacity>
 
-              {/* Tab 4: Financials / Payments Wallet */}
+              {/* Tab 4: Wallet */}
               <TouchableOpacity
                 style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('management')}
@@ -271,7 +271,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'management' && <View style={styles.navActiveTopLine} />}
                 <NavWalletIcon color={currentTab === 'management' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'management' && styles.bottomNavLabelActive]}>
-                  Payments Wallet
+                  Wallet
                 </Text>
               </TouchableOpacity>
 
@@ -458,6 +458,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 4,
     position: 'relative',
+    minHeight: 44,
   },
   navActiveTopLine: {
     position: 'absolute',
@@ -468,10 +469,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#ea580c',
   },
   bottomNavLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '600',
     color: '#64748b',
-    marginTop: 4,
+    marginTop: 3,
     textAlign: 'center',
   },
   bottomNavLabelActive: {

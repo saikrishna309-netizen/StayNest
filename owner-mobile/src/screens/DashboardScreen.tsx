@@ -2515,7 +2515,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <Text style={styles.kycCardTitle}>
                       Aadhaar Verification ({displayKycTenants.length})
                     </Text>
-                    <Text style={styles.kycCardSub}>Resident Aadhaar check</Text>
+                    <Text style={styles.kycCardSub}>Tenant Aadhaar check</Text>
                   </View>
                 </View>
 
