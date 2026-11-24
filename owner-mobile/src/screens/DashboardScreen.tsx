@@ -2071,8 +2071,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </View>
 
-        {/* ─── 2. PURPLE HERO CONTAINER (FROM NOVEMBER CALENDAR TO TOTAL SPENT STATS) ─── */}
-        <View style={styles.heroLavenderContainer}>
+        {/* ─── 2. PURPLE HERO CONTAINER (FROM NOVEMBER CALENDAR TO TOTAL SPENT STATS, SHINING LIGHT ORANGE BORDER) ─── */}
+        <Animated.View
+          style={[
+            styles.heroLavenderContainer,
+            {
+              borderColor: animatedBorderColor,
+              shadowOpacity: animatedShadowOpacity,
+            },
+          ]}
+        >
           {/* Month & Year Filter Bar & Report Download (Requirements 6 & 7) */}
           <View style={styles.heroMonthBar}>
             <TouchableOpacity
@@ -2255,7 +2263,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
             </TouchableOpacity>
           </View>
-        </View>
+        </Animated.View>
 
         {/* ─── 2. OCCUPANCY PILL CARDS (EMPTY BEDS & OCCUPIED BEDS) ─── */}
         <View style={styles.occupancyRow}>
@@ -2432,15 +2440,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         ) : (
           <View style={styles.kycNoPendingCard}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <View style={styles.kycNoPendingIconCircle}>
-                  <Text style={{ fontSize: 16 }}>🛡️</Text>
-                </View>
-                <View>
-                  <Text style={styles.kycNoPendingTitle}>No KYC Pending</Text>
-                  <Text style={styles.kycNoPendingSub}>All PG residents have verified Government ID</Text>
-                </View>
+            <View style={styles.kycNoPendingRow}>
+              <View style={styles.kycNoPendingIconCircle}>
+                <Text style={{ fontSize: 16 }}>🛡️</Text>
+              </View>
+              <View style={{ flex: 1, marginHorizontal: 10 }}>
+                <Text style={styles.kycNoPendingTitle}>No KYC Pending</Text>
+                <Text style={styles.kycNoPendingSub}>All residents verified</Text>
               </View>
               <View style={styles.kycVerifiedBadge}>
                 <Text style={styles.kycVerifiedBadgeText}>✓ 100% Verified</Text>
@@ -2449,7 +2455,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 3. QUICK ACTIONS (WHITE BOX WITH ANIMATED SHINING ORANGE BORDER) ─── */}
+        {/* ─── 3. QUICK ACTIONS (COMPACT HALF SIZE, ONLY ORANGE BORDERS, WHITE IN MIDDLE) ─── */}
         <Animated.View
           style={[
             styles.quickActionsOuterCard,
@@ -2460,32 +2466,26 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           ]}
         >
           <View style={styles.quickActionsHeaderRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-              <View style={styles.quickActionsHeaderIconCircle}>
-                <Text style={{ fontSize: 13 }}>⚡</Text>
-              </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 15 }}>⚡</Text>
               <Text style={styles.quickActionsHeaderTitle}>Quick Actions</Text>
             </View>
-            <Text style={styles.quickActionsHeaderSub}>Instant Operations</Text>
           </View>
 
-          <View style={styles.quickGridContainer}>
-            {/* 1. Add Tenants (Light Orange) */}
+          <View style={styles.quickImageStyleRow}>
+            {/* 1. Add Tenant (Pasted image style: icon + title, white inside, orange border) */}
             <TouchableOpacity
-              style={styles.quickGridBoxPremium}
+              style={styles.quickImageStyleCard}
               onPress={() => setShowOnboardModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
-                <Text style={{ fontSize: 20, color: '#ea580c', fontWeight: '800' }}>👤⁺</Text>
-              </View>
-              <Text style={styles.quickLabelTextPremium}>Add Tenant</Text>
-              <Text style={styles.quickSubLabelText}>Onboard & Bed</Text>
+              <Text style={[styles.quickImageActionIcon, { color: '#1d4ed8' }]}>👤⁺</Text>
+              <Text style={styles.quickImageActionTitle}>Add Tenant</Text>
             </TouchableOpacity>
 
-            {/* 2. Record Rent (Matched to user pasted image with bold Rupee symbol) */}
+            {/* 2. Record Rent (Pasted image style: ₹ icon + title, white inside, orange border) */}
             <TouchableOpacity
-              style={styles.quickGridBoxPremium}
+              style={styles.quickImageStyleCard}
               onPress={() => {
                 if (dueTenants.length > 0) {
                   handleOpenTenantModal(dueTenants[0]);
@@ -2497,68 +2497,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               }}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
-                <Text style={{ fontSize: 24, fontWeight: '900', color: '#1d4ed8' }}>₹</Text>
-              </View>
-              <Text style={styles.quickLabelTextPremium}>Record Rent</Text>
-              <Text style={styles.quickSubLabelText}>Collect & Due</Text>
+              <Text style={[styles.quickImageActionIcon, { fontSize: 26, fontWeight: '900', color: '#1d4ed8' }]}>₹</Text>
+              <Text style={styles.quickImageActionTitle}>Record Rent</Text>
             </TouchableOpacity>
 
-            {/* 3. Add Expense (Matched to user pasted image with receipt/bill icon) */}
+            {/* 3. Add Expense (Pasted image style: receipt icon + title, white inside, orange border) */}
             <TouchableOpacity
-              style={styles.quickGridBoxPremium}
+              style={styles.quickImageStyleCard}
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
-                <Text style={{ fontSize: 20, color: '#1d4ed8' }}>🧾</Text>
-              </View>
-              <Text style={styles.quickLabelTextPremium}>Add Expense</Text>
-              <Text style={styles.quickSubLabelText}>Bills & Staff</Text>
-            </TouchableOpacity>
-
-            {/* 4. Upcoming Due / View Reports (Matched to user pasted image with bar chart icon) */}
-            <TouchableOpacity
-              style={styles.quickGridBoxPremium}
-              onPress={() => setShowNeedToCollectModal(true)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
-                <Text style={{ fontSize: 20, color: '#1d4ed8' }}>📊</Text>
-                {dueTenantsCount > 0 && (
-                  <View style={styles.quickDueDot}>
-                    <Text style={styles.quickDueDotText}>{dueTenantsCount}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.quickLabelTextPremium}>Pending Dues</Text>
-              <Text style={styles.quickSubLabelText}>{dueTenantsCount} Due ›</Text>
-            </TouchableOpacity>
-
-            {/* 5. Rooms/Beds */}
-            <TouchableOpacity
-              style={styles.quickGridBoxPremium}
-              onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' }]}>
-                <Text style={{ fontSize: 18 }}>🏢</Text>
-              </View>
-              <Text style={styles.quickLabelTextPremium}>Rooms / Beds</Text>
-              <Text style={styles.quickSubLabelText}>{availableBeds} Vacant</Text>
-            </TouchableOpacity>
-
-            {/* 6. Electricity Bill Management (Light Orange) */}
-            <TouchableOpacity
-              style={styles.quickGridBoxPremium}
-              onPress={() => setShowElectricityModal(true)}
-              activeOpacity={0.75}
-            >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
-                <Text style={{ fontSize: 20, color: '#ea580c' }}>⚡</Text>
-              </View>
-              <Text style={styles.quickLabelTextPremium}>Power Bill</Text>
-              <Text style={styles.quickSubLabelText}>Meter & Bill</Text>
+              <Text style={[styles.quickImageActionIcon, { color: '#1d4ed8' }]}>🧾</Text>
+              <Text style={styles.quickImageActionTitle}>Add Expense</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
@@ -4902,7 +4852,7 @@ const styles = StyleSheet.create({
     paddingBottom: 130,
   },
 
-  // ─── Lavender Curved Hero Header (Screenshot Style) ───
+  // ─── Lavender Curved Hero Header (Screenshot Style, Shining Orange Border) ───
   heroLavenderContainer: {
     backgroundColor: '#6c5ce7',
     paddingTop: 16,
@@ -4911,6 +4861,11 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     marginHorizontal: 16,
     marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#fb923c',
+    shadowColor: '#ea580c',
+    shadowRadius: 10,
+    elevation: 4,
   },
   heroTopDividedBox: {
     backgroundColor: '#ffffff',
@@ -5346,114 +5301,62 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#1e1b4b',
   },
-  // Requirement 2: Quick Actions White Card with Medium Orange Animated Shining Border
+  // Quick Actions: Half size, only orange borders, white inside (Image Style)
   quickActionsOuterCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
-    marginBottom: 20,
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 2,
+    marginBottom: 16,
+    borderRadius: 18,
+    paddingTop: 10,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
     borderColor: '#fb923c',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.16,
-    shadowRadius: 8,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
   },
   quickActionsHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     paddingHorizontal: 2,
   },
-  quickActionsHeaderIconCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#fb923c',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   quickActionsHeaderTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#c2410c',
+    color: '#0f172a',
   },
-  quickActionsHeaderSub: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#ea580c',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#fb923c',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  quickGridContainer: {
+  quickImageStyleRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     gap: 8,
   },
-  quickGridBoxPremium: {
-    width: '31%',
+  quickImageStyleCard: {
+    flex: 1,
     backgroundColor: '#ffffff',
     borderRadius: 14,
     paddingVertical: 12,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#fb923c',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.04,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 1,
   },
-  quickIconCirclePremium: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#fdba74',
-    backgroundColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-    position: 'relative',
+  quickImageActionIcon: {
+    fontSize: 22,
+    marginBottom: 5,
   },
-  quickLabelTextPremium: {
+  quickImageActionTitle: {
     fontSize: 11,
     fontWeight: '800',
     color: '#0f172a',
     textAlign: 'center',
-  },
-  quickSubLabelText: {
-    fontSize: 9,
-    color: '#64748b',
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  quickDueDot: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#ef4444',
-    borderRadius: 8,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  quickDueDotText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontWeight: '900',
   },
   enquiryHoldBtn: {
     backgroundColor: '#fff7ed',
@@ -7009,10 +6912,11 @@ const styles = StyleSheet.create({
   kycNoPendingCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 10,
     marginBottom: 8,
     borderRadius: 16,
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderWidth: 1.5,
     borderColor: '#fb923c',
     shadowColor: '#ea580c',
@@ -7020,38 +6924,43 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 2,
   },
+  kycNoPendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   kycNoPendingIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#fff7ed',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#fed7aa',
+    borderWidth: 1.5,
+    borderColor: '#fb923c',
   },
   kycNoPendingTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
   },
   kycNoPendingSub: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#64748b',
     marginTop: 1,
   },
   kycVerifiedBadge: {
-    backgroundColor: '#f0fdf4',
-    borderWidth: 1,
-    borderColor: '#86efac',
-    paddingHorizontal: 8,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#fb923c',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   kycVerifiedBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#16a34a',
+    color: '#ea580c',
   },
   kycCardHeader: {
     flexDirection: 'row',
