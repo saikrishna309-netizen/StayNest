@@ -17,17 +17,20 @@ const NavHomeIcon = ({ color }: { color: string }) => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
     <Path
       d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 01-1.5 1.5h-4A1.5 1.5 0 0114 20v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4a1.5 1.5 0 01-1.5 1.5h-4A1.5 1.5 0 013 20v-9.5z"
-      fill={color}
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
   </Svg>
 );
 
 const NavGridIcon = ({ color }: { color: string }) => (
-  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-    <Rect x="3" y="3" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
-    <Rect x="13.5" y="3" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
-    <Rect x="3" y="13.5" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
-    <Rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2.5" stroke={color} strokeWidth="2.2" />
+  <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Rect x="3.5" y="3.5" width="7" height="7" rx="2" stroke={color} strokeWidth="2.2" />
+    <Rect x="13.5" y="3.5" width="7" height="7" rx="2" stroke={color} strokeWidth="2.2" />
+    <Rect x="3.5" y="13.5" width="7" height="7" rx="2" stroke={color} strokeWidth="2.2" />
+    <Rect x="13.5" y="13.5" width="7" height="7" rx="2" stroke={color} strokeWidth="2.2" />
   </Svg>
 );
 
@@ -222,7 +225,7 @@ const MainNavigator: React.FC = () => {
                 }}
                 activeOpacity={0.8}
               >
-                <NavHomeIcon color={currentTab === 'dashboard' ? '#ffffff' : '#9a3412'} />
+                <NavHomeIcon color={currentTab === 'dashboard' ? '#ffffff' : '#4b5563'} />
               </TouchableOpacity>
 
               {/* Tab 2: Properties / Grid */}
@@ -231,7 +234,7 @@ const MainNavigator: React.FC = () => {
                 onPress={() => setCurrentTab('properties')}
                 activeOpacity={0.8}
               >
-                <NavGridIcon color={currentTab === 'properties' ? '#ffffff' : '#9a3412'} />
+                <NavGridIcon color={currentTab === 'properties' ? '#ffffff' : '#4b5563'} />
               </TouchableOpacity>
 
               {/* Tab 3: Tenants (Multiple People Logo) */}
@@ -240,7 +243,7 @@ const MainNavigator: React.FC = () => {
                 onPress={() => setCurrentTab('tenants')}
                 activeOpacity={0.8}
               >
-                <NavTenantsIcon color={currentTab === 'tenants' ? '#ffffff' : '#9a3412'} />
+                <NavTenantsIcon color={currentTab === 'tenants' ? '#ffffff' : '#4b5563'} />
               </TouchableOpacity>
 
               {/* Tab 4: Financials / Expenses & Reports */}
@@ -249,7 +252,7 @@ const MainNavigator: React.FC = () => {
                 onPress={() => setCurrentTab('management')}
                 activeOpacity={0.8}
               >
-                <NavWalletIcon color={currentTab === 'management' ? '#ffffff' : '#9a3412'} />
+                <NavWalletIcon color={currentTab === 'management' ? '#ffffff' : '#4b5563'} />
               </TouchableOpacity>
 
               {/* Tab 5: User Profile */}
@@ -258,7 +261,7 @@ const MainNavigator: React.FC = () => {
                 onPress={() => setCurrentTab('profile')}
                 activeOpacity={0.8}
               >
-                <NavUserIcon color={currentTab === 'profile' ? '#ffffff' : '#9a3412'} />
+                <NavUserIcon color={currentTab === 'profile' ? '#ffffff' : '#4b5563'} />
               </TouchableOpacity>
             </View>
           </View>
@@ -404,10 +407,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 15,
   },
-  // ─── Floating Trendy Bottom Bar (Light Orange Pill + White Icon on Active Circle) ───
+  // ─── Floating Trendy Bottom Bar (Crisp White + Warm Terracotta Circle on Active) ───
   floatingBarOuter: {
     paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'android' ? 46 : 28,
+    paddingBottom: Platform.OS === 'android' ? 36 : 24,
     paddingTop: 8,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
@@ -418,32 +421,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#fff7ed', // Sleek Light Orange / Warm Cream
+    backgroundColor: '#ffffff',
     borderRadius: 36,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     width: '100%',
     maxWidth: 420,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa', // Light Orange Accent Border
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.12,
-    shadowRadius: 14,
-    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 4,
   },
   floatingTabCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
   floatingTabCircleActive: {
-    backgroundColor: '#f97316', // Vibrant Orange fill when selected
-    shadowColor: '#f97316',
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    backgroundColor: '#ea580c', // Refined warm terracotta/amber
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
     elevation: 3,
   },
   bottomNav: {

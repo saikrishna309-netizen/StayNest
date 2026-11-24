@@ -20,7 +20,7 @@ import { safeStorage } from '../utils/safeStorage';
 import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -38,6 +38,33 @@ const OutlineSearchIcon = ({ color = '#475569', size = 18 }: { color?: string; s
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <Circle cx="11" cy="11" r="7" stroke={color} strokeWidth="2" />
     <Path d="M21 21l-4.35-4.35" stroke={color} strokeWidth="2" strokeLinecap="round" />
+  </Svg>
+);
+
+// ─── MINIMALIST VECTOR BED & CAMERA ICONS (LUXURY SAAS STYLE) ───
+const BedVectorIcon = ({ color = '#94a3b8', size = 22 }: { color?: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* Headboard */}
+    <Path d="M3 7v10" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    {/* Footboard */}
+    <Path d="M21 11v6" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    {/* Mattress Frame */}
+    <Path d="M3 13.5h18" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+    {/* Pillow */}
+    <Rect x="5.5" y="9" width="5.5" height="4" rx="1.2" stroke={color} strokeWidth="1.4" />
+  </Svg>
+);
+
+const CameraMicroIcon = ({ color = '#94a3b8', size = 11 }: { color?: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21 18a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h3.5l1.5-2h4l1.5 2H19a2 2 0 012 2v10z"
+      stroke={color}
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Circle cx="12" cy="13" r="3.5" stroke={color} strokeWidth="1.8" />
   </Svg>
 );
 
@@ -1924,19 +1951,29 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         <TouchableOpacity
           style={styles.propertySelectorBar}
           onPress={() => setShowPropertyPicker(true)}
+          activeOpacity={0.85}
         >
-          <View style={styles.propIconCircle}>
-            <Text style={{ fontSize: 16 }}>🏢</Text>
-          </View>
-          <View style={{ flex: 1, marginLeft: 10 }}>
+          <Image
+            source={{
+              uri:
+                buildingPhoto ||
+                activeProperty?.primaryPhotoUrl ||
+                'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=200&q=80',
+            }}
+            style={styles.propThumbImage}
+            resizeMode="cover"
+          />
+          <View style={{ flex: 1, marginLeft: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.activePropName}>{activeProperty?.name || 'Ramesh PG'}</Text>
+              <Text style={styles.activePropName} numberOfLines={1}>
+                {activeProperty?.name || "StayNest Elite Men's PG"}
+              </Text>
               <View style={styles.genderTag}>
                 <Text style={styles.genderTagText}>{activeProperty?.genderPolicy || 'BOYS'}</Text>
               </View>
             </View>
-            <Text style={styles.activePropLoc}>
-              📍 {activeProperty?.addressLine || 'MG Road'}, {activeProperty?.cityName || 'Vijayawada'}
+            <Text style={styles.activePropLoc} numberOfLines={1}>
+              📍 {activeProperty?.addressLine || 'Opp. PVP Square, MG Road'}, {activeProperty?.cityName || 'Vijayawada'}
             </Text>
           </View>
           <Text style={styles.dropdownChevron}>▼</Text>
@@ -1975,22 +2012,15 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   />
                   <View style={styles.buildingPhotoOverlay}>
                     <View style={styles.buildingPhotoBadge}>
-                      <Text style={styles.buildingPhotoBadgeText}>🏢 Building Photo (Website & App)</Text>
+                      <Text style={styles.buildingPhotoBadgeText}>🖼️ Building Photo (Website & App)</Text>
                     </View>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                       <TouchableOpacity
                         style={styles.buildingPhotoUploadBtn}
                         onPress={handleUpdateBuildingPhoto}
                         activeOpacity={0.85}
                       >
                         <Text style={styles.buildingPhotoUploadBtnText}>📷 Upload / Edit Photo</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.buildingPhotoUploadBtn, { backgroundColor: '#2563eb' }]}
-                        onPress={handleSyncToWebsite}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.buildingPhotoUploadBtnText}>🌐 Sync & View on Website</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2107,9 +2137,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                     </Text>
                                   </View>
 
-                                  <Text style={styles.roomWiseRentText}>
-                                    ₹{room.rentRupees.toLocaleString('en-IN')}/mo
-                                  </Text>
+                                  <View style={styles.roomWiseRentBadge}>
+                                    <Text style={styles.roomWiseRentText}>
+                                      ₹{room.rentRupees.toLocaleString('en-IN')}/mo
+                                    </Text>
+                                  </View>
                                 </View>
 
                                 {/* Room Action Buttons: 🛏️ Add/Edit Beds & ⚙️ Edit Room */}
@@ -2212,9 +2244,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                               }}
                                               activeOpacity={0.8}
                                             >
-                                              <Text style={styles.bedInlineAddPhotoBtnText}>📷</Text>
+                                              <CameraMicroIcon color="#94a3b8" size={11} />
                                             </TouchableOpacity>
-                                            <Text style={styles.bedIconEmoji}>🛏️</Text>
+                                            <BedVectorIcon color="#64748b" size={24} />
                                             <Text style={[styles.bedBoxNumber, { color: styleObj.numColor }]}>
                                               {bedNumStr}
                                             </Text>
@@ -2289,9 +2321,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                                               }}
                                               activeOpacity={0.8}
                                             >
-                                              <Text style={styles.bedInlineAddPhotoBtnText}>📷</Text>
+                                              <CameraMicroIcon color="#94a3b8" size={11} />
                                             </TouchableOpacity>
-                                            <Text style={styles.bedIconEmojiGrey}>🛏️</Text>
+                                            <BedVectorIcon color="#94a3b8" size={24} />
                                             <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
                                             <Text style={styles.bedBoxAddText}>+ Add</Text>
                                           </>
@@ -2316,7 +2348,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                               <View style={styles.roomPhotosSection}>
                                 <View style={styles.roomPhotosHeaderRow}>
                                   <Text style={styles.roomPhotosTitle}>
-                                    📸 Room Photos ({room.photos?.length || 0})
+                                    📷 Room Photos ({room.photos?.length || 0})
                                   </Text>
                                   <TouchableOpacity
                                     style={styles.addRoomPhotoBtn}
@@ -3799,7 +3831,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f8f9fa',
   },
   header: {
     backgroundColor: '#ffffff',
@@ -3834,8 +3866,9 @@ const styles = StyleSheet.create({
   },
   pageTitleHeader: {
     fontSize: 17,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#111827',
+    letterSpacing: -0.2,
   },
   headerRightActions: {
     flexDirection: 'row',
@@ -3844,14 +3877,18 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   headerIconBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#f8fafc',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   headerAvatarCircle: {
     width: 34,
@@ -4105,45 +4142,59 @@ const styles = StyleSheet.create({
   propertySelectorBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f1f5f9',
-    padding: 10,
-    borderRadius: 10,
+    backgroundColor: '#ffffff',
+    padding: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  propThumbImage: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#111827',
   },
   propIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#ffffff',
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#f1f5f9',
     justifyContent: 'center',
     alignItems: 'center',
   },
   activePropName: {
     fontSize: 15,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#111827',
+    letterSpacing: -0.2,
   },
   genderTag: {
-    backgroundColor: '#e0e7ff',
+    backgroundColor: '#eef2ff',
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
     marginLeft: 8,
   },
   genderTagText: {
-    color: '#4338ca',
+    color: '#4f46e5',
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.5,
   },
   activePropLoc: {
-    fontSize: 12,
-    color: '#64748b',
+    fontSize: 11.5,
+    color: '#6b7280',
+    fontWeight: '500',
     marginTop: 2,
   },
   dropdownChevron: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#6b7280',
     paddingHorizontal: 4,
   },
   scrollContent: {
@@ -4911,6 +4962,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     borderWidth: 1,
     borderColor: '#f1f5f9',
+    shadowColor: '#000000',
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   floorFilterScroll: {
     flexDirection: 'row',
@@ -4918,90 +4973,101 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   floorFilterPill: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
   },
   floorFilterPillActive: {
-    backgroundColor: '#ff7337',
-    borderColor: '#ff7337',
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 2,
   },
   floorFilterText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748b',
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#374151',
   },
   floorFilterTextActive: {
     color: '#ffffff',
-    fontWeight: '800',
+    fontWeight: '700',
   },
   addFloorHeaderPill: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
-    backgroundColor: '#fff7ed',
+    backgroundColor: '#fffbeb',
     borderWidth: 1,
-    borderColor: '#fed7aa',
+    borderColor: '#fde68a',
     borderStyle: 'dashed',
   },
   addFloorHeaderPillText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#ea580c',
+    fontWeight: '700',
+    color: '#d97706',
   },
   floorSectionCard: {
     backgroundColor: '#ffffff',
     borderRadius: 20,
     padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     elevation: 2,
   },
   floorSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
-    paddingBottom: 10,
+    marginBottom: 14,
+    paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#f8fafc',
   },
   floorSectionTitle: {
     fontSize: 18,
-    fontWeight: '900',
-    color: '#1e1b4b',
+    fontWeight: '700',
+    color: '#111827',
+    letterSpacing: -0.3,
   },
   floorSectionSub: {
-    fontSize: 11,
-    color: '#64748b',
-    fontWeight: '600',
+    fontSize: 12,
+    color: '#6b7280',
+    fontWeight: '500',
     marginTop: 2,
   },
   floorHeaderAddRoomBtn: {
-    backgroundColor: '#ede9fe',
+    backgroundColor: '#f5f3ff',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#ddd6fe',
+    borderColor: '#ede9fe',
   },
   floorHeaderAddRoomBtnText: {
-    color: '#6d28d9',
-    fontSize: 11,
-    fontWeight: '800',
+    color: '#7c3aed',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
   roomWiseCard: {
     backgroundColor: '#ffffff',
     borderRadius: 16,
     padding: 14,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 1,
   },
   roomWiseTopBar: {
     flexDirection: 'row',
@@ -5018,31 +5084,37 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   roomWiseNumBadge: {
-    backgroundColor: '#1e1b4b',
+    backgroundColor: '#111827',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   roomWiseNumText: {
     color: '#ffffff',
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   roomWiseTypeBadge: {
-    backgroundColor: '#ede9fe',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: '#f3f4f6',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   roomWiseTypeText: {
-    color: '#6d28d9',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#374151',
+    fontSize: 11.5,
+    fontWeight: '600',
+  },
+  roomWiseRentBadge: {
+    backgroundColor: '#ecfdf5',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   roomWiseRentText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#16a34a',
+    fontWeight: '700',
+    color: '#059669',
   },
   roomWiseActionButtons: {
     flexDirection: 'row',
@@ -5050,63 +5122,65 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   roomWiseAddBedBtn: {
-    backgroundColor: '#fff7ed',
+    backgroundColor: '#fffbeb',
     borderWidth: 1,
-    borderColor: '#fed7aa',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    borderColor: '#fde68a',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   roomWiseAddBedBtnText: {
-    color: '#ea580c',
+    color: '#d97706',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   roomWiseAddRoomBtn: {
     backgroundColor: '#f0fdf4',
     borderWidth: 1,
     borderColor: '#bbf7d0',
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
   },
   roomWiseAddRoomBtnText: {
     color: '#16a34a',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   roomWiseSettingsBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
     alignItems: 'center',
     justifyContent: 'center',
   },
   roomWiseSettingsBtnText: {
-    color: '#475569',
+    color: '#4b5563',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '600',
   },
   roomBedsGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 8,
     alignItems: 'center',
     justifyContent: 'flex-start',
   },
   bedBoxCard: {
     width: '31%',
-    height: 94,
+    height: 98,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1.2,
+    borderColor: '#e2e8f0',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 4,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
+    shadowColor: '#000000',
+    shadowOpacity: 0.02,
     shadowRadius: 4,
     elevation: 1,
     marginVertical: 3,
@@ -5116,13 +5190,16 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   bedBoxNumber: {
-    fontSize: 13,
-    fontWeight: '900',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 3,
     marginBottom: 1,
   },
   bedBoxTenantName: {
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '600',
+    color: '#6b7280',
     textAlign: 'center',
   },
   bedBoxWrapper: {
@@ -5131,17 +5208,21 @@ const styles = StyleSheet.create({
   },
   bedBoxVacantCard: {
     width: '31%',
-    height: 94,
+    height: 98,
     borderRadius: 14,
-    borderWidth: 1.5,
+    borderWidth: 1.2,
     borderStyle: 'dashed',
-    borderColor: '#fed7aa',
-    backgroundColor: '#fffaf5',
+    borderColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 4,
     position: 'relative',
     marginVertical: 3,
+    shadowColor: '#000000',
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   bedIconEmojiGrey: {
     fontSize: 18,
@@ -5149,15 +5230,16 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   bedBoxVacantNumber: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#64748b',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 4,
     marginBottom: 1,
   },
   bedBoxAddText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#ff7337',
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#d97706',
   },
   bedBoxWithPhoto: {
     overflow: 'hidden',
@@ -5466,11 +5548,10 @@ const styles = StyleSheet.create({
   },
   inlineAddBedCard: {
     width: '31%',
-    height: 94,
+    height: 98,
     borderRadius: 14,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#fed7aa',
+    borderWidth: 1.2,
+    borderColor: '#fde68a',
     backgroundColor: '#fff7ed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -5478,31 +5559,34 @@ const styles = StyleSheet.create({
     marginVertical: 3,
   },
   inlineAddBedPlus: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#ea580c',
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#d97706',
     marginBottom: 2,
   },
   inlineAddBedText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#ea580c',
+    fontWeight: '700',
+    color: '#d97706',
   },
   floorAddRoomDottedBtn: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#cbd5e1',
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderWidth: 1.2,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#ffffff',
-    marginTop: 6,
+    marginTop: 8,
+    shadowColor: '#000000',
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
   floorAddRoomDottedText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#4f46e5',
+    fontWeight: '700',
+    color: '#374151',
   },
   addFloorLargeBtn: {
     backgroundColor: '#4338ca',
@@ -5916,13 +6000,17 @@ const styles = StyleSheet.create({
   },
   // Building Photo Card Styles
   buildingPhotoCard: {
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
-    height: 140,
+    height: 160,
     position: 'relative',
-    backgroundColor: '#0f172a',
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
     marginBottom: 4,
   },
   buildingPhotoImage: {
@@ -5934,17 +6022,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 10,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(17, 24, 39, 0.72)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   buildingPhotoBadge: {
     backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
   buildingPhotoBadgeText: {
     color: '#ffffff',
@@ -5953,21 +6042,25 @@ const styles = StyleSheet.create({
   },
   buildingPhotoUploadBtn: {
     backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    shadowColor: '#000000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   buildingPhotoUploadBtnText: {
-    color: '#0f172a',
+    color: '#111827',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   // Room Photos Section Styles
   roomPhotosSection: {
-    marginTop: 12,
-    paddingTop: 10,
+    marginTop: 14,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
+    borderTopColor: '#f1f5f9',
   },
   roomPhotosHeaderRow: {
     flexDirection: 'row',
@@ -5976,21 +6069,21 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   roomPhotosTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#334155',
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#111827',
   },
   addRoomPhotoBtn: {
     backgroundColor: '#eff6ff',
     borderWidth: 1,
     borderColor: '#bfdbfe',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 8,
   },
   addRoomPhotoBtnText: {
-    fontSize: 10,
-    fontWeight: '800',
+    fontSize: 10.5,
+    fontWeight: '700',
     color: '#2563eb',
   },
   roomPhotosScroll: {
