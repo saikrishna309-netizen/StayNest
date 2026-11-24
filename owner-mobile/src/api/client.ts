@@ -3,7 +3,8 @@
 // Connects to Live Render Backend
 // ============================================================================
 
-export const API_BASE = 'https://staynest-6ylx.onrender.com/api/v1';
+export const API_BASE =
+  process.env.EXPO_PUBLIC_API_URL || 'https://staynest-6ylx.onrender.com/api/v1';
 
 let authToken: string | null = null;
 

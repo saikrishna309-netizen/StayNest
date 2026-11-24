@@ -14,6 +14,7 @@ import {
   Linking,
 } from 'react-native';
 import { safeStorage } from '../utils/safeStorage';
+import { fastDataCache } from '../services/dataCache';
 import { useAuth } from '../context/AuthContext';
 import { GooglePayLogo, PhonePeLogo, PaytmLogo, CardPaymentLogo } from '../components/PaymentLogos';
 import { pickImageFromDevice } from '../utils/imagePicker';
@@ -555,6 +556,70 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
                 <Text style={styles.quickTileLabelWarm}>View Reports</Text>
               </TouchableOpacity>
             </View>
+          </View>
+
+          {/* ─── SYSTEM & DATA CACHE CONTROLS ─── */}
+          <View style={{ marginTop: 22, marginBottom: 20 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#fff7ed',
+                borderWidth: 1.5,
+                borderColor: '#fed7aa',
+                borderRadius: 14,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                marginBottom: 10,
+              }}
+              onPress={async () => {
+                try {
+                  await safeStorage.removeItem('@staynest_custom_tenants');
+                  await safeStorage.removeItem('@staynest_custom_properties');
+                  fastDataCache.invalidateAll();
+                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                    window.localStorage.removeItem('staynest_custom_properties');
+                    window.localStorage.removeItem('staynest_customer_enquiries');
+                  }
+                  Alert.alert(
+                    'Local Cache Cleared! 🧹',
+                    'All cached data has been removed. The app is fetching fresh, live data from the backend.'
+                  );
+                } catch (err: any) {
+                  Alert.alert('Error', err.message || 'Could not clear cache');
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 16 }}>🧹</Text>
+              <Text style={{ color: '#ea580c', fontWeight: '900', fontSize: 13 }}>
+                Clear Local Cache & Fetch Live Backend
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#f8fafc',
+                borderWidth: 1,
+                borderColor: '#e2e8f0',
+                borderRadius: 14,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+              onPress={handleLogout}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 15 }}>🚪</Text>
+              <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>
+                Log Out from Account
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
