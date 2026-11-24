@@ -23,7 +23,8 @@ import { validateVerhoeffAadhaar, parseAadhaarQrPayload } from '../utils/aadhaar
 import { ElectricityBillModal } from '../components/modals/ElectricityBillModal';
 import { fastDataCache } from '../services/dataCache';
 import { safeStorage } from '../utils/safeStorage';
-import Svg, { Path } from 'react-native-svg';
+import { isValidUuid } from '../services/propertyDataService';
+import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) => (
   <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -651,27 +652,47 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
       let loadedTenants = tRes || [];
 
-      // Multi-PG Demo Tenants for PG 1 and PG 2
-      if (loadedTenants.length < 5) {
-        const multiPgTenants: Tenant[] = [
-          // PG 1 Residents (StayNest Elite Men's PG - MG Road)
-          { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+      // Multi-PG Demo Tenants for PG 1 and PG 2 (Always retained and merged)
+      const multiPgTenants: Tenant[] = [
+        // PG 1 Residents (StayNest Elite Men's PG - MG Road)
+        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
+        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
+        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
+        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
+        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
+        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
 
-          // PG 2 Residents (Sai Durga Executive Ladies PG - Benz Circle)
-          { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        ];
-        const existingPhones = new Set(loadedTenants.map((t) => t.phone));
-        const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone));
-        loadedTenants = [...loadedTenants, ...extraTenants];
-      }
+        // PG 2 Residents (Sai Durga Executive Ladies PG - Benz Circle)
+        { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
+        { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000 },
+        { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 950000, outstandingPaise: 0 },
+        { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
+      ];
+      const existingPhones = new Set(loadedTenants.map((t) => t.phone));
+      const existingIds = new Set(loadedTenants.map((t) => t.id));
+      const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone) && !existingIds.has(mt.id));
+      loadedTenants = [...loadedTenants, ...extraTenants];
+
+      // Merge local custom onboarded tenants from safeStorage so they never disappear
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        if (storedCustomStr) {
+          const customList: Tenant[] = JSON.parse(storedCustomStr);
+          const cIds = new Set(customList.map(c => c.id));
+          const cPhones = new Set(customList.map(c => c.phone));
+          loadedTenants = [
+            ...customList,
+            ...loadedTenants.filter(lt => !cIds.has(lt.id) && !cPhones.has(lt.phone)),
+          ];
+        }
+      } catch {}
+
+      // Ensure every resident without explicit termination is marked ACTIVE
+      loadedTenants = loadedTenants.map((t) => ({
+        ...t,
+        active: t.stayStatus === 'TERMINATED' ? false : t.active !== false,
+        stayStatus: t.stayStatus === 'TERMINATED' ? 'TERMINATED' : 'ACTIVE',
+      }));
       // Merge local payment updates to ensure paid tenants stay marked as PAID across all tabs
       if (typeof window !== 'undefined' && window.localStorage) {
         const cached = window.localStorage.getItem('staynest_cached_tenants');
@@ -1548,8 +1569,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }),
       });
 
-      // 2. Allocate stay with selected bed & the fixed monthly rent
-      if (selectedBedId && selectedPropId) {
+      // 2. Allocate stay with selected bed & the fixed monthly rent (only for real backend UUIDs)
+      if (selectedBedId && selectedPropId && isValidUuid(selectedPropId) && isValidUuid(newTenant.id)) {
         await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
           method: 'POST',
           body: JSON.stringify({
@@ -1561,48 +1582,69 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             checkIn: new Date().toISOString().split('T')[0],
           }),
         }).catch(() => { });
-      }
 
-      // 3. Create monthly rent invoice with fixed rent
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const todayDate = new Date().toISOString().split('T')[0];
-      try {
-        const invoice = await apiClient<any>('/owner/rent-invoices', {
-          method: 'POST',
-          body: JSON.stringify({
-            tenantId: newTenant.id,
-            propertyId: selectedPropId,
-            billingMonth: currentMonth,
-            rentAmountPaise: fixedRent * 100,
-            dueDate: todayDate,
-          }),
-        });
-
-        // 4. Record initial rent payment if paid
-        if (rentPayingNow > 0 && invoice?.id) {
-          await apiClient(`/owner/rent-invoices/${invoice.id}/payments`, {
+        // 3. Create monthly rent invoice with fixed rent
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const todayDate = new Date().toISOString().split('T')[0];
+        try {
+          const invoice = await apiClient<any>('/owner/rent-invoices', {
             method: 'POST',
             body: JSON.stringify({
-              amountPaidPaise: rentPayingNow * 100,
-              paymentMethod: onboardPayMode,
-              notes: rentDue > 0
-                ? `Partial onboarding rent paid ₹${rentPayingNow}. Remaining ₹${rentDue} due.`
-                : 'Full rent paid at onboarding.',
+              tenantId: newTenant.id,
+              propertyId: selectedPropId,
+              billingMonth: currentMonth,
+              rentAmountPaise: fixedRent * 100,
+              dueDate: todayDate,
             }),
           });
-        }
-      } catch (invErr) {
-        // Direct payment fallback
-        if (rentPayingNow > 0) {
-          await apiClient(`/owner/tenants/${newTenant.id}/payments`, {
-            method: 'POST',
-            body: JSON.stringify({
-              amountPaidPaise: rentPayingNow * 100,
-              paymentMethod: onboardPayMode,
-            }),
-          }).catch(() => { });
+
+          // 4. Record initial rent payment if paid
+          if (rentPayingNow > 0 && invoice?.id) {
+            await apiClient(`/owner/rent-invoices/${invoice.id}/payments`, {
+              method: 'POST',
+              body: JSON.stringify({
+                amountPaidPaise: rentPayingNow * 100,
+                paymentMethod: onboardPayMode,
+                notes: rentDue > 0
+                  ? `Partial onboarding rent paid ₹${rentPayingNow}. Remaining ₹${rentDue} due.`
+                  : 'Full rent paid at onboarding.',
+              }),
+            }).catch(() => { });
+          }
+        } catch (invErr) {
+          // Direct payment fallback
+          if (rentPayingNow > 0) {
+            await apiClient(`/owner/tenants/${newTenant.id}/payments`, {
+              method: 'POST',
+              body: JSON.stringify({
+                amountPaidPaise: rentPayingNow * 100,
+                paymentMethod: onboardPayMode,
+              }),
+            }).catch(() => { });
+          }
         }
       }
+
+      // Persist newly onboarded resident into safeStorage so it never vanishes
+      try {
+        const fullNewTenant: Tenant = {
+          ...newTenant,
+          propertyId: selectedPropId,
+          propertyName: properties.find((p) => p.id === selectedPropId)?.name || 'StayNest PG',
+          roomNumber: selectedRoomId ? (propertyRoomsMap[selectedPropId] || []).find((r) => r.id === selectedRoomId)?.roomNumber || '101' : '101',
+          bedId: selectedBedId,
+          bedLabel: (propertyRoomsMap[selectedPropId] || []).flatMap((r) => r.beds || []).find((b) => b.id === selectedBedId)?.bedLabel || 'Bed 1',
+          monthlyRentPaise: fixedRent * 100,
+          outstandingPaise: rentDue * 100,
+          rentStatus: rentDue === 0 ? 'PAID' : (rentPayingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
+          active: true,
+          stayStatus: 'ACTIVE',
+        };
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
+        const mergedCustom = [fullNewTenant, ...customList.filter((ct) => ct.id !== newTenant.id && ct.phone !== onboardPhone.trim())];
+        await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(mergedCustom));
+      } catch {}
 
       const alertMsg = rentDue > 0
         ? `${onboardFullName} onboarded! Rent received: ₹${rentPayingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
@@ -2455,10 +2497,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 3. QUICK ACTIONS (NO OUTSIDE BOX, COMPACT HALF SIZE, ONLY ORANGE BORDERS, MEDIUM NAMES) ─── */}
+        {/* ─── 3. QUICK ACTIONS (2-COLUMN GRID MATCHING REFERENCE IMAGE, WHITE CENTER, ORANGE BORDERS ONLY) ─── */}
         <View style={styles.quickActionsSectionWrap}>
           <View style={styles.quickActionsHeaderRow}>
-            <Text style={{ fontSize: 16, color: '#2563eb' }}>⚡</Text>
+            <Text style={{ fontSize: 20, color: '#2563eb' }}>⚡</Text>
             <Text style={styles.quickActionsSectionTitle}>Quick Actions</Text>
           </View>
 
@@ -2469,7 +2511,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => setShowOnboardModal(true)}
               activeOpacity={0.75}
             >
-              <Text style={styles.quickCompactIcon}>👤⁺</Text>
+              <View style={styles.quickIconCircle}>
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                  <Path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" fill="#1d4ed8" />
+                  <Circle cx="9" cy="7" r="4" fill="#1d4ed8" />
+                  <Path d="M19 8v6m3-3h-6" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
+                </Svg>
+              </View>
               <Text style={styles.quickCompactLabel}>Add Tenant</Text>
             </TouchableOpacity>
 
@@ -2487,7 +2535,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               }}
               activeOpacity={0.75}
             >
-              <Text style={[styles.quickCompactIcon, { fontSize: 22, fontWeight: '900', color: '#1d4ed8' }]}>₹</Text>
+              <View style={styles.quickIconCircle}>
+                <Text style={{ fontSize: 28, fontWeight: '800', color: '#1d4ed8', lineHeight: 30 }}>₹</Text>
+              </View>
               <Text style={styles.quickCompactLabel}>Record Rent</Text>
             </TouchableOpacity>
 
@@ -2497,17 +2547,29 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
-              <Text style={styles.quickCompactIcon}>🧾</Text>
+              <View style={styles.quickIconCircle}>
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                  <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="#1d4ed8" />
+                  <Path d="M14 2v6h6" fill="#1e40af" />
+                  <Path d="M8 13h8M8 17h5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+                </Svg>
+              </View>
               <Text style={styles.quickCompactLabel}>Add Expense</Text>
             </TouchableOpacity>
 
-            {/* 4. View Reports / Pending Dues */}
+            {/* 4. View Reports */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowNeedToCollectModal(true)}
               activeOpacity={0.75}
             >
-              <Text style={styles.quickCompactIcon}>📊</Text>
+              <View style={styles.quickIconCircle}>
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                  <Rect x="4" y="13" width="4" height="8" rx="1.5" fill="#1d4ed8" />
+                  <Rect x="10" y="8" width="4" height="13" rx="1.5" fill="#1d4ed8" />
+                  <Rect x="16" y="3" width="4" height="18" rx="1.5" fill="#1d4ed8" />
+                </Svg>
+              </View>
               <Text style={styles.quickCompactLabel}>View Reports</Text>
             </TouchableOpacity>
 
@@ -2517,7 +2579,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
               activeOpacity={0.75}
             >
-              <Text style={styles.quickCompactIcon}>🏢</Text>
+              <View style={styles.quickIconCircle}>
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                  <Path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 9h2M13 9h2M9 13h2M13 13h2" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </View>
               <Text style={styles.quickCompactLabel}>Rooms / Beds</Text>
             </TouchableOpacity>
 
@@ -2527,7 +2593,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => setShowElectricityModal(true)}
               activeOpacity={0.75}
             >
-              <Text style={styles.quickCompactIcon}>⚡</Text>
+              <View style={styles.quickIconCircle}>
+                <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+                  <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#1d4ed8" />
+                </Svg>
+              </View>
               <Text style={styles.quickCompactLabel}>Power Bill</Text>
             </TouchableOpacity>
           </View>
@@ -5321,20 +5391,21 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#1e1b4b',
   },
-  // Quick Actions: No outside box, compact half-size cards, orange borders, medium weight labels
+  // Quick Actions: 2-column layout matching reference image, pure white background, orange borders
   quickActionsSectionWrap: {
     marginHorizontal: 16,
-    marginBottom: 16,
+    marginTop: 8,
+    marginBottom: 26,
   },
   quickActionsHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 10,
+    gap: 8,
+    marginBottom: 14,
     paddingHorizontal: 2,
   },
   quickActionsSectionTitle: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '800',
     color: '#0f172a',
   },
@@ -5342,31 +5413,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 8,
+    rowGap: 12,
   },
   quickCompactCard: {
-    width: '31.5%',
+    width: '48.5%',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 4,
+    borderRadius: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#fb923c',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.04,
-    shadowRadius: 3,
-    elevation: 1,
+  },
+  quickIconCircle: {
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
   quickCompactIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    fontSize: 24,
+    marginBottom: 6,
   },
   quickCompactLabel: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
-    color: '#475569',
+    color: '#0f172a',
     textAlign: 'center',
   },
   enquiryHoldBtn: {
@@ -5390,7 +5463,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginTop: 8,
+    marginBottom: 14,
   },
   dueCountBadgePill: {
     backgroundColor: '#ede9fe',
@@ -6909,8 +6983,8 @@ const styles = StyleSheet.create({
   kycCarouselCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 18,
+    marginBottom: 20,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1.5,
@@ -6923,8 +6997,8 @@ const styles = StyleSheet.create({
   kycNoPendingCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
-    marginTop: 10,
-    marginBottom: 8,
+    marginTop: 18,
+    marginBottom: 20,
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 16,
