@@ -98,6 +98,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   const [fixedDepositAmount, setFixedDepositAmount] = useState(2500);
   const [rentPayingNow, setRentPayingNow] = useState('8500');
   const [depositPayingNow, setDepositPayingNow] = useState('2500');
+  const [dateOfJoining, setDateOfJoining] = useState(new Date().toISOString().split('T')[0]);
+  const [rentCycle, setRentCycle] = useState('1st of every month');
   const [payMode, setPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [rentRupees, setRentRupees] = useState('8500');
   const [depositRupees, setDepositRupees] = useState('8500');
@@ -456,7 +458,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               bedId: selectedBedId,
               monthlyRentPaise: fixedRent * 100,
               securityDepositPaise: depositPaying * 100,
-              checkIn: new Date().toISOString().split('T')[0],
+              checkIn: dateOfJoining || new Date().toISOString().split('T')[0],
             }),
           });
         } catch (stayErr: any) {
@@ -530,6 +532,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         rentStatus: rentDue === 0 ? 'PAID' : (payingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
         active: true,
         stayStatus: 'ACTIVE',
+        checkIn: dateOfJoining || new Date().toISOString().split('T')[0],
+        rentCycle: rentCycle || '1st of every month',
         createdAt: new Date().toISOString(),
       };
 
@@ -579,6 +583,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       setSelectedRoomId('');
       setRentPayingNow('8500');
       setDepositPayingNow('2500');
+      setDateOfJoining(new Date().toISOString().split('T')[0]);
+      setRentCycle('1st of every month');
       loadData();
     } catch (err: any) {
       Alert.alert('Onboarding Notice', err.message || 'Could not onboard tenant');
@@ -1062,6 +1068,417 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     }
   };
 
+  // ─── SEPARATE PAGE: ONBOARD NEW RESIDENT (WITH BACK BUTTON) ───
+  if (showForm) {
+    return (
+      <View style={styles.separatePageContainer}>
+        {/* Top Header with Back Button */}
+        <View style={styles.separatePageHeader}>
+          <TouchableOpacity
+            style={styles.separatePageBackBtn}
+            onPress={() => {
+              setShowForm(false);
+              setFullName('');
+              setPhone('');
+              setEmail('');
+              setIdProofNumber('');
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.separatePageBackBtnText}>← Back to Tenants</Text>
+          </TouchableOpacity>
+          <View style={{ flex: 1, alignItems: 'center', marginRight: 30 }}>
+            <Text style={styles.separatePageHeaderTitle}>Onboard Resident</Text>
+            <Text style={styles.separatePageHeaderSub}>Assign bed, fixed rent & rent cycle</Text>
+          </View>
+        </View>
+
+        <ScrollView
+          style={styles.separatePageContent}
+          contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* 1. Property Selector */}
+          {properties.length > 1 && (
+            <View style={{ marginBottom: 14 }}>
+              <Text style={styles.fieldLabel}>🏢 1. SELECT PG PROPERTY *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                {properties.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.propChip,
+                      selectedPropId === p.id && styles.propChipSelected,
+                    ]}
+                    onPress={() => handlePropertySelect(p.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.propChipText,
+                        selectedPropId === p.id && styles.propChipTextSelected,
+                      ]}
+                    >
+                      🏢 {p.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* 2. Resident Name & Phone */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>👤 RESIDENT FULL NAME *</Text>
+            <TextInput
+              style={styles.input}
+              value={fullName}
+              onChangeText={setFullName}
+              placeholder="e.g. Anand Kumar"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>📱 PHONE NUMBER (10 DIGITS) *</Text>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+              placeholder="e.g. 9876543210"
+              placeholderTextColor="#94a3b8"
+              maxLength={10}
+            />
+          </View>
+
+          {/* 3. Government ID Proof Type (Dropdown for Aadhaar & PAN) */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>🪪 GOVERNMENT ID PROOF TYPE *</Text>
+            <TouchableOpacity
+              style={styles.idDropdownTrigger}
+              onPress={() => setShowIdDropdown((prev) => !prev)}
+              activeOpacity={0.8}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 16 }}>{idProofType === 'AADHAAR' ? '🪪' : '💳'}</Text>
+                <Text style={styles.idDropdownTriggerText}>
+                  {idProofType === 'AADHAAR' ? 'Aadhaar Card (12-Digit UIDAI)' : 'PAN Card (10-Char Income Tax ID)'}
+                </Text>
+              </View>
+              <Text style={styles.idDropdownArrow}>{showIdDropdown ? '▴' : '▾'}</Text>
+            </TouchableOpacity>
+
+            {showIdDropdown && (
+              <View style={styles.idDropdownMenu}>
+                <TouchableOpacity
+                  style={[styles.idDropdownItem, idProofType === 'AADHAAR' && styles.idDropdownItemActive]}
+                  onPress={() => {
+                    setIdProofType('AADHAAR');
+                    setIdProofNumber('');
+                    setShowIdDropdown(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>🪪</Text>
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={[styles.idDropdownItemTitle, idProofType === 'AADHAAR' && styles.idDropdownItemTitleActive]}>
+                      Aadhaar Card (Default)
+                    </Text>
+                    <Text style={styles.idDropdownItemSub}>12-digit UIDAI Government ID</Text>
+                  </View>
+                  {idProofType === 'AADHAAR' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.idDropdownItem, idProofType === 'PAN' && styles.idDropdownItemActive]}
+                  onPress={() => {
+                    setIdProofType('PAN');
+                    setIdProofNumber('');
+                    setShowIdDropdown(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 16 }}>💳</Text>
+                  <View style={{ flex: 1, marginLeft: 8 }}>
+                    <Text style={[styles.idDropdownItemTitle, idProofType === 'PAN' && styles.idDropdownItemTitleActive]}>
+                      PAN Card
+                    </Text>
+                    <Text style={styles.idDropdownItemSub}>10-character Income Tax ID</Text>
+                  </View>
+                  {idProofType === 'PAN' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+
+          {/* ID Number input with validity feedback */}
+          <View style={{ marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <Text style={styles.fieldLabel}>
+                {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS) *' : 'PAN CARD NUMBER (10 CHARS) *'}
+              </Text>
+              {(() => {
+                const clean = idProofNumber.replace(/\s+/g, '');
+                if (!clean) return null;
+                if (idProofType === 'AADHAAR') {
+                  const v = validateVerhoeffAadhaar(clean);
+                  return (
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: v.isValid ? '#16a34a' : '#ea580c' }}>
+                      {v.isValid ? '✓ Valid Aadhaar' : `⚠️ ${v.message}`}
+                    </Text>
+                  );
+                } else {
+                  const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean);
+                  return (
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: isValid ? '#16a34a' : '#ea580c' }}>
+                      {isValid ? '✓ Valid PAN' : (clean.length < 10 ? `⚠️ ${10 - clean.length} chars needed` : '⚠️ Invalid PAN')}
+                    </Text>
+                  );
+                }
+              })()}
+            </View>
+
+            <TextInput
+              style={styles.input}
+              value={idProofNumber}
+              onChangeText={(val) => {
+                if (idProofType === 'AADHAAR') {
+                  const digits = val.replace(/\D/g, '').slice(0, 12);
+                  const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+                  setIdProofNumber(formatted);
+                } else {
+                  const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                  setIdProofNumber(pan);
+                }
+              }}
+              placeholder={idProofType === 'AADHAAR' ? 'e.g. 5489 1234 5678' : 'e.g. ABCDE1234F'}
+              placeholderTextColor="#94a3b8"
+              keyboardType={idProofType === 'AADHAAR' ? 'number-pad' : 'default'}
+              maxLength={idProofType === 'AADHAAR' ? 14 : 10}
+              autoCapitalize={idProofType === 'PAN' ? 'characters' : 'none'}
+            />
+          </View>
+
+          {/* 4. Select Available Bed */}
+          <Text style={[styles.fieldLabel, { marginTop: 4 }]}>
+            🛏️ SELECT AVAILABLE BED ({availableBeds.length} Free) *
+          </Text>
+          {availableBeds.length === 0 ? (
+            <Text style={styles.noBedWarn}>
+              No free beds available in this property. Configure rooms/beds under Properties.
+            </Text>
+          ) : (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bedScroll}>
+              {availableBeds.map(({ bed, roomNumber, roomId, rentPaise, depositPaise }) => {
+                const isSelected = selectedBedId === bed.id;
+                return (
+                  <TouchableOpacity
+                    key={bed.id}
+                    style={[styles.bedPickChip, isSelected && styles.bedPickChipSelected]}
+                    onPress={() => handleSelectBed(bed, roomId, rentPaise, depositPaise)}
+                  >
+                    <Text style={[styles.bedPickText, isSelected && styles.bedPickTextSelected]}>
+                      Room {roomNumber} • {bed.bedLabel}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          )}
+
+          {/* 5. FIXED DEPOSIT & RENT (READ-ONLY LOCKED BOX - REQUIREMENT 3) */}
+          <View style={styles.lockedRentCard}>
+            <View style={styles.lockedRentRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>🔒</Text>
+                <Text style={styles.lockedRentTitle}>Fixed Monthly Rent:</Text>
+              </View>
+              <Text style={styles.lockedRentVal}>₹{fixedRentAmount.toLocaleString('en-IN')} / mo</Text>
+            </View>
+
+            <View style={[styles.lockedRentRow, { marginTop: 8 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 16 }}>🔒</Text>
+                <Text style={styles.lockedRentTitle}>Fixed Security Deposit:</Text>
+              </View>
+              <Text style={styles.lockedRentVal}>₹{fixedDepositAmount.toLocaleString('en-IN')}</Text>
+            </View>
+            <Text style={styles.lockedRentNotice}>
+              🔒 Fixed amounts are locked based on selected Room & Bed.
+            </Text>
+          </View>
+
+          {/* 6. EDITABLE PAYMENTS - ONLY WHAT HE IS PAYING (REQUIREMENT 3) */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>💵 RENT AMOUNT PAYING NOW (₹) *</Text>
+            <View style={styles.currencyInputRow}>
+              <Text style={styles.currencyInrLight}>₹</Text>
+              <TextInput
+                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                value={rentPayingNow}
+                onChangeText={setRentPayingNow}
+                keyboardType="numeric"
+                placeholder={String(fixedRentAmount)}
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+
+          {/* Dynamic Rent Due Indicator */}
+          {(() => {
+            const paying = Number(rentPayingNow || 0);
+            const due = Math.max(0, fixedRentAmount - paying);
+            if (due > 0) {
+              return (
+                <View style={styles.rentDueAlertBox}>
+                  <Text style={styles.rentDueAlertTitle}>
+                    ⚠️ REMAINING RENT DUE: ₹{due.toLocaleString('en-IN')}
+                  </Text>
+                  <Text style={styles.rentDueAlertSub}>
+                    Resident pays ₹{paying.toLocaleString('en-IN')} today. Remaining ₹{due.toLocaleString('en-IN')} will be marked as DUE.
+                  </Text>
+                </View>
+              );
+            } else if (paying >= fixedRentAmount && fixedRentAmount > 0) {
+              return (
+                <View style={styles.rentPaidAlertBox}>
+                  <Text style={styles.rentPaidAlertTitle}>
+                    ✓ FULL RENT PAID (₹0 Due)
+                  </Text>
+                  <Text style={styles.rentPaidAlertSub}>
+                    Complete monthly rent of ₹{fixedRentAmount.toLocaleString('en-IN')} received.
+                  </Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+
+          {/* Security Deposit Paying Now */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>🛡️ SECURITY DEPOSIT PAYING NOW (₹) *</Text>
+            <View style={styles.currencyInputRow}>
+              <Text style={styles.currencyInrLight}>₹</Text>
+              <TextInput
+                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                value={depositPayingNow}
+                onChangeText={setDepositPayingNow}
+                keyboardType="numeric"
+                placeholder={String(fixedDepositAmount)}
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+
+          {/* Payment Mode */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>💳 INITIAL PAYMENT MODE</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[
+                    styles.modePillLarge,
+                    payMode === mode && styles.modePillLargeActive,
+                  ]}
+                  onPress={() => setPayMode(mode)}
+                >
+                  <Text style={[styles.modePillLargeText, payMode === mode && styles.modePillLargeTextActive]}>
+                    {mode === 'BANK_TRANSFER' ? '🏦 Bank Transfer' : mode === 'UPI' ? '📱 UPI' : '💵 Cash'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* 7. DATE OF JOINING & RENT CYCLE (REQUIREMENT 4) */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>📅 DATE OF JOINING (CHECK-IN) *</Text>
+            <TextInput
+              style={styles.input}
+              value={dateOfJoining}
+              onChangeText={setDateOfJoining}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor="#94a3b8"
+            />
+            {/* Quick date chips */}
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+              {[
+                { label: 'Today', val: new Date().toISOString().split('T')[0] },
+                { label: 'Tomorrow', val: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
+                { label: '1st of Next Month', val: `${new Date().getFullYear()}-${String(new Date().getMonth() + 2).padStart(2, '0')}-01` },
+              ].map((chip) => (
+                <TouchableOpacity
+                  key={chip.label}
+                  style={[styles.quickDatePill, dateOfJoining === chip.val && styles.quickDatePillActive]}
+                  onPress={() => setDateOfJoining(chip.val)}
+                >
+                  <Text style={[styles.quickDatePillText, dateOfJoining === chip.val && styles.quickDatePillTextActive]}>
+                    {chip.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <View style={{ marginBottom: 18 }}>
+            <Text style={styles.fieldLabel}>🔄 MONTHLY RENT CYCLE (DUE DATE) *</Text>
+            <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
+              Select which day of the month rent is due for this resident:
+            </Text>
+            <View style={{ gap: 6 }}>
+              {[
+                { label: '1st of every month (Standard)', val: '1st of every month' },
+                { label: '5th of every month', val: '5th of every month' },
+                { label: '10th of every month', val: '10th of every month' },
+                { label: `Same day as joining (${dateOfJoining.split('-')[2] || 'Day'}th of every month)`, val: `Day of joining (${dateOfJoining.split('-')[2] || '1'})` },
+              ].map((cycle) => (
+                <TouchableOpacity
+                  key={cycle.val}
+                  style={[styles.cycleOptionCard, rentCycle === cycle.val && styles.cycleOptionCardActive]}
+                  onPress={() => setRentCycle(cycle.val)}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.cycleRadioCircle, rentCycle === cycle.val && styles.cycleRadioCircleActive]}>
+                    {rentCycle === cycle.val && <View style={styles.cycleRadioInner} />}
+                  </View>
+                  <Text style={[styles.cycleOptionText, rentCycle === cycle.val && styles.cycleOptionTextActive]}>
+                    {cycle.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+            <TouchableOpacity
+              style={styles.cancelFormBtn}
+              onPress={() => {
+                setShowForm(false);
+                setFullName('');
+                setPhone('');
+                setEmail('');
+                setIdProofNumber('');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.cancelFormBtnText}>← Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]}
+              onPress={handleOnboard}
+              disabled={submitting}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.submitBtnText}>
+                {submitting ? 'Onboarding...' : '✓ Complete Onboard & Assign Bed'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -1072,7 +1489,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         <Text style={styles.headerTitle}>Tenant Management</Text>
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => setShowForm(!showForm)}
+          onPress={() => setShowForm(true)}
         >
           <Text style={styles.addBtnText}>+ Onboard</Text>
         </TouchableOpacity>
@@ -1090,353 +1507,6 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           />
         }
       >
-        {/* Onboarding Form */}
-        {showForm && (
-          <View style={styles.formCard}>
-            <View style={styles.formHeaderRow}>
-              <View>
-                <Text style={styles.formTitle}>Onboard New Resident</Text>
-                <Text style={styles.formSubtitle}>Assign room & bed to resident</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.closeFormCircleBtn}
-                onPress={() => {
-                  setShowForm(false);
-                  setFullName('');
-                  setPhone('');
-                  setEmail('');
-                  setIdProofNumber('');
-                }}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.closeFormCircleText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Property Selector */}
-            {properties.length > 1 && (
-              <View style={{ marginBottom: 12 }}>
-                <Text style={styles.label}>SELECT PROPERTY</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  {properties.map((p) => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={[
-                        styles.propChip,
-                        selectedPropId === p.id && styles.propChipSelected,
-                      ]}
-                      onPress={() => handlePropertySelect(p.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.propChipText,
-                          selectedPropId === p.id && styles.propChipTextSelected,
-                        ]}
-                      >
-                        {p.name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-
-            <Text style={styles.label}>TENANT FULL NAME *</Text>
-            <TextInput
-              style={styles.input}
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder="e.g. Anand Kumar"
-              placeholderTextColor="#334155"
-            />
-
-            <View style={{ marginBottom: 12 }}>
-              <Text style={styles.label}>PHONE NUMBER *</Text>
-              <TextInput
-                style={styles.input}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                placeholder="e.g. 9876543210"
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-
-            {/* Dropdown for Aadhaar and PAN (Initially shows Aadhaar; tap to select PAN) */}
-            <View style={{ marginBottom: 12 }}>
-              <Text style={styles.label}>GOVERNMENT ID PROOF TYPE *</Text>
-              
-              <TouchableOpacity
-                style={styles.idDropdownTrigger}
-                onPress={() => setShowIdDropdown((prev) => !prev)}
-                activeOpacity={0.8}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontSize: 16 }}>{idProofType === 'AADHAAR' ? '🪪' : '💳'}</Text>
-                  <Text style={styles.idDropdownTriggerText}>
-                    {idProofType === 'AADHAAR' ? 'Aadhaar Card (12-Digit UIDAI)' : 'PAN Card (10-Char Income Tax ID)'}
-                  </Text>
-                </View>
-                <Text style={styles.idDropdownArrow}>{showIdDropdown ? '▴' : '▾'}</Text>
-              </TouchableOpacity>
-
-              {showIdDropdown && (
-                <View style={styles.idDropdownMenu}>
-                  <TouchableOpacity
-                    style={[
-                      styles.idDropdownItem,
-                      idProofType === 'AADHAAR' && styles.idDropdownItemActive,
-                    ]}
-                    onPress={() => {
-                      setIdProofType('AADHAAR');
-                      setIdProofNumber('');
-                      setShowIdDropdown(false);
-                    }}
-                  >
-                    <Text style={{ fontSize: 16 }}>🪪</Text>
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={[styles.idDropdownItemTitle, idProofType === 'AADHAAR' && styles.idDropdownItemTitleActive]}>
-                        Aadhaar Card (Default)
-                      </Text>
-                      <Text style={styles.idDropdownItemSub}>12-digit UIDAI Government ID</Text>
-                    </View>
-                    {idProofType === 'AADHAAR' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.idDropdownItem,
-                      idProofType === 'PAN' && styles.idDropdownItemActive,
-                    ]}
-                    onPress={() => {
-                      setIdProofType('PAN');
-                      setIdProofNumber('');
-                      setShowIdDropdown(false);
-                    }}
-                  >
-                    <Text style={{ fontSize: 16 }}>💳</Text>
-                    <View style={{ flex: 1, marginLeft: 8 }}>
-                      <Text style={[styles.idDropdownItemTitle, idProofType === 'PAN' && styles.idDropdownItemTitleActive]}>
-                        PAN Card
-                      </Text>
-                      <Text style={styles.idDropdownItemSub}>10-character Income Tax ID</Text>
-                    </View>
-                    {idProofType === 'PAN' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-
-            <View style={{ marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                <Text style={styles.label}>
-                  {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS) *' : 'PAN CARD NUMBER (10 CHARS) *'}
-                </Text>
-                {(() => {
-                  const clean = idProofNumber.replace(/\s+/g, '');
-                  if (!clean) return null;
-                  if (idProofType === 'AADHAAR') {
-                    const v = validateVerhoeffAadhaar(clean);
-                    return (
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: v.isValid ? '#16a34a' : '#ea580c' }}>
-                        {v.isValid ? '✓ Valid Aadhaar' : `⚠️ ${v.message}`}
-                      </Text>
-                    );
-                  } else {
-                    const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean);
-                    return (
-                      <Text style={{ fontSize: 11, fontWeight: '800', color: isValid ? '#16a34a' : '#ea580c' }}>
-                        {isValid ? '✓ Valid PAN' : (clean.length < 10 ? `⚠️ ${10 - clean.length} chars needed` : '⚠️ Invalid PAN')}
-                      </Text>
-                    );
-                  }
-                })()}
-              </View>
-
-              <TextInput
-                style={[
-                  styles.input,
-                  (() => {
-                    const clean = idProofNumber.replace(/\s+/g, '');
-                    if (!clean) return null;
-                    if (idProofType === 'AADHAAR') {
-                      return validateVerhoeffAadhaar(clean).isValid
-                        ? { borderColor: '#16a34a', borderWidth: 1.5 }
-                        : { borderColor: '#ea580c', borderWidth: 1.5 };
-                    } else {
-                      return /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean)
-                        ? { borderColor: '#16a34a', borderWidth: 1.5 }
-                        : { borderColor: '#ea580c', borderWidth: 1.5 };
-                    }
-                  })(),
-                ]}
-                value={idProofNumber}
-                onChangeText={(val) => {
-                  if (idProofType === 'AADHAAR') {
-                    const digits = val.replace(/\D/g, '').slice(0, 12);
-                    const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
-                    setIdProofNumber(formatted);
-                  } else {
-                    const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-                    setIdProofNumber(pan);
-                  }
-                }}
-                placeholder={idProofType === 'AADHAAR' ? 'e.g. 5489 1234 5678' : 'e.g. ABCDE1234F'}
-                placeholderTextColor="#94a3b8"
-                keyboardType={idProofType === 'AADHAAR' ? 'number-pad' : 'default'}
-                maxLength={idProofType === 'AADHAAR' ? 14 : 10}
-                autoCapitalize={idProofType === 'PAN' ? 'characters' : 'none'}
-              />
-            </View>
-
-            {/* Select Available Bed */}
-            <Text style={[styles.label, { marginTop: 6 }]}>
-              SELECT AVAILABLE BED ({availableBeds.length} Free)
-            </Text>
-            {availableBeds.length === 0 ? (
-              <Text style={styles.noBedWarn}>
-                No free beds available in this property. Configure rooms/beds under Properties.
-              </Text>
-            ) : (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bedScroll}>
-                {availableBeds.map(({ bed, roomNumber, roomId, rentPaise, depositPaise }) => {
-                  const isSelected = selectedBedId === bed.id;
-                  return (
-                    <TouchableOpacity
-                      key={bed.id}
-                      style={[styles.bedPickChip, isSelected && styles.bedPickChipSelected]}
-                      onPress={() => handleSelectBed(bed, roomId, rentPaise, depositPaise)}
-                    >
-                      <Text
-                        style={[styles.bedPickText, isSelected && styles.bedPickTextSelected]}
-                      >
-                        Room {roomNumber} • {bed.bedLabel}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            )}
-
-            {/* FIXED RENT BANNER & PAYMENT SECTION */}
-            <View style={styles.fixedRentInfoBox}>
-              <View style={styles.fixedRentRow}>
-                <Text style={styles.fixedRentLabel}>🏢 FIXED MONTHLY RENT:</Text>
-                <Text style={styles.fixedRentVal}>₹{fixedRentAmount.toLocaleString('en-IN')} / mo</Text>
-              </View>
-              <View style={styles.fixedRentRow}>
-                <Text style={styles.fixedRentLabel}>🛡️ SECURITY DEPOSIT:</Text>
-                <Text style={styles.fixedRentVal}>₹{fixedDepositAmount.toLocaleString('en-IN')}</Text>
-              </View>
-            </View>
-
-            <Text style={styles.label}>RENT AMOUNT PAYING NOW (₹) *</Text>
-            <View style={styles.currencyInputRow}>
-              <Text style={styles.currencyInrLight}>₹</Text>
-              <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
-                value={rentPayingNow}
-                onChangeText={setRentPayingNow}
-                keyboardType="numeric"
-                placeholder={`INR ${fixedRentAmount}`}
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-
-            {/* Dynamic Rent Due Indicator */}
-            {(() => {
-              const paying = Number(rentPayingNow || 0);
-              const due = Math.max(0, fixedRentAmount - paying);
-              if (due > 0) {
-                return (
-                  <View style={styles.rentDueAlertBox}>
-                    <Text style={styles.rentDueAlertTitle}>
-                      ⚠️ RENT DUE: ₹{due.toLocaleString('en-IN')}
-                    </Text>
-                    <Text style={styles.rentDueAlertSub}>
-                      Resident pays ₹{paying.toLocaleString('en-IN')} today. Remaining ₹{due.toLocaleString('en-IN')} will be marked as DUE on dashboard & records.
-                    </Text>
-                  </View>
-                );
-              } else if (paying >= fixedRentAmount && fixedRentAmount > 0) {
-                return (
-                  <View style={styles.rentPaidAlertBox}>
-                    <Text style={styles.rentPaidAlertTitle}>
-                      ✓ FULL RENT PAID (₹0 Due)
-                    </Text>
-                    <Text style={styles.rentPaidAlertSub}>
-                      Complete monthly rent of ₹{fixedRentAmount.toLocaleString('en-IN')} received.
-                    </Text>
-                  </View>
-                );
-              }
-              return null;
-            })()}
-
-            <View style={styles.row}>
-              <View style={styles.col}>
-                <Text style={styles.label}>SECURITY DEPOSIT PAID (₹)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={depositPayingNow}
-                  onChangeText={setDepositPayingNow}
-                  keyboardType="numeric"
-                  placeholder={String(fixedDepositAmount)}
-                />
-              </View>
-              <View style={styles.col}>
-                <Text style={styles.label}>PAYMENT MODE</Text>
-                <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
-                  {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
-                    <TouchableOpacity
-                      key={mode}
-                      style={[
-                        styles.modePillSmall,
-                        payMode === mode && styles.modePillSmallActive,
-                      ]}
-                      onPress={() => setPayMode(mode)}
-                    >
-                      <Text
-                        style={[
-                          styles.modePillSmallText,
-                          payMode === mode && styles.modePillSmallTextActive,
-                        ]}
-                      >
-                        {mode === 'BANK_TRANSFER' ? 'BANK' : mode}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-              <TouchableOpacity
-                style={styles.cancelFormBtn}
-                onPress={() => {
-                  setShowForm(false);
-                  setFullName('');
-                  setPhone('');
-                  setEmail('');
-                  setIdProofNumber('');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.cancelFormBtnText}>✕ Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]}
-                onPress={handleOnboard}
-                disabled={submitting}
-              >
-                <Text style={styles.submitBtnText}>
-                  {submitting ? 'Onboarding...' : 'Confirm & Allocate Bed'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         {/* ─── Month Filter Bar & Executive Summary (Requirements 6 & 7) ─── */}
         <View style={styles.monthHeaderBar}>
           <TouchableOpacity
@@ -3192,5 +3262,173 @@ const styles = StyleSheet.create({
     color: '#e11d48',
     fontWeight: '800',
     fontSize: 11,
+  },
+  // Separate Page Styles
+  separatePageContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  separatePageHeader: {
+    backgroundColor: '#ffffff',
+    paddingTop: Platform.OS === 'android' ? 14 : 10,
+    paddingBottom: 14,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  separatePageBackBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#fff7ed',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  separatePageBackBtnText: {
+    color: '#ea580c',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  separatePageHeaderTitle: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#0f172a',
+  },
+  separatePageHeaderSub: {
+    fontSize: 11,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  separatePageContent: {
+    flex: 1,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  lockedRentCard: {
+    backgroundColor: '#fff7ed',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#fed7aa',
+    marginBottom: 14,
+  },
+  lockedRentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  lockedRentTitle: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#9a3412',
+    letterSpacing: 0.6,
+    marginBottom: 2,
+  },
+  lockedRentVal: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#ea580c',
+  },
+  lockedRentNotice: {
+    fontSize: 11,
+    color: '#9a3412',
+    marginTop: 10,
+    lineHeight: 15,
+    fontWeight: '600',
+  },
+  modePillLarge: {
+    flex: 1,
+    paddingVertical: 10,
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    alignItems: 'center',
+  },
+  modePillLargeActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#ea580c',
+    borderWidth: 2,
+  },
+  modePillLargeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  modePillLargeTextActive: {
+    color: '#ea580c',
+    fontWeight: '900',
+  },
+  quickDatePill: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickDatePillActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#ea580c',
+  },
+  quickDatePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickDatePillTextActive: {
+    color: '#ea580c',
+    fontWeight: '900',
+  },
+  cycleOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 8,
+  },
+  cycleOptionCardActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#ea580c',
+    borderWidth: 1.5,
+  },
+  cycleRadioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#94a3b8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  cycleRadioCircleActive: {
+    borderColor: '#ea580c',
+  },
+  cycleRadioInner: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#ea580c',
+  },
+  cycleOptionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#344155',
+  },
+  cycleOptionTextActive: {
+    color: '#0f172a',
+    fontWeight: '900',
   },
 });

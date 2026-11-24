@@ -13,6 +13,7 @@ import {
   Platform,
   Animated,
 } from 'react-native';
+import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { apiClient } from '../api/client';
 import { RentInvoice, Expense, Property } from '../types';
 
@@ -581,7 +582,26 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
           <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.8}>
             <Text style={styles.backBtnText}>← Dashboard</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Finance & P&L</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M4 5.5A2 2 0 016 3.5h9a2 2 0 012 2V6H4v-.5z"
+                stroke="#0f172a"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <Rect x="2.5" y="6" width="18" height="14" rx="3" stroke="#0f172a" strokeWidth="2" />
+              <Path
+                d="M15 10.5h4.5a1.5 1.5 0 011.5 1.5v2a1.5 1.5 0 01-1.5 1.5H15v-5z"
+                stroke="#0f172a"
+                strokeWidth="1.8"
+                fill="#ffffff"
+              />
+              <Circle cx="18" cy="13" r="1.2" fill="#0f172a" />
+            </Svg>
+            <Text style={styles.headerTitle}>Financials</Text>
+          </View>
           <TouchableOpacity
             style={styles.addBtn}
             onPress={() => setShowExpenseForm(!showExpenseForm)}

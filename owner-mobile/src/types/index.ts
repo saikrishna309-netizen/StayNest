@@ -84,6 +84,7 @@ export interface Tenant {
   stayStatus?: 'ACTIVE' | 'TERMINATED' | 'COMPLETED';
   rentStatus?: 'PAID' | 'DUE' | 'OVERDUE' | 'PARTIALLY_PAID';
   rentDueDate?: string;
+  rentCycle?: string;
   outstandingPaise?: number;
   createdAt?: string;
 }

@@ -42,12 +42,26 @@ const NavTenantsIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
-const NavWalletIcon = ({ color }: { color: string }) => (
-  <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-    <Rect x="2.5" y="5.5" width="19" height="14" rx="3.5" stroke={color} strokeWidth="2.2" />
-    <Path d="M2.5 10h19" stroke={color} strokeWidth="1.8" />
-    <Path d="M14.5 11.5H20a1.5 1.5 0 011.5 1.5v2A1.5 1.5 0 0120 16.5h-5.5a1.5 1.5 0 01-1.5-1.5v-2a1.5 1.5 0 011.5-1.5z" stroke={color} strokeWidth="2" fill="#ffffff" />
-    <Circle cx="17.5" cy="14" r="1.2" fill={color} />
+export const NavWalletIcon = ({ color, size = 22 }: { color: string; size?: number }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    {/* Top Flap fold */}
+    <Path
+      d="M4 5.5A2 2 0 016 3.5h9a2 2 0 012 2V6H4v-.5z"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    {/* Main Wallet Body */}
+    <Rect x="2.5" y="6" width="18" height="14" rx="3" stroke={color} strokeWidth="2" />
+    {/* Right Clasp with Snap Button */}
+    <Path
+      d="M15 10.5h4.5a1.5 1.5 0 011.5 1.5v2a1.5 1.5 0 01-1.5 1.5H15v-5z"
+      stroke={color}
+      strokeWidth="1.8"
+      fill="#ffffff"
+    />
+    <Circle cx="18" cy="13" r="1.2" fill={color} />
   </Svg>
 );
 

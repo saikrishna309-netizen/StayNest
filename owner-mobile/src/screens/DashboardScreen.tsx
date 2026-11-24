@@ -1111,7 +1111,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     (t) => t.rentStatus !== 'PAID' || (t.outstandingPaise && t.outstandingPaise > 0)
   ).length;
 
-  const pendingEnquiries = enquiries.filter((e) => e.status === 'PENDING_HOLD');
+  const currentPropertyObj = properties.find((p) => p.id === selectedPropId);
+  const pendingEnquiries = enquiries.filter((e) => {
+    if (e.status !== 'PENDING_HOLD') return false;
+    // Property matching: ONLY for this specific PG!
+    if (e.propertyId && (e.propertyId === selectedPropId || e.propertyId === currentPropertyObj?.id)) {
+      return true;
+    }
+    if (e.propertyName && currentPropertyObj?.name) {
+      return e.propertyName.trim().toLowerCase() === currentPropertyObj.name.trim().toLowerCase();
+    }
+    return selectedPropId === 'prop-pg-1' && (e.propertyId === 'staynest-pg-01' || !e.propertyId);
+  });
   const pendingEnquiriesCount = pendingEnquiries.length;
 
   const handleCallCustomer = (phone: string) => {
@@ -1201,20 +1212,33 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
     }
 
-    // 4. Update backend
+    // 4. Update backend (safeguarded against 500 on demo non-UUID properties)
     try {
-      const created = await apiClient<Tenant>('/owner/tenants', {
-        method: 'POST',
-        body: JSON.stringify({
-          fullName: enquiry.customerName,
-          phone: enquiry.customerPhone,
-          email: enquiry.customerEmail,
-          idProofType: 'AADHAAR',
-          idProofNumber: 'FROM_WEBSITE_HOLD',
-        }),
-      });
+      let created: any = null;
+      try {
+        created = await apiClient<Tenant>('/owner/tenants', {
+          method: 'POST',
+          body: JSON.stringify({
+            fullName: enquiry.customerName,
+            phone: enquiry.customerPhone,
+            email: enquiry.customerEmail,
+            idProofType: 'AADHAAR',
+            idProofNumber: 'FROM_WEBSITE_HOLD',
+          }),
+        });
+      } catch (tErr: any) {
+        console.log('Backend tenant sync note:', tErr.message);
+      }
 
-      if (enquiry.propertyId && enquiry.bedId && created?.id) {
+      // ONLY call backend /stays if both propertyId, bedId and tenantId are valid UUIDs!
+      if (
+        enquiry.propertyId &&
+        enquiry.bedId &&
+        created?.id &&
+        isValidUuid(enquiry.propertyId) &&
+        isValidUuid(enquiry.bedId) &&
+        isValidUuid(created.id)
+      ) {
         await apiClient(`/owner/tenants/${created.id}/stays`, {
           method: 'POST',
           body: JSON.stringify({
@@ -1227,6 +1251,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           }),
         }).catch(() => {});
       }
+    } catch {}
+
+    // Persist to @staynest_custom_tenants so new resident remains active and visible everywhere!
+    try {
+      const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+      const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
+      const mergedCustom = [newTenant, ...customList.filter((ct) => ct.id !== newTenant.id && ct.phone !== newTenant.phone)];
+      await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(mergedCustom));
     } catch {}
 
     Alert.alert(
@@ -1820,18 +1852,33 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           {/* Section 1: Website Bed Hold Requests */}
-          <Text style={styles.notifSectionHeader}>🛏️ WEBSITE BED HOLD REQUESTS</Text>
-          {enquiries.length === 0 ? (
-            <View style={styles.notifEmptyCard}>
-              <Text style={{ fontSize: 28, marginBottom: 6 }}>📭</Text>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: '#1e293b' }}>No Pending Enquiries</Text>
-              <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
-                When visitors book or hold a bed on the website, their details appear here instantly.
-              </Text>
-            </View>
-          ) : (
-            <View style={{ gap: 12, marginBottom: 20 }}>
-              {enquiries.map((enq) => {
+          <Text style={styles.notifSectionHeader}>
+            🛏️ WEBSITE BED HOLD REQUESTS ({currentPropertyObj?.name || 'Current PG'})
+          </Text>
+          {(() => {
+            const pgEnquiries = enquiries.filter((e) => {
+              if (e.propertyId && (e.propertyId === selectedPropId || e.propertyId === currentPropertyObj?.id)) return true;
+              if (e.propertyName && currentPropertyObj?.name) {
+                return e.propertyName.trim().toLowerCase() === currentPropertyObj.name.trim().toLowerCase();
+              }
+              return selectedPropId === 'prop-pg-1' && (e.propertyId === 'staynest-pg-01' || !e.propertyId);
+            });
+
+            if (pgEnquiries.length === 0) {
+              return (
+                <View style={styles.notifEmptyCard}>
+                  <Text style={{ fontSize: 28, marginBottom: 6 }}>📭</Text>
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#1e293b' }}>No Pending Enquiries for this PG</Text>
+                  <Text style={{ fontSize: 12, color: '#64748b', textAlign: 'center', marginTop: 4 }}>
+                    When visitors hold a bed for {currentPropertyObj?.name || 'this PG'}, their requests appear here.
+                  </Text>
+                </View>
+              );
+            }
+
+            return (
+              <View style={{ gap: 12, marginBottom: 20 }}>
+                {pgEnquiries.map((enq) => {
                 const isPending = enq.status === 'PENDING_HOLD';
                 const isHeld = enq.status === 'HOLD';
                 const rent = (enq.monthlyRentPaise / 100).toLocaleString('en-IN');
@@ -1968,7 +2015,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 );
               })}
             </View>
-          )}
+          );
+        })()}
 
           {/* Section 2: Rent Due Alerts */}
           {dueTenants.length > 0 && (
@@ -2370,7 +2418,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
               </View>
               <Text style={styles.enquiryAlertSub} numberOfLines={1}>
-                {enquiries[0]?.customerName} requested {enquiries[0]?.bedLabel} in Room {enquiries[0]?.roomNumber} ({enquiries[0]?.propertyName})
+                {pendingEnquiries[0]?.customerName} requested {pendingEnquiries[0]?.bedLabel} in Room {pendingEnquiries[0]?.roomNumber} ({pendingEnquiries[0]?.propertyName})
               </Text>
             </View>
             <Text style={styles.enquiryAlertViewText}>View ›</Text>
@@ -2501,32 +2549,37 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 3. QUICK ACTIONS (ONE LINE 4 ACTIONS + FOOD MENU & LOG ISSUE, COMPACT ICONS, WHITE BOX, ORANGE BORDERS) ─── */}
+        {/* ─── 3. QUICK ACTIONS (MATCHING EXACT REFERENCE DESIGN IMAGE) ─── */}
         <View style={styles.quickActionsSectionWrap}>
           <View style={styles.quickActionsHeaderRow}>
-            <Text style={{ fontSize: 18, color: '#2563eb' }}>⚡</Text>
+            <Text style={{ fontSize: 20, color: '#2563eb' }}>⚡</Text>
             <Text style={styles.quickActionsSectionTitle}>Quick Actions</Text>
           </View>
 
           <View style={styles.quickGridContainer}>
-            {/* ─── LINE 1: 4 ACTIONS ─── */}
-            {/* 1. Add Tenant */}
+            {/* 1. Add Tenant (Top-Left) */}
             <TouchableOpacity
               style={styles.quickCompactCard}
-              onPress={() => setShowOnboardModal(true)}
+              onPress={() => {
+                if (onNavigateTab) {
+                  onNavigateTab('tenants');
+                } else {
+                  setShowOnboardModal(true);
+                }
+              }}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
                   <Path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2" fill="#1d4ed8" />
                   <Circle cx="9" cy="7" r="4" fill="#1d4ed8" />
                   <Path d="M19 8v6m3-3h-6" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Add Tenant</Text>
+              <Text style={styles.quickCompactLabel}>Add Tenant</Text>
             </TouchableOpacity>
 
-            {/* 2. Record Rent */}
+            {/* 2. Record Rent (Top-Right) */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => {
@@ -2541,94 +2594,64 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Text style={{ fontSize: 20, fontWeight: '900', color: '#1d4ed8', lineHeight: 22 }}>₹</Text>
+                <Text style={{ fontSize: 32, fontWeight: '900', color: '#1d4ed8', lineHeight: 34 }}>₹</Text>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Record Rent</Text>
+              <Text style={styles.quickCompactLabel}>Record Rent</Text>
             </TouchableOpacity>
 
-            {/* 3. Add Expense */}
+            {/* 3. Add Expense (Bottom-Left) */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" fill="#1d4ed8" />
-                  <Path d="M14 2v6h6" fill="#1e40af" />
-                  <Path d="M8 13h8M8 17h5" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" />
+                <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
+                  <Path d="M9 12h6m-6 4h4m5 5l-2.5-1.5L15 21l-3-1.8L9 21l-3-1.8L3.5 21V5a2 2 0 012-2h13a2 2 0 012 2v16z" fill="#1d4ed8" />
+                  <Path d="M7 8h10M7 12h6M7 16h4" stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Add Expense</Text>
+              <Text style={styles.quickCompactLabel}>Add Expense</Text>
             </TouchableOpacity>
 
-            {/* 4. View Reports */}
+            {/* 4. View Reports (Bottom-Right) */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowNeedToCollectModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Rect x="4" y="13" width="4" height="8" rx="1.2" fill="#1d4ed8" />
-                  <Rect x="10" y="8" width="4" height="13" rx="1.2" fill="#1d4ed8" />
-                  <Rect x="16" y="3" width="4" height="18" rx="1.2" fill="#1d4ed8" />
+                <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
+                  <Rect x="3" y="13" width="5" height="8" rx="1.5" fill="#1d4ed8" />
+                  <Rect x="9.5" y="8" width="5" height="13" rx="1.5" fill="#1d4ed8" />
+                  <Rect x="16" y="3" width="5" height="18" rx="1.5" fill="#1d4ed8" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>View Reports</Text>
+              <Text style={styles.quickCompactLabel}>View Reports</Text>
             </TouchableOpacity>
 
-            {/* ─── LINE 2: 4 ACTIONS (FOOD MENU, LOG ISSUE, ROOMS/BEDS, POWER BILL) ─── */}
-            {/* 5. Food Menu (New!) */}
+            {/* 5. Food Menu (Line 2) */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowFoodMenuModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Text style={{ fontSize: 20 }}>🍲</Text>
+                <Text style={{ fontSize: 28 }}>🍲</Text>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Food Menu</Text>
+              <Text style={styles.quickCompactLabel}>Food Menu</Text>
             </TouchableOpacity>
 
-            {/* 6. Log Issue (New!) */}
+            {/* 6. Log Issue (Line 2) */}
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => setShowLogIssueModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
-                <Text style={{ fontSize: 20 }}>🛠️</Text>
+                <Text style={{ fontSize: 28 }}>🛠️</Text>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Log Issue</Text>
-            </TouchableOpacity>
-
-            {/* 7. Rooms / Beds */}
-            <TouchableOpacity
-              style={styles.quickCompactCard}
-              onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
-              activeOpacity={0.75}
-            >
-              <View style={styles.quickIconCircle}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M3 21h18M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16M9 9h2M13 9h2M9 13h2M13 13h2" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-              </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Rooms / Beds</Text>
-            </TouchableOpacity>
-
-            {/* 8. Power Bill */}
-            <TouchableOpacity
-              style={styles.quickCompactCard}
-              onPress={() => setShowElectricityModal(true)}
-              activeOpacity={0.75}
-            >
-              <View style={styles.quickIconCircle}>
-                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-                  <Path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="#1d4ed8" />
-                </Svg>
-              </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Power Bill</Text>
+              <Text style={styles.quickCompactLabel}>Log Issue</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -5459,35 +5482,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 10,
+    rowGap: 14,
   },
   quickCompactCard: {
-    width: '23.2%',
+    width: '48.5%',
     backgroundColor: '#ffffff',
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 2,
+    borderRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#fb923c',
+    borderColor: '#fb923c', // Orange border with pure white center
+    shadowColor: '#2563eb',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
   quickIconCircle: {
-    height: 24,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
   },
   quickCompactIcon: {
-    fontSize: 18,
-    marginBottom: 2,
+    fontSize: 26,
+    marginBottom: 4,
   },
   quickCompactLabel: {
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '700',
     color: '#0f172a',
     textAlign: 'center',
-    lineHeight: 13,
   },
   enquiryHoldBtn: {
     backgroundColor: '#fff7ed',
