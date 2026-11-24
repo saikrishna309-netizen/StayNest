@@ -13,12 +13,13 @@ import { ProfileScreen } from './src/screens/ProfileScreen';
 import { Property } from './src/types';
 
 // ─── TRENDY MODERN SVG ICONS (MATCHING SCREENSHOT) ───
-const NavHomeIcon = ({ color }: { color: string }) => (
+const NavHomeIcon = ({ color, filled = false }: { color: string; filled?: boolean }) => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
     <Path
       d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 01-1.5 1.5h-4A1.5 1.5 0 0114 20v-4a1 1 0 00-1-1h-2a1 1 0 00-1 1v4a1.5 1.5 0 01-1.5 1.5h-4A1.5 1.5 0 013 20v-9.5z"
+      fill={filled ? color : 'none'}
       stroke={color}
-      strokeWidth="2"
+      strokeWidth={filled ? 0 : 2}
       strokeLinecap="round"
       strokeLinejoin="round"
     />
@@ -213,55 +214,78 @@ const MainNavigator: React.FC = () => {
             />
           </View>
 
-          {/* ─── FLOATING TRENDY BOTTOM NAVIGATION BAR (MATCHING SCREENSHOT) ─── */}
-          <View style={styles.floatingBarOuter}>
-            <View style={styles.floatingPillBar}>
+          {/* ─── MODERN BOTTOM NAVIGATION BAR (MATCHING SCREENSHOT) ─── */}
+          <View style={styles.bottomNavWrapper}>
+            <View style={styles.bottomNavInner}>
               {/* Tab 1: Dashboard / Home */}
               <TouchableOpacity
-                style={[styles.floatingTabCircle, currentTab === 'dashboard' && styles.floatingTabCircleActive]}
+                style={styles.bottomNavItem}
                 onPress={() => {
                   setCurrentTab('dashboard');
                   setDashboardResetTrigger((prev) => prev + 1);
                 }}
                 activeOpacity={0.8}
               >
-                <NavHomeIcon color={currentTab === 'dashboard' ? '#ffffff' : '#4b5563'} />
+                {currentTab === 'dashboard' && <View style={styles.navActiveTopLine} />}
+                <NavHomeIcon
+                  color={currentTab === 'dashboard' ? '#ea580c' : '#4b5563'}
+                  filled={currentTab === 'dashboard'}
+                />
+                <Text style={[styles.bottomNavLabel, currentTab === 'dashboard' && styles.bottomNavLabelActive]}>
+                  Home
+                </Text>
               </TouchableOpacity>
 
               {/* Tab 2: Properties / Grid */}
               <TouchableOpacity
-                style={[styles.floatingTabCircle, currentTab === 'properties' && styles.floatingTabCircleActive]}
+                style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('properties')}
                 activeOpacity={0.8}
               >
-                <NavGridIcon color={currentTab === 'properties' ? '#ffffff' : '#4b5563'} />
+                {currentTab === 'properties' && <View style={styles.navActiveTopLine} />}
+                <NavGridIcon color={currentTab === 'properties' ? '#ea580c' : '#4b5563'} />
+                <Text style={[styles.bottomNavLabel, currentTab === 'properties' && styles.bottomNavLabelActive]}>
+                  Dashboard Grid
+                </Text>
               </TouchableOpacity>
 
-              {/* Tab 3: Tenants (Multiple People Logo) */}
+              {/* Tab 3: Tenants / Residents */}
               <TouchableOpacity
-                style={[styles.floatingTabCircle, currentTab === 'tenants' && styles.floatingTabCircleActive]}
+                style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('tenants')}
                 activeOpacity={0.8}
               >
-                <NavTenantsIcon color={currentTab === 'tenants' ? '#ffffff' : '#4b5563'} />
+                {currentTab === 'tenants' && <View style={styles.navActiveTopLine} />}
+                <NavTenantsIcon color={currentTab === 'tenants' ? '#ea580c' : '#4b5563'} />
+                <Text style={[styles.bottomNavLabel, currentTab === 'tenants' && styles.bottomNavLabelActive]}>
+                  Users/Residents
+                </Text>
               </TouchableOpacity>
 
-              {/* Tab 4: Financials / Expenses & Reports */}
+              {/* Tab 4: Financials / Payments Wallet */}
               <TouchableOpacity
-                style={[styles.floatingTabCircle, currentTab === 'management' && styles.floatingTabCircleActive]}
+                style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('management')}
                 activeOpacity={0.8}
               >
-                <NavWalletIcon color={currentTab === 'management' ? '#ffffff' : '#4b5563'} />
+                {currentTab === 'management' && <View style={styles.navActiveTopLine} />}
+                <NavWalletIcon color={currentTab === 'management' ? '#ea580c' : '#4b5563'} />
+                <Text style={[styles.bottomNavLabel, currentTab === 'management' && styles.bottomNavLabelActive]}>
+                  Payments Wallet
+                </Text>
               </TouchableOpacity>
 
               {/* Tab 5: User Profile */}
               <TouchableOpacity
-                style={[styles.floatingTabCircle, currentTab === 'profile' && styles.floatingTabCircleActive]}
+                style={styles.bottomNavItem}
                 onPress={() => setCurrentTab('profile')}
                 activeOpacity={0.8}
               >
-                <NavUserIcon color={currentTab === 'profile' ? '#ffffff' : '#4b5563'} />
+                {currentTab === 'profile' && <View style={styles.navActiveTopLine} />}
+                <NavUserIcon color={currentTab === 'profile' ? '#ea580c' : '#4b5563'} />
+                <Text style={[styles.bottomNavLabel, currentTab === 'profile' && styles.bottomNavLabelActive]}>
+                  Profile
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -407,47 +431,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 15,
   },
-  // ─── Floating Trendy Bottom Bar (Crisp White + Warm Terracotta Circle on Active) ───
-  floatingBarOuter: {
-    paddingHorizontal: 16,
-    paddingBottom: Platform.OS === 'android' ? 36 : 24,
-    paddingTop: 8,
+  // ─── Modern Bottom Navigation Bar (Matching Screenshot) ───
+  bottomNavWrapper: {
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#f1f5f9',
-    alignItems: 'center',
-  },
-  floatingPillBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
-    borderRadius: 36,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingBottom: Platform.OS === 'android' ? 24 : 14,
+    paddingTop: 8,
     width: '100%',
-    maxWidth: 420,
-    borderWidth: 1,
-    borderColor: '#f1f5f9',
     shadowColor: '#000000',
     shadowOpacity: 0.04,
     shadowRadius: 10,
     elevation: 4,
   },
-  floatingTabCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  bottomNavInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+  },
+  bottomNavItem: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    position: 'relative',
   },
-  floatingTabCircleActive: {
-    backgroundColor: '#ea580c', // Refined warm terracotta/amber
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    elevation: 3,
+  navActiveTopLine: {
+    position: 'absolute',
+    top: -8,
+    width: 32,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#ea580c',
+  },
+  bottomNavLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  bottomNavLabelActive: {
+    color: '#ea580c',
+    fontWeight: '700',
   },
   bottomNav: {
     flexDirection: 'row',
