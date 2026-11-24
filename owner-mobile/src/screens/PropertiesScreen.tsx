@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { apiClient } from '../api/client';
+import { safeStorage } from '../utils/safeStorage';
 import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
@@ -1095,25 +1096,25 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         combinedProps = [...combinedProps, ...extra];
       }
 
-      if (typeof window !== 'undefined' && window.localStorage) {
-        try {
-          const customP = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
-          if (Array.isArray(customP) && customP.length > 0) {
-            const seenIds = new Set(combinedProps.map((p) => p.id));
-            const uniqueCustom = customP.filter((p: any) => !seenIds.has(p.id));
-            combinedProps = [...combinedProps, ...uniqueCustom];
-          }
-        } catch { }
-      }
+      try {
+        const customPStr = await safeStorage.getItem('@staynest_custom_properties');
+        let customP: any[] = customPStr ? JSON.parse(customPStr) : [];
+        if ((!Array.isArray(customP) || customP.length === 0) && typeof window !== 'undefined' && window.localStorage) {
+          customP = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
+        }
+        if (Array.isArray(customP) && customP.length > 0) {
+          const seenIds = new Set(combinedProps.map((p) => p.id));
+          const uniqueCustom = customP.filter((p: any) => !seenIds.has(p.id));
+          combinedProps = [...combinedProps, ...uniqueCustom];
+        }
+      } catch { }
 
       setPropertiesList(combinedProps);
 
       let targetProp = initialProperty;
-      if (!targetProp && typeof window !== 'undefined' && window.localStorage) {
-        const savedPropId = window.localStorage.getItem('staynest_active_property_id');
-        if (savedPropId) {
-          targetProp = combinedProps.find((p) => p.id === savedPropId) || null;
-        }
+      const savedPropId = await safeStorage.getItem('@staynest_active_property_id') || (typeof window !== 'undefined' && window.localStorage ? window.localStorage.getItem('staynest_active_property_id') : null);
+      if (!targetProp && savedPropId) {
+        targetProp = combinedProps.find((p) => p.id === savedPropId) || null;
       }
       if (!targetProp) {
         targetProp = combinedProps[0];
@@ -1253,14 +1254,15 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       });
 
       let nextFloors: FloorConfig[] | null = null;
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const cached = window.localStorage.getItem(`staynest_floors_${p.id}`);
+      try {
+        const cached = (await safeStorage.getItem(`@staynest_floors_${p.id}`)) || (await safeStorage.getItem(`staynest_floors_${p.id}`));
         if (cached) {
-          try {
-            nextFloors = JSON.parse(cached);
-          } catch { }
+          nextFloors = JSON.parse(cached);
+        } else if (typeof window !== 'undefined' && window.localStorage) {
+          const lCached = window.localStorage.getItem(`staynest_floors_${p.id}`);
+          if (lCached) nextFloors = JSON.parse(lCached);
         }
-      }
+      } catch { }
 
       if (!nextFloors || nextFloors.length === 0) {
         nextFloors = getInitialFloorsForProperty(p.id);

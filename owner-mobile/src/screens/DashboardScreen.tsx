@@ -327,14 +327,33 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  // Multi-PG Management State (Requirements 3, 4, 5)
+  // Multi-PG Management State & Full Property Onboarding Details
   const [showPgDropdown, setShowPgDropdown] = useState(false);
   const [showAddPgModal, setShowAddPgModal] = useState(false);
   const [newPgName, setNewPgName] = useState('');
-  const [newPgAddress, setNewPgAddress] = useState('');
-  const [newPgCity, setNewPgCity] = useState('Vijayawada');
   const [newPgGender, setNewPgGender] = useState<'BOYS' | 'GIRLS' | 'CO_ED'>('BOYS');
+  const [newPgType, setNewPgType] = useState<'PG' | 'HOSTEL' | 'CO_LIVING'>('PG');
+  const [newPgAddress, setNewPgAddress] = useState('');
+  const [newPgLocality, setNewPgLocality] = useState('Benz Circle');
+  const [newPgCity, setNewPgCity] = useState('Vijayawada');
+  const [newPgState, setNewPgState] = useState('Andhra Pradesh');
+  const [newPgPincode, setNewPgPincode] = useState('520010');
+  const [newPgFloors, setNewPgFloors] = useState('3');
+  const [newPgRoomsPerFloor, setNewPgRoomsPerFloor] = useState('2');
+  const [newPgSharingType, setNewPgSharingType] = useState<'SINGLE' | 'DOUBLE' | 'TRIPLE' | 'FOUR'>('DOUBLE');
   const [newPgRent, setNewPgRent] = useState('8500');
+  const [newPgDeposit, setNewPgDeposit] = useState('2500');
+  const [newPgNoticeDays, setNewPgNoticeDays] = useState('30');
+  const [newPgFoodIncluded, setNewPgFoodIncluded] = useState(true);
+  const [newPgAmenities, setNewPgAmenities] = useState<string[]>([
+    'HIGH_SPEED_WIFI',
+    'HOMESTYLE_FOOD',
+    'POWER_BACKUP',
+    'DAILY_HOUSEKEEPING',
+    'RO_WATER',
+    'CCTV_SECURITY',
+  ]);
+  const [creatingPgLoading, setCreatingPgLoading] = useState(false);
 
   // Bed Hold Enquiries & Notifications State (Requirement 1 & Requirement 5)
   const [enquiries, setEnquiries] = useState<ResidentEnquiry[]>([]);
@@ -423,93 +442,185 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return '🌙 Shubh Ratri';
   };
 
-  // 1-Click Multi-PG Creator (Requirements 3, 4, 5)
-  const handleCreateNewPg = () => {
-    if (!newPgName.trim()) {
-      Alert.alert('Required', 'Please enter a name for the new PG property.');
+  // Complete Multi-PG Creator with validation for all building details
+  const handleCreateNewPg = async () => {
+    // 1. Validate all required fields
+    if (!newPgName.trim() || newPgName.trim().length < 3) {
+      Alert.alert('Required: PG Name', 'Please enter a valid PG / Building name (at least 3 characters).');
       return;
     }
-    const created: Property = {
-      id: `prop-pg-${Date.now()}`,
-      name: newPgName.trim(),
-      addressLine: newPgAddress.trim() || 'Vijayawada, Andhra Pradesh',
-      cityName: newPgCity.trim() || 'Vijayawada',
-      genderPolicy: newPgGender,
-      propertyType: 'PG',
-      startingPricePaise: parseInt(newPgRent || '8500') * 100,
-      foodIncluded: true,
-      approvalStatus: 'APPROVED',
-      published: true,
-      primaryPhotoUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-      amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'AC_ROOMS'],
-    };
-
-    if (typeof window !== 'undefined' && window.localStorage) {
-      try {
-        const cached = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
-        const updated = [created, ...cached.filter((p: any) => p.id !== created.id)];
-        window.localStorage.setItem('staynest_custom_properties', JSON.stringify(updated));
-
-        // Create default rooms and beds for this new building
-        const defaultFloors = [
-          {
-            floorNumber: 1,
-            rooms: [
-              {
-                id: `rm-${created.id}-101`,
-                roomNumber: '101',
-                floorNumber: 1,
-                sharingType: 'DOUBLE',
-                rentRupees: parseInt(newPgRent || '8500'),
-                depositRupees: parseInt(newPgRent || '8500'),
-                beds: [
-                  { id: `b-${created.id}-101-1`, bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                  { id: `b-${created.id}-101-2`, bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                ],
-              },
-              {
-                id: `rm-${created.id}-102`,
-                roomNumber: '102',
-                floorNumber: 1,
-                sharingType: 'DOUBLE',
-                rentRupees: parseInt(newPgRent || '8500'),
-                depositRupees: parseInt(newPgRent || '8500'),
-                beds: [
-                  { id: `b-${created.id}-102-1`, bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                  { id: `b-${created.id}-102-2`, bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                ],
-              },
-            ],
-          },
-          {
-            floorNumber: 2,
-            rooms: [
-              {
-                id: `rm-${created.id}-201`,
-                roomNumber: '201',
-                floorNumber: 2,
-                sharingType: 'DOUBLE',
-                rentRupees: parseInt(newPgRent || '8500'),
-                depositRupees: parseInt(newPgRent || '8500'),
-                beds: [
-                  { id: `b-${created.id}-201-1`, bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                  { id: `b-${created.id}-201-2`, bedLabel: 'Bed 2', status: 'AVAILABLE' },
-                ],
-              },
-            ],
-          },
-        ];
-        window.localStorage.setItem(`staynest_floors_${created.id}`, JSON.stringify(defaultFloors));
-      } catch {}
+    if (!newPgAddress.trim() || newPgAddress.trim().length < 3) {
+      Alert.alert('Required: Address', 'Please enter the street address or building location.');
+      return;
     }
+    if (!newPgCity.trim()) {
+      Alert.alert('Required: City', 'Please enter the city where the building is located.');
+      return;
+    }
+    const cleanPincode = newPgPincode.replace(/\D/g, '');
+    if (cleanPincode.length !== 6) {
+      Alert.alert('Required: Pincode', 'Please enter a valid 6-digit postal pincode.');
+      return;
+    }
+    const rentNum = parseInt(newPgRent.replace(/\D/g, '') || '0', 10);
+    if (rentNum <= 0) {
+      Alert.alert('Required: Monthly Rent', 'Please enter a valid monthly rent amount (greater than ₹0).');
+      return;
+    }
+    const depositNum = parseInt(newPgDeposit.replace(/\D/g, '') || '0', 10);
+    const floorsCount = Math.max(1, Math.min(10, parseInt(newPgFloors.replace(/\D/g, '') || '1', 10)));
+    const roomsCount = Math.max(1, Math.min(10, parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '1', 10)));
 
-    setProperties([created, ...properties]);
-    setSelectedPropId(created.id);
-    setShowAddPgModal(false);
-    setShowPgDropdown(false);
-    setNewPgName('');
-    setNewPgAddress('');
-    Alert.alert('🎉 New PG Created!', `${created.name} is now active. All management facilities are live for this property.`);
+    setCreatingPgLoading(true);
+
+    try {
+      const createdPropId = `prop-pg-${Date.now()}`;
+      const bedsPerRoom = newPgSharingType === 'SINGLE' ? 1 : newPgSharingType === 'DOUBLE' ? 2 : newPgSharingType === 'TRIPLE' ? 3 : 4;
+      const generatedFloors: any[] = [];
+      const generatedRoomsList: Room[] = [];
+
+      for (let f = 1; f <= floorsCount; f++) {
+        const floorRooms: any[] = [];
+        for (let r = 1; r <= roomsCount; r++) {
+          const roomNum = `${f}${r < 10 ? '0' + r : r}`;
+          const roomId = `rm-${createdPropId}-${roomNum}`;
+          const bedsList: Bed[] = [];
+          const floorBeds: any[] = [];
+
+          for (let b = 1; b <= bedsPerRoom; b++) {
+            const bedId = `b-${createdPropId}-${roomNum}-${b}`;
+            const bedObj: Bed = {
+              id: bedId,
+              roomId: roomId,
+              propertyId: createdPropId,
+              bedLabel: `Bed ${b}`,
+              status: 'AVAILABLE',
+            };
+            bedsList.push(bedObj);
+            floorBeds.push({
+              id: bedId,
+              bedLabel: `Bed ${b}`,
+              status: 'AVAILABLE',
+            });
+          }
+
+          floorRooms.push({
+            id: roomId,
+            roomNumber: roomNum,
+            floorNumber: f,
+            sharingType: newPgSharingType,
+            rentRupees: rentNum,
+            depositRupees: depositNum,
+            ac: newPgAmenities.includes('AC_ROOMS'),
+            attachedBathroom: true,
+            beds: floorBeds,
+          });
+
+          generatedRoomsList.push({
+            id: roomId,
+            propertyId: createdPropId,
+            roomNumber: roomNum,
+            sharingType: newPgSharingType as any,
+            capacity: bedsPerRoom,
+            floorNumber: f,
+            rentMonthlyPaise: rentNum * 100,
+            depositPaise: depositNum * 100,
+            status: 'AVAILABLE',
+            beds: bedsList,
+          });
+        }
+
+        generatedFloors.push({
+          floorNumber: f,
+          rooms: floorRooms,
+        });
+      }
+
+      const created: Property = {
+        id: createdPropId,
+        name: newPgName.trim(),
+        addressLine: `${newPgAddress.trim()}${newPgLocality.trim() ? ', ' + newPgLocality.trim() : ''}`,
+        cityName: newPgCity.trim(),
+        pincode: cleanPincode,
+        genderPolicy: newPgGender,
+        propertyType: newPgType,
+        startingPricePaise: rentNum * 100,
+        foodIncluded: newPgFoodIncluded,
+        approvalStatus: 'APPROVED',
+        published: true,
+        primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
+        amenities: newPgAmenities,
+      };
+
+      // 2. Persist floors into safeStorage
+      await safeStorage.setItem(`@staynest_floors_${createdPropId}`, JSON.stringify(generatedFloors));
+      await safeStorage.setItem(`staynest_floors_${createdPropId}`, JSON.stringify(generatedFloors));
+
+      // 3. Persist property into safeStorage
+      const cachedStr = await safeStorage.getItem('@staynest_custom_properties');
+      let cachedProps: Property[] = cachedStr ? JSON.parse(cachedStr) : [];
+      if (!Array.isArray(cachedProps)) cachedProps = [];
+      const updatedProps = [created, ...cachedProps.filter((p: any) => p.id !== created.id)];
+      await safeStorage.setItem('@staynest_custom_properties', JSON.stringify(updatedProps));
+      await safeStorage.setItem('@staynest_active_property_id', created.id);
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          window.localStorage.setItem('staynest_custom_properties', JSON.stringify(updatedProps));
+          window.localStorage.setItem(`staynest_floors_${createdPropId}`, JSON.stringify(generatedFloors));
+          window.localStorage.setItem('staynest_active_property_id', created.id);
+        } catch {}
+      }
+
+      // 4. Try backend API creation
+      try {
+        await apiClient<Property>('/owner/properties', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: created.name,
+            propertyType: created.propertyType,
+            genderPolicy: created.genderPolicy,
+            cityId: '00000000-0000-0000-0000-000000000001',
+            addressLine: created.addressLine,
+            cityName: created.cityName,
+            pincode: cleanPincode,
+            startingPricePaise: created.startingPricePaise,
+            foodIncluded: created.foodIncluded,
+            amenities: created.amenities,
+          }),
+        });
+      } catch (e) {
+        console.log('Backend property sync notice (saved locally in persistent storage):', e);
+      }
+
+      // 5. Update local state immediately
+      setProperties([created, ...properties.filter((p) => p.id !== created.id)]);
+      setSelectedPropId(created.id);
+      setPropertyRoomsMap((prev) => ({
+        ...prev,
+        [created.id]: generatedRoomsList,
+      }));
+
+      onActivePropertyChange?.(created);
+      onSelectPropertyForRooms?.(created);
+
+      setShowAddPgModal(false);
+      setShowPgDropdown(false);
+      setNewPgName('');
+      setNewPgAddress('');
+
+      const totalBedsCreated = floorsCount * roomsCount * bedsPerRoom;
+      const successMsg = `✓ ${created.name} successfully created with ${floorsCount} floors, ${floorsCount * roomsCount} rooms & ${totalBedsCreated} beds! Switched to active building.`;
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
+        window.alert(successMsg);
+      } else {
+        Alert.alert('🎉 New PG Created!', successMsg);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to create new PG property.');
+    } finally {
+      setCreatingPgLoading(false);
+    }
   };
 
   const handleRefresh = async () => {
@@ -638,19 +749,25 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         combinedProps = [...combinedProps, ...extraBackend];
       }
 
-      if (typeof window !== 'undefined' && window.localStorage) {
-        try {
-          const customP = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
-          if (Array.isArray(customP) && customP.length > 0) {
-            const seenIds = new Set(combinedProps.map((p) => p.id));
-            const uniqueCustom = customP.filter((p: any) => !seenIds.has(p.id));
-            combinedProps = [...combinedProps, ...uniqueCustom];
-          }
-        } catch {}
-      }
+      // Load custom properties from persistent safeStorage (and fallback to window.localStorage)
+      try {
+        const customPStr = await safeStorage.getItem('@staynest_custom_properties');
+        let customP: any[] = customPStr ? JSON.parse(customPStr) : [];
+        if ((!Array.isArray(customP) || customP.length === 0) && typeof window !== 'undefined' && window.localStorage) {
+          customP = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
+        }
+        if (Array.isArray(customP) && customP.length > 0) {
+          const seenIds = new Set(combinedProps.map((p) => p.id));
+          const uniqueCustom = customP.filter((p: any) => !seenIds.has(p.id));
+          combinedProps = [...combinedProps, ...uniqueCustom];
+        }
+      } catch {}
 
       setProperties(combinedProps);
-      if (!selectedPropId || !combinedProps.some((p) => p.id === selectedPropId)) {
+      const activeIdFromStorage = await safeStorage.getItem('@staynest_active_property_id');
+      if (activeIdFromStorage && combinedProps.some((p) => p.id === activeIdFromStorage)) {
+        setSelectedPropId(activeIdFromStorage);
+      } else if (!selectedPropId || !combinedProps.some((p) => p.id === selectedPropId)) {
         setSelectedPropId(combinedProps[0].id);
       }
 
@@ -4390,7 +4507,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </Modal>
 
-      {/* ─── MODAL 12: ADD NEW PG / BUILDING MODAL (1-CLICK CREATION) ─── */}
+      {/* ─── MODAL 12: ADD NEW PG / BUILDING MODAL (COMPLETE PROPERTY ONBOARDING) ─── */}
       <Modal
         visible={showAddPgModal}
         transparent
@@ -4398,62 +4515,34 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onRequestClose={() => setShowAddPgModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+          <View style={[styles.modalCard, { maxHeight: '92%' }]}>
             <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={styles.modalTitle}>🏢 Add New PG Property</Text>
-                <Text style={styles.modalSub}>Set up a new building with rooms, beds & full management</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>🏢 Add New PG / Building</Text>
+                <Text style={styles.modalSub}>Complete building details, rooms, pricing & amenities</Text>
               </View>
               <TouchableOpacity onPress={() => setShowAddPgModal(false)} style={styles.modalCloseIcon}>
                 <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 420 }}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              {/* SECTION 1: BASIC IDENTITY */}
+              <View style={styles.pgFormSectionHeader}>
+                <Text style={styles.pgFormSectionTitle}>1. 🏢 Building Identity & Category</Text>
+              </View>
+
               <Text style={styles.inputLabelDark}>PG / Building Name *</Text>
               <TextInput
                 style={styles.customTextInput}
-                placeholder="e.g. Saikrishna Luxury PG (Building 03)"
+                placeholder="e.g. Sai Balaji Luxury PG (Building 03)"
                 placeholderTextColor="#94a3b8"
                 value={newPgName}
                 onChangeText={setNewPgName}
               />
 
-              <Text style={styles.inputLabelDark}>Location / Address *</Text>
-              <TextInput
-                style={styles.customTextInput}
-                placeholder="e.g. Near Benz Circle, MG Road"
-                placeholderTextColor="#94a3b8"
-                value={newPgAddress}
-                onChangeText={setNewPgAddress}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>City</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="Vijayawada"
-                    placeholderTextColor="#94a3b8"
-                    value={newPgCity}
-                    onChangeText={setNewPgCity}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Starting Rent (₹)</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="8500"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={newPgRent}
-                    onChangeText={setNewPgRent}
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.inputLabelDark}>PG Category / Gender Policy</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+              <Text style={styles.inputLabelDark}>Category / Gender Policy *</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
                 {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
                   <TouchableOpacity
                     key={g}
@@ -4469,18 +4558,284 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         newPgGender === g && styles.genderSelectBtnTextActive,
                       ]}
                     >
-                      {g === 'BOYS' ? '👨 Boys' : g === 'GIRLS' ? '👩 Girls' : '👫 Coliving'}
+                      {g === 'BOYS' ? '👨 Boys PG' : g === 'GIRLS' ? '👩 Girls PG' : '👫 Coliving'}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
+              <Text style={styles.inputLabelDark}>Property Type</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                {(['PG', 'HOSTEL', 'CO_LIVING'] as const).map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[
+                      styles.genderSelectBtn,
+                      newPgType === t && styles.genderSelectBtnActive,
+                    ]}
+                    onPress={() => setNewPgType(t)}
+                  >
+                    <Text
+                      style={[
+                        styles.genderSelectBtnText,
+                        newPgType === t && styles.genderSelectBtnTextActive,
+                      ]}
+                    >
+                      {t === 'PG' ? 'Paying Guest (PG)' : t === 'HOSTEL' ? 'Hostel' : 'Co-Living'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* SECTION 2: LOCATION & ADDRESS */}
+              <View style={styles.pgFormSectionHeader}>
+                <Text style={styles.pgFormSectionTitle}>2. 📍 Location & Address</Text>
+              </View>
+
+              <Text style={styles.inputLabelDark}>Street Address / Door No *</Text>
+              <TextInput
+                style={styles.customTextInput}
+                placeholder="e.g. Plot 42, Opposite PVP Square"
+                placeholderTextColor="#94a3b8"
+                value={newPgAddress}
+                onChangeText={setNewPgAddress}
+              />
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Area / Landmark</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="e.g. Benz Circle"
+                    placeholderTextColor="#94a3b8"
+                    value={newPgLocality}
+                    onChangeText={setNewPgLocality}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>City *</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="Vijayawada"
+                    placeholderTextColor="#94a3b8"
+                    value={newPgCity}
+                    onChangeText={setNewPgCity}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>State</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="Andhra Pradesh"
+                    placeholderTextColor="#94a3b8"
+                    value={newPgState}
+                    onChangeText={setNewPgState}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Pincode * (6 Digits)</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="520010"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    maxLength={6}
+                    value={newPgPincode}
+                    onChangeText={setNewPgPincode}
+                  />
+                </View>
+              </View>
+
+              {/* SECTION 3: BUILDING STRUCTURE & BED ALLOCATION */}
+              <View style={styles.pgFormSectionHeader}>
+                <Text style={styles.pgFormSectionTitle}>3. 🏗️ Building Structure & Rooms</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Total Floors *</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="3"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={newPgFloors}
+                    onChangeText={setNewPgFloors}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Rooms per Floor *</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="2"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={newPgRoomsPerFloor}
+                    onChangeText={setNewPgRoomsPerFloor}
+                  />
+                </View>
+              </View>
+
+              <Text style={styles.inputLabelDark}>Default Room Sharing Type *</Text>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                {[
+                  { key: 'SINGLE', label: '1-Share' },
+                  { key: 'DOUBLE', label: '2-Share' },
+                  { key: 'TRIPLE', label: '3-Share' },
+                  { key: 'FOUR', label: '4-Share' },
+                ].map((s) => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={[
+                      styles.genderSelectBtn,
+                      newPgSharingType === s.key && styles.genderSelectBtnActive,
+                    ]}
+                    onPress={() => setNewPgSharingType(s.key as any)}
+                  >
+                    <Text
+                      style={[
+                        styles.genderSelectBtnText,
+                        newPgSharingType === s.key && styles.genderSelectBtnTextActive,
+                      ]}
+                    >
+                      {s.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Live Structure Calculator Banner */}
+              {(() => {
+                const fc = Math.max(1, parseInt(newPgFloors.replace(/\D/g, '') || '1', 10));
+                const rc = Math.max(1, parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '1', 10));
+                const bc = newPgSharingType === 'SINGLE' ? 1 : newPgSharingType === 'DOUBLE' ? 2 : newPgSharingType === 'TRIPLE' ? 3 : 4;
+                const totRooms = fc * rc;
+                const totBeds = totRooms * bc;
+                return (
+                  <View style={styles.pgStructureBanner}>
+                    <Text style={styles.pgStructureBannerTitle}>
+                      📐 Auto-Generated Setup:
+                    </Text>
+                    <Text style={styles.pgStructureBannerSub}>
+                      {fc} Floors × {rc} Rooms = {totRooms} Rooms • {totBeds} Total Beds Capacity
+                    </Text>
+                  </View>
+                );
+              })()}
+
+              {/* SECTION 4: PRICING & FOOD */}
+              <View style={styles.pgFormSectionHeader}>
+                <Text style={styles.pgFormSectionTitle}>4. 💰 Rent, Deposit & Food</Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Monthly Rent / Bed (₹) *</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="8500"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={newPgRent}
+                    onChangeText={setNewPgRent}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Security Deposit (₹) *</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="2500"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={newPgDeposit}
+                    onChangeText={setNewPgDeposit}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Notice Period (Days)</Text>
+                  <TextInput
+                    style={styles.customTextInput}
+                    placeholder="30"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="numeric"
+                    value={newPgNoticeDays}
+                    onChangeText={setNewPgNoticeDays}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.inputLabelDark}>Food / Meals Policy</Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.foodPolicyBtn,
+                      newPgFoodIncluded && styles.foodPolicyBtnActive,
+                    ]}
+                    onPress={() => setNewPgFoodIncluded(!newPgFoodIncluded)}
+                  >
+                    <Text style={[styles.foodPolicyBtnText, newPgFoodIncluded && styles.foodPolicyBtnTextActive]}>
+                      {newPgFoodIncluded ? '🍲 3 Meals Included' : '❌ No Food Provided'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* SECTION 5: AMENITIES & FACILITIES */}
+              <View style={styles.pgFormSectionHeader}>
+                <Text style={styles.pgFormSectionTitle}>5. ✨ Building Amenities & Facilities</Text>
+              </View>
+
+              <View style={styles.amenitiesWrap}>
+                {[
+                  { key: 'HIGH_SPEED_WIFI', label: '📶 High-Speed Wi-Fi' },
+                  { key: 'HOMESTYLE_FOOD', label: '🍲 3 Homestyle Meals' },
+                  { key: 'AC_ROOMS', label: '❄️ Air Conditioned (AC)' },
+                  { key: 'DAILY_HOUSEKEEPING', label: '🧹 Daily Cleaning' },
+                  { key: 'POWER_BACKUP', label: '⚡ 24/7 Power Backup' },
+                  { key: 'CCTV_SECURITY', label: '📹 CCTV Security' },
+                  { key: 'HOT_WATER', label: '🚿 Geyser / Hot Water' },
+                  { key: 'WASHING_MACHINE', label: '🧺 Washing Machine' },
+                  { key: 'RO_WATER', label: '💧 RO Purified Water' },
+                  { key: 'LIFT', label: '🛗 Lift / Elevator' },
+                  { key: 'BIKE_PARKING', label: '🛵 Two-Wheeler Parking' },
+                ].map((item) => {
+                  const isSel = newPgAmenities.includes(item.key);
+                  return (
+                    <TouchableOpacity
+                      key={item.key}
+                      style={[styles.amenityChip, isSel && styles.amenityChipActive]}
+                      onPress={() => {
+                        if (isSel) {
+                          setNewPgAmenities(newPgAmenities.filter((a) => a !== item.key));
+                        } else {
+                          setNewPgAmenities([...newPgAmenities, item.key]);
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.amenityChipText, isSel && styles.amenityChipTextActive]}>
+                        {isSel ? '✓ ' : '+ '}{item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
               <TouchableOpacity
-                style={styles.submitCreatePgBtn}
+                style={[styles.submitCreatePgBtn, creatingPgLoading && { opacity: 0.7 }]}
                 onPress={handleCreateNewPg}
-                activeOpacity={0.8}
+                disabled={creatingPgLoading}
+                activeOpacity={0.85}
               >
-                <Text style={styles.submitCreatePgBtnText}>✓ Create PG & Switch Now</Text>
+                {creatingPgLoading ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={styles.submitCreatePgBtnText}>✓ Validate & Create New PG Building</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -7556,5 +7911,88 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '900',
+  },
+  pgFormSectionHeader: {
+    backgroundColor: '#f1f5f9',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    marginTop: 12,
+    marginBottom: 8,
+  },
+  pgFormSectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  pgStructureBanner: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    marginBottom: 10,
+  },
+  pgStructureBannerTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1d4ed8',
+  },
+  pgStructureBannerSub: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1e40af',
+    marginTop: 2,
+  },
+  foodPolicyBtn: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  foodPolicyBtnActive: {
+    borderColor: '#10b981',
+    backgroundColor: '#f0fdf4',
+  },
+  foodPolicyBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  foodPolicyBtnTextActive: {
+    color: '#16a34a',
+    fontWeight: '800',
+  },
+  amenitiesWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
+  },
+  amenityChip: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  amenityChipActive: {
+    backgroundColor: '#eef2ff',
+    borderColor: '#4f46e5',
+  },
+  amenityChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  amenityChipTextActive: {
+    color: '#4f46e5',
+    fontWeight: '800',
   },
 });

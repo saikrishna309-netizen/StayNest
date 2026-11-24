@@ -195,6 +195,17 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       ]);
       let loadedTenants = tRes.content || [];
       let loadedProps = pRes.content || [];
+      try {
+        const storedCustom = await safeStorage.getItem('@staynest_custom_properties');
+        if (storedCustom) {
+          const parsed = JSON.parse(storedCustom);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const seenIds = new Set(loadedProps.map((p) => p.id));
+            const unique = parsed.filter((p: any) => !seenIds.has(p.id));
+            loadedProps = [...loadedProps, ...unique];
+          }
+        }
+      } catch {}
 
       // Ensure default multi PGs are present
       const existingPropIds = new Set(loadedProps.map((p) => p.id));
