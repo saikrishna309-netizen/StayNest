@@ -7094,7 +7094,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // ─── KYC Auto-Sliding Carousel & Aadhaar Verification Styles (Requirements 2 & 7) ───
+  // ─── KYC Auto-Sliding Carousel & Aadhaar Verification Styles (Light Orange Borders, White Inside) ───
   kycCarouselCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
@@ -7103,9 +7103,9 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     borderWidth: 1.5,
-    borderColor: '#fb923c',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.05,
+    borderColor: '#fdba74', // Light orange border, pure white inside
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
@@ -7118,9 +7118,9 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 16,
     borderWidth: 1.5,
-    borderColor: '#fb923c',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.05,
+    borderColor: '#fdba74', // Light orange border, pure white inside
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
@@ -7136,8 +7136,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#fb923c',
+    borderWidth: 1,
+    borderColor: '#fdba74',
   },
   kycNoPendingTitle: {
     fontSize: 13,
@@ -7151,8 +7151,8 @@ const styles = StyleSheet.create({
   },
   kycVerifiedBadge: {
     backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#fb923c',
+    borderWidth: 1,
+    borderColor: '#fdba74',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 10,
@@ -7172,14 +7172,16 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#ffedd5',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fdba74',
   },
   kycCardTitle: {
     fontSize: 13,
-    fontWeight: '900',
-    color: '#9a3412',
+    fontWeight: '800',
+    color: '#0f172a', // Clean navy instead of heavy orange
   },
   kycCardSub: {
     fontSize: 10,
@@ -7187,7 +7189,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   kycViewAllBtn: {
-    backgroundColor: '#fff7ed',
+    backgroundColor: '#ffffff',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -7200,11 +7202,11 @@ const styles = StyleSheet.create({
     color: '#ea580c',
   },
   kycSlideBox: {
-    backgroundColor: '#fffaf5',
+    backgroundColor: '#ffffff', // Pure white inside
     borderRadius: 12,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#fed7aa',
+    borderColor: '#fdba74', // Light orange border
   },
   kycTenantRow: {
     flexDirection: 'row',
@@ -7214,9 +7216,11 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#ffedd5',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
   },
   kycTenantName: {
     fontSize: 13,
@@ -7242,13 +7246,15 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   kycVerifyBtn: {
-    backgroundColor: '#ea580c',
+    backgroundColor: '#ffffff', // Pure white inside
+    borderWidth: 1.5,
+    borderColor: '#fdba74', // Light orange border
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
   },
   kycVerifyBtnText: {
-    color: '#ffffff',
+    color: '#ea580c',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -7259,7 +7265,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#ffedd5',
+    borderTopColor: '#f1f5f9',
   },
   kycDotsRow: {
     flexDirection: 'row',
@@ -7382,7 +7388,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   kycListActionBtn: {
-    backgroundColor: '#ea580c',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#fdba74',
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -7390,7 +7398,7 @@ const styles = StyleSheet.create({
   kycListActionBtnText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#ffffff',
+    color: '#ea580c',
   },
   freeKycBanner: {
     backgroundColor: '#f0fdf4',
