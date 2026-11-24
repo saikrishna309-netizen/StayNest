@@ -11,7 +11,6 @@ interface AuthContextType {
   verifyOtp: (phone: string, otp: string) => Promise<void>;
   updateProfile: (fullName: string, email: string) => Promise<void>;
   login: (email: string, pass: string) => Promise<void>;
-  loginDummy: (phone?: string, name?: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -98,16 +97,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       authenticatedToken = res.accessToken;
       authenticatedUser = res.user;
     } catch (err: any) {
-      // Offline / Dummy local testing fallback: Always accept for smooth local testing
-      authenticatedUser = {
-        id: 'owner-' + (cleanPhone || '9876543210'),
-        fullName: 'Ramesh Kumar',
-        email: `owner_${cleanPhone || '9876543210'}@staynest.in`,
-        phone: cleanPhone || '9876543210',
-        role: 'ROLE_OWNER',
-        status: 'ACTIVE',
-      };
-      authenticatedToken = 'dummy-jwt-token-' + (cleanPhone || '9876543210');
+      // Validate against the exact generated OTP sent to owner's WhatsApp
+      const expected = activeOtps[cleanPhone];
+      if (expected && cleanOtp === expected) {
+        authenticatedUser = {
+          id: 'owner-' + cleanPhone,
+          fullName: 'PG Owner',
+          email: `owner_${cleanPhone}@staynest.in`,
+          phone: cleanPhone,
+          role: 'ROLE_OWNER',
+          status: 'ACTIVE',
+        };
+        authenticatedToken = 'live-session-token-' + cleanPhone;
+      } else {
+        throw new Error(err.message || 'Incorrect OTP code. Please enter the 6-digit code received on your WhatsApp.');
+      }
     }
 
     if (authenticatedUser && authenticatedToken) {
@@ -181,30 +185,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await safeStorage.setItem('@staynest_owner_user', JSON.stringify(res.user));
   };
 
-  const loginDummy = async (phone: string = '9876543210', name: string = 'Ramesh Kumar') => {
-    const cleanPhone = phone.replace(/[^0-9]/g, '') || '9876543210';
-    const dummyUser: User = {
-      id: 'owner-' + cleanPhone,
-      fullName: name,
-      email: `owner_${cleanPhone}@staynest.in`,
-      phone: cleanPhone,
-      role: 'ROLE_OWNER',
-      status: 'ACTIVE',
-    };
-    const dummyToken = 'dummy-jwt-token-' + cleanPhone;
-
-    setAuthToken(dummyToken);
-    setToken(dummyToken);
-    setUser(dummyUser);
-
-    try {
-      await safeStorage.setItem('@staynest_owner_token', dummyToken);
-      await safeStorage.setItem('@staynest_owner_user', JSON.stringify(dummyUser));
-    } catch (storageErr) {
-      console.log('Storage save note:', storageErr);
-    }
-  };
-
   const logout = () => {
     safeStorage.removeItem('@staynest_owner_token').catch(() => {});
     safeStorage.removeItem('@staynest_owner_user').catch(() => {});
@@ -223,7 +203,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         verifyOtp,
         updateProfile,
         login,
-        loginDummy,
         logout,
       }}
     >
