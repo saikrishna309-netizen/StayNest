@@ -42,12 +42,12 @@ const NavTenantsIcon = ({ color }: { color: string }) => (
   </Svg>
 );
 
-const NavChartIcon = ({ color }: { color: string }) => (
+const NavWalletIcon = ({ color }: { color: string }) => (
   <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-    <Rect x="3" y="3" width="18" height="18" rx="5" stroke={color} strokeWidth="2.2" />
-    <Path d="M7 16l3-3 2.5 2 4.5-5" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M14 10h3v3" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-    <Path d="M7 17v-1M11 17v-3M15 17v-5" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    <Rect x="2.5" y="5.5" width="19" height="14" rx="3.5" stroke={color} strokeWidth="2.2" />
+    <Path d="M2.5 10h19" stroke={color} strokeWidth="1.8" />
+    <Path d="M14.5 11.5H20a1.5 1.5 0 011.5 1.5v2A1.5 1.5 0 0120 16.5h-5.5a1.5 1.5 0 01-1.5-1.5v-2a1.5 1.5 0 011.5-1.5z" stroke={color} strokeWidth="2" fill="#ffffff" />
+    <Circle cx="17.5" cy="14" r="1.2" fill={color} />
   </Svg>
 );
 
@@ -114,7 +114,8 @@ const MainNavigator: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+      <RNStatusBar barStyle="dark-content" />
+      <StatusBar style="dark" />
       <View style={styles.webOuterWrapper}>
         {/* On Web: Switcher bar to toggle between Mobile Frame & Full Desktop Width */}
         {Platform.OS === 'web' && (
@@ -228,13 +229,13 @@ const MainNavigator: React.FC = () => {
                 <NavTenantsIcon color={currentTab === 'tenants' ? '#ffffff' : '#9a3412'} />
               </TouchableOpacity>
 
-              {/* Tab 4: Analytics / Reports */}
+              {/* Tab 4: Financials / Expenses & Reports */}
               <TouchableOpacity
                 style={[styles.floatingTabCircle, currentTab === 'management' && styles.floatingTabCircleActive]}
                 onPress={() => setCurrentTab('management')}
                 activeOpacity={0.8}
               >
-                <NavChartIcon color={currentTab === 'management' ? '#ffffff' : '#9a3412'} />
+                <NavWalletIcon color={currentTab === 'management' ? '#ffffff' : '#9a3412'} />
               </TouchableOpacity>
 
               {/* Tab 5: User Profile */}
@@ -307,7 +308,7 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#6c5ce7',
+    backgroundColor: '#ffffff',
     paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0,
   },
   webOuterWrapper: {

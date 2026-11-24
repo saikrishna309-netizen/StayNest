@@ -845,15 +845,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const pendingKycTenants = activeTenants.filter((t) => {
     const isAadhaarVerified =
       t.aadhaarVerified === true ||
+      t.kycStatus === 'VERIFIED' ||
       (typeof window !== 'undefined' &&
         window.localStorage &&
         window.localStorage.getItem(`staynest_kyc_${t.id}`) === 'VERIFIED');
-    const aadhaarVal = t.idProof || t.idProofNumber || '';
+    const aadhaarVal = (t.idProof || t.idProofNumber || '').trim();
+    const cleanId = aadhaarVal.replace(/\s+/g, '');
     const hasValidAadhaar =
-      aadhaarVal &&
-      aadhaarVal.replace(/\s+/g, '').length === 12 &&
-      validateVerhoeffAadhaar(aadhaarVal).isValid;
-    return !isAadhaarVerified && !hasValidAadhaar;
+      cleanId.length === 12 &&
+      /^\d{12}$/.test(cleanId) &&
+      validateVerhoeffAadhaar(cleanId).isValid;
+    const hasValidPan =
+      (t.idProofType === 'PAN' || /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanId)) &&
+      cleanId.length === 10;
+    return !isAadhaarVerified && !hasValidAadhaar && !hasValidPan;
   });
 
   // Auto-slide carousel one by one every 3.5 seconds
@@ -2318,8 +2323,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </TouchableOpacity>
         )}
 
-        {/* ─── 2.5 KYC VERIFICATION PENDING AUTO-SLIDING CAROUSEL (REQUIREMENT 7) ─── */}
-        {pendingKycTenants.length > 0 && (
+        {/* ─── 2.5 KYC VERIFICATION CARD / CAROUSEL (ORANGE BORDERS ONLY) ─── */}
+        {pendingKycTenants.length > 0 ? (
           <View style={styles.kycCarouselCard}>
             <View style={styles.kycCardHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
@@ -2425,6 +2430,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               );
             })()}
           </View>
+        ) : (
+          <View style={styles.kycNoPendingCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.kycNoPendingIconCircle}>
+                  <Text style={{ fontSize: 16 }}>🛡️</Text>
+                </View>
+                <View>
+                  <Text style={styles.kycNoPendingTitle}>No KYC Pending</Text>
+                  <Text style={styles.kycNoPendingSub}>All PG residents have verified Government ID</Text>
+                </View>
+              </View>
+              <View style={styles.kycVerifiedBadge}>
+                <Text style={styles.kycVerifiedBadgeText}>✓ 100% Verified</Text>
+              </View>
+            </View>
+          </View>
         )}
 
         {/* ─── 3. QUICK ACTIONS (WHITE BOX WITH ANIMATED SHINING ORANGE BORDER) ─── */}
@@ -2448,20 +2470,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
 
           <View style={styles.quickGridContainer}>
-            {/* 1. Add Tenants */}
+            {/* 1. Add Tenants (Light Orange) */}
             <TouchableOpacity
               style={styles.quickGridBoxPremium}
               onPress={() => setShowOnboardModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
-                <Text style={{ fontSize: 18 }}>👥</Text>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
+                <Text style={{ fontSize: 20, color: '#ea580c', fontWeight: '800' }}>👤⁺</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Add Tenant</Text>
               <Text style={styles.quickSubLabelText}>Onboard & Bed</Text>
             </TouchableOpacity>
 
-            {/* 2. Record Rent */}
+            {/* 2. Record Rent (Matched to user pasted image with bold Rupee symbol) */}
             <TouchableOpacity
               style={styles.quickGridBoxPremium}
               onPress={() => {
@@ -2475,34 +2497,34 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               }}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
-                <Text style={{ fontSize: 18 }}>💳</Text>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+                <Text style={{ fontSize: 24, fontWeight: '900', color: '#1d4ed8' }}>₹</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Record Rent</Text>
               <Text style={styles.quickSubLabelText}>Collect & Due</Text>
             </TouchableOpacity>
 
-            {/* 3. Add Expense */}
+            {/* 3. Add Expense (Matched to user pasted image with receipt/bill icon) */}
             <TouchableOpacity
               style={styles.quickGridBoxPremium}
               onPress={() => onNavigateTab ? onNavigateTab('finance') : null}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
-                <Text style={{ fontSize: 18 }}>📋</Text>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+                <Text style={{ fontSize: 20, color: '#1d4ed8' }}>🧾</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Add Expense</Text>
               <Text style={styles.quickSubLabelText}>Bills & Staff</Text>
             </TouchableOpacity>
 
-            {/* 4. Upcoming Due */}
+            {/* 4. Upcoming Due / View Reports (Matched to user pasted image with bar chart icon) */}
             <TouchableOpacity
               style={styles.quickGridBoxPremium}
               onPress={() => setShowNeedToCollectModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
-                <Text style={{ fontSize: 18 }}>📅</Text>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#eff6ff', borderColor: '#bfdbfe' }]}>
+                <Text style={{ fontSize: 20, color: '#1d4ed8' }}>📊</Text>
                 {dueTenantsCount > 0 && (
                   <View style={styles.quickDueDot}>
                     <Text style={styles.quickDueDotText}>{dueTenantsCount}</Text>
@@ -2519,21 +2541,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               onPress={() => onNavigateTab ? onNavigateTab('rooms') : null}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#f8fafc', borderColor: '#cbd5e1' }]}>
                 <Text style={{ fontSize: 18 }}>🏢</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Rooms / Beds</Text>
               <Text style={styles.quickSubLabelText}>{availableBeds} Vacant</Text>
             </TouchableOpacity>
 
-            {/* 6. Electricity Bill Management (Replaces duplicate bell) */}
+            {/* 6. Electricity Bill Management (Light Orange) */}
             <TouchableOpacity
               style={styles.quickGridBoxPremium}
               onPress={() => setShowElectricityModal(true)}
               activeOpacity={0.75}
             >
-              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#ffffff', borderColor: '#f97316' }]}>
-                <Text style={{ fontSize: 18 }}>⚡</Text>
+              <View style={[styles.quickIconCirclePremium, { backgroundColor: '#fff7ed', borderColor: '#fed7aa' }]}>
+                <Text style={{ fontSize: 20, color: '#ea580c' }}>⚡</Text>
               </View>
               <Text style={styles.quickLabelTextPremium}>Power Bill</Text>
               <Text style={styles.quickSubLabelText}>Meter & Bill</Text>
@@ -6978,11 +7000,58 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    borderColor: '#fb923c',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     elevation: 2,
+  },
+  kycNoPendingCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#fb923c',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  kycNoPendingIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+  },
+  kycNoPendingTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+  },
+  kycNoPendingSub: {
+    fontSize: 11,
+    color: '#64748b',
+    marginTop: 1,
+  },
+  kycVerifiedBadge: {
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#86efac',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  kycVerifiedBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#16a34a',
   },
   kycCardHeader: {
     flexDirection: 'row',

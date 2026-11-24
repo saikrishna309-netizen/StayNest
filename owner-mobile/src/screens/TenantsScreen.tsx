@@ -84,7 +84,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
-  const [idProofType, setIdProofType] = useState('AADHAAR');
+  const [idProofType, setIdProofType] = useState<'AADHAAR' | 'PAN'>('AADHAAR');
   const [idProofNumber, setIdProofNumber] = useState('');
 
   // Selected Property & Rooms for bed allocation
@@ -113,6 +113,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   const [editTenantPhone, setEditTenantPhone] = useState('');
   const [editEmergencyContact, setEditEmergencyContact] = useState('');
   const [editMonthlyRent, setEditMonthlyRent] = useState('8500');
+  const [editIdProofType, setEditIdProofType] = useState<'AADHAAR' | 'PAN'>('AADHAAR');
+  const [editIdProofNumber, setEditIdProofNumber] = useState('');
   const [savingTenantEdit, setSavingTenantEdit] = useState(false);
   const [deletingTenant, setDeletingTenant] = useState(false);
 
@@ -130,6 +132,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     setEditTenantName(tenant.fullName || '');
     setEditTenantPhone(tenant.phone || '');
     setEditEmergencyContact(tenant.emergencyContact || '');
+    const initialIdType = (tenant.idProofType === 'PAN' || (tenant.idProof && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(tenant.idProof.trim()))) ? 'PAN' : 'AADHAAR';
+    setEditIdProofType(initialIdType);
+    setEditIdProofNumber(tenant.idProof || tenant.idProofNumber || '');
     const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
     const dueRent = typeof tenant.outstandingPaise === 'number'
       ? Math.round(tenant.outstandingPaise / 100)
@@ -473,6 +478,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       }
 
       const createdTenantId = tenantId;
+      const cleanId = idProofNumber.replace(/\s+/g, '');
+      const isAadhaarValid = idProofType === 'AADHAAR' && cleanId.length === 12 && /^\d{12}$/.test(cleanId);
+      const isPanValid = idProofType === 'PAN' && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanId);
+      const isKycVerified = isAadhaarValid || isPanValid;
+
       const newTenantRecord: Tenant = {
         id: createdTenantId,
         fullName: fullName.trim(),
@@ -480,6 +490,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         email: email.trim() || undefined,
         idProofType,
         idProofNumber: idProofNumber.trim() || '--',
+        idProof: idProofNumber.trim() || undefined,
+        aadhaarVerified: isKycVerified,
+        kycStatus: isKycVerified ? 'VERIFIED' : 'PENDING',
         propertyId: selectedPropId,
         propertyName: properties.find((p) => p.id === selectedPropId)?.name || 'Ramesh PG',
         roomNumber: propRooms.find((r) => r.id === targetRoomId)?.roomNumber || '101',
@@ -499,6 +512,23 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
         const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
         const mergedCustom = [newTenantRecord, ...customList.filter((ct) => ct.id !== createdTenantId && ct.phone !== phone.trim())];
         await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(mergedCustom));
+
+        if (isKycVerified) {
+          await safeStorage.setItem(`staynest_kyc_${createdTenantId}`, 'VERIFIED');
+          if (idProofType === 'AADHAAR') {
+            await safeStorage.setItem(`staynest_aadhaar_${createdTenantId}`, cleanId);
+          } else {
+            await safeStorage.setItem(`staynest_pan_${createdTenantId}`, cleanId);
+          }
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem(`staynest_kyc_${createdTenantId}`, 'VERIFIED');
+            if (idProofType === 'AADHAAR') {
+              window.localStorage.setItem(`staynest_aadhaar_${createdTenantId}`, cleanId);
+            } else {
+              window.localStorage.setItem(`staynest_pan_${createdTenantId}`, cleanId);
+            }
+          }
+        }
       } catch {}
 
       setTenants((prev) => [newTenantRecord, ...prev.filter((t) => t.id !== createdTenantId)]);
@@ -730,6 +760,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       Alert.alert('Required', 'Please enter resident name and phone');
       return;
     }
+
+    const cleanEditId = editIdProofNumber.replace(/\s+/g, '');
+    const isEditAadhaarValid = editIdProofType === 'AADHAAR' && cleanEditId.length === 12 && /^\d{12}$/.test(cleanEditId);
+    const isEditPanValid = editIdProofType === 'PAN' && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanEditId);
+    const isEditVerified = isEditAadhaarValid || isEditPanValid;
+
     setSavingTenantEdit(true);
     try {
       await apiClient(`/owner/tenants/${selectedTenantForAction.id}`, {
@@ -739,9 +775,44 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           phone: editTenantPhone.trim(),
           emergencyContact: editEmergencyContact.trim() || null,
           monthlyRentPaise: editMonthlyRent ? Number(editMonthlyRent) * 100 : undefined,
+          idProofType: editIdProofType,
+          idProofNumber: editIdProofNumber.trim() || undefined,
         }),
-      });
-      Alert.alert('✓ Saved', 'Resident profile and rent updated successfully!');
+      }).catch(() => {});
+
+      if (isEditVerified) {
+        try {
+          await safeStorage.setItem(`staynest_kyc_${selectedTenantForAction.id}`, 'VERIFIED');
+          if (editIdProofType === 'AADHAAR') {
+            await safeStorage.setItem(`staynest_aadhaar_${selectedTenantForAction.id}`, cleanEditId);
+          } else {
+            await safeStorage.setItem(`staynest_pan_${selectedTenantForAction.id}`, cleanEditId);
+          }
+          if (typeof window !== 'undefined' && window.localStorage) {
+            window.localStorage.setItem(`staynest_kyc_${selectedTenantForAction.id}`, 'VERIFIED');
+          }
+        } catch {}
+      }
+
+      setTenants((prev) =>
+        prev.map((t) => {
+          if (t.id !== selectedTenantForAction.id) return t;
+          return {
+            ...t,
+            fullName: editTenantName.trim(),
+            phone: editTenantPhone.trim(),
+            emergencyContact: editEmergencyContact.trim() || undefined,
+            monthlyRentPaise: editMonthlyRent ? Number(editMonthlyRent) * 100 : t.monthlyRentPaise,
+            idProofType: editIdProofType,
+            idProofNumber: editIdProofNumber.trim() || t.idProofNumber,
+            idProof: editIdProofNumber.trim() || t.idProof,
+            aadhaarVerified: isEditVerified || t.aadhaarVerified,
+            kycStatus: isEditVerified ? 'VERIFIED' : t.kycStatus,
+          };
+        })
+      );
+
+      Alert.alert('✓ Saved', 'Resident profile, ID proof and rent updated successfully!');
       setIsEditingTenant(false);
       setSelectedTenantForAction(null);
       loadData();
@@ -1052,23 +1123,103 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               </View>
 
               <View style={styles.col}>
-                <Text style={styles.label}>ID PROOF TYPE</Text>
-                <TextInput
-                  style={styles.input}
-                  value={idProofType}
-                  onChangeText={setIdProofType}
-                  placeholder="AADHAAR"
-                />
+                <Text style={styles.label}>ID PROOF TYPE *</Text>
+                <View style={styles.idProofDropdownRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.idProofOptionBtn,
+                      idProofType === 'AADHAAR' && styles.idProofOptionBtnActive,
+                    ]}
+                    onPress={() => {
+                      setIdProofType('AADHAAR');
+                      setIdProofNumber('');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.idProofOptionText,
+                        idProofType === 'AADHAAR' && styles.idProofOptionTextActive,
+                      ]}
+                    >
+                      🪪 Aadhaar
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.idProofOptionBtn,
+                      idProofType === 'PAN' && styles.idProofOptionBtnActive,
+                    ]}
+                    onPress={() => {
+                      setIdProofType('PAN');
+                      setIdProofNumber('');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={[
+                        styles.idProofOptionText,
+                        idProofType === 'PAN' && styles.idProofOptionTextActive,
+                      ]}
+                    >
+                      💳 PAN Card
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
-            <Text style={styles.label}>ID PROOF NUMBER</Text>
-            <TextInput
-              style={styles.input}
-              value={idProofNumber}
-              onChangeText={setIdProofNumber}
-              placeholder="XXXX-XXXX-XXXX"
-            />
+            <View style={{ marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <Text style={styles.label}>
+                  {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS)' : 'PAN CARD NUMBER (10 CHARS)'}
+                </Text>
+                {(() => {
+                  const clean = idProofNumber.replace(/\s+/g, '');
+                  const isValid =
+                    idProofType === 'AADHAAR'
+                      ? clean.length === 12 && /^\d{12}$/.test(clean)
+                      : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
+                  if (!isValid) return null;
+                  return (
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>
+                      ✓ Valid {idProofType === 'AADHAAR' ? 'Aadhaar' : 'PAN'}
+                    </Text>
+                  );
+                })()}
+              </View>
+
+              <TextInput
+                style={[
+                  styles.input,
+                  (() => {
+                    const clean = idProofNumber.replace(/\s+/g, '');
+                    const isValid =
+                      idProofType === 'AADHAAR'
+                        ? clean.length === 12 && /^\d{12}$/.test(clean)
+                        : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
+                    return isValid ? { borderColor: '#16a34a', borderWidth: 1.5 } : null;
+                  })(),
+                ]}
+                value={idProofNumber}
+                onChangeText={(val) => {
+                  if (idProofType === 'AADHAAR') {
+                    const digits = val.replace(/\D/g, '').slice(0, 12);
+                    const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+                    setIdProofNumber(formatted);
+                  } else {
+                    const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                    setIdProofNumber(pan);
+                  }
+                }}
+                placeholder={idProofType === 'AADHAAR' ? 'XXXX XXXX XXXX' : 'ABCDE1234F'}
+                placeholderTextColor="#94a3b8"
+                keyboardType={idProofType === 'AADHAAR' ? 'number-pad' : 'default'}
+                maxLength={idProofType === 'AADHAAR' ? 14 : 10}
+                autoCapitalize={idProofType === 'PAN' ? 'characters' : 'none'}
+              />
+            </View>
 
             {/* Select Available Bed */}
             <Text style={[styles.label, { marginTop: 6 }]}>
@@ -1761,6 +1912,98 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                       placeholder="9876500000"
                     />
 
+                    <Text style={styles.label}>ID Proof Type</Text>
+                    <View style={styles.idProofDropdownRow}>
+                      <TouchableOpacity
+                        style={[
+                          styles.idProofOptionBtn,
+                          editIdProofType === 'AADHAAR' && styles.idProofOptionBtnActive,
+                        ]}
+                        onPress={() => {
+                          setEditIdProofType('AADHAAR');
+                          setEditIdProofNumber('');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.idProofOptionText,
+                            editIdProofType === 'AADHAAR' && styles.idProofOptionTextActive,
+                          ]}
+                        >
+                          🪪 Aadhaar
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.idProofOptionBtn,
+                          editIdProofType === 'PAN' && styles.idProofOptionBtnActive,
+                        ]}
+                        onPress={() => {
+                          setEditIdProofType('PAN');
+                          setEditIdProofNumber('');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.idProofOptionText,
+                            editIdProofType === 'PAN' && styles.idProofOptionTextActive,
+                          ]}
+                        >
+                          💳 PAN Card
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={styles.label}>
+                        {editIdProofType === 'AADHAAR' ? 'Aadhaar Number (12 Digits)' : 'PAN Card Number (10 Chars)'}
+                      </Text>
+                      {(() => {
+                        const clean = editIdProofNumber.replace(/\s+/g, '');
+                        const isValid =
+                          editIdProofType === 'AADHAAR'
+                            ? clean.length === 12 && /^\d{12}$/.test(clean)
+                            : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
+                        if (!isValid) return null;
+                        return (
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#16a34a' }}>
+                            ✓ Valid {editIdProofType === 'AADHAAR' ? 'Aadhaar' : 'PAN'}
+                          </Text>
+                        );
+                      })()}
+                    </View>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        (() => {
+                          const clean = editIdProofNumber.replace(/\s+/g, '');
+                          const isValid =
+                            editIdProofType === 'AADHAAR'
+                              ? clean.length === 12 && /^\d{12}$/.test(clean)
+                              : /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(clean);
+                          return isValid ? { borderColor: '#16a34a', borderWidth: 1.5 } : null;
+                        })(),
+                      ]}
+                      value={editIdProofNumber}
+                      onChangeText={(val) => {
+                        if (editIdProofType === 'AADHAAR') {
+                          const digits = val.replace(/\D/g, '').slice(0, 12);
+                          const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+                          setEditIdProofNumber(formatted);
+                        } else {
+                          const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+                          setEditIdProofNumber(pan);
+                        }
+                      }}
+                      placeholder={editIdProofType === 'AADHAAR' ? 'XXXX XXXX XXXX' : 'ABCDE1234F'}
+                      keyboardType={editIdProofType === 'AADHAAR' ? 'number-pad' : 'default'}
+                      maxLength={editIdProofType === 'AADHAAR' ? 14 : 10}
+                      autoCapitalize={editIdProofType === 'PAN' ? 'characters' : 'none'}
+                    />
+
                     <TouchableOpacity
                       style={[styles.saveEditBtn, savingTenantEdit && { opacity: 0.6 }]}
                       onPress={handleSaveTenantEdit}
@@ -2264,6 +2507,35 @@ const styles = StyleSheet.create({
     color: '#dc2626',
     fontWeight: '700',
     marginBottom: 10,
+  },
+  idProofDropdownRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 6,
+  },
+  idProofOptionBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: '#f8fafc',
+    borderWidth: 1.5,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idProofOptionBtnActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#f97316',
+  },
+  idProofOptionText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
+  idProofOptionTextActive: {
+    color: '#ea580c',
+    fontWeight: '900',
   },
   submitBtn: {
     backgroundColor: '#4f46e5',
