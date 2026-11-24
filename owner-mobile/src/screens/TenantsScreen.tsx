@@ -45,17 +45,10 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DUE' | 'ACTIVE' | 'VACATED'>('ALL');
-  const [propertyFilter, setPropertyFilter] = useState<string>(() => {
-    if (selectedPropertyId) return selectedPropertyId;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage.getItem('staynest_active_property_id') || 'prop-pg-1';
-    }
-    return 'prop-pg-1';
-  });
+  const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
 
   useEffect(() => {
     if (selectedPropertyId) {
-      setPropertyFilter(selectedPropertyId);
       setSelectedPropId(selectedPropertyId);
       loadRoomsForProperty(selectedPropertyId);
     }
@@ -213,19 +206,19 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       setProperties(combinedProps);
 
       const multiPgTenants: Tenant[] = [
-        // PG 1 (StayNest Elite Men's PG - 6 active tenants)
-        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', propertyName: 'StayNest Elite Men\'s PG', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', propertyName: 'StayNest Elite Men\'s PG', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
-        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', propertyName: 'StayNest Elite Men\'s PG', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', propertyName: 'StayNest Elite Men\'s PG', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', propertyName: 'StayNest Elite Men\'s PG', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
-        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', propertyName: 'StayNest Elite Men\'s PG', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-
-        // PG 2 (Sai Durga Executive Ladies PG - 4 active tenants)
+        // PG 2 (Sai Durga Executive Ladies PG - Sneha Reddy & Ananya Roy first, matching reference screen)
         { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
         { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000 },
         { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 950000, outstandingPaise: 0 },
         { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
+
+        // PG 1 (StayNest Elite Men's PG - 6 active tenants)
+        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
+        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
+        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
+        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
+        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
+        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
       ];
       const existingPhones = new Set(loadedTenants.map((t) => t.phone));
       const existingIds = new Set(loadedTenants.map((t) => t.id));
@@ -1518,7 +1511,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           />
         }
       >
-        {/* ─── Month Filter Bar & Executive Summary (Requirements 6 & 7) ─── */}
+        {/* ─── Month Filter Bar & Executive Summary ─── */}
         <View style={styles.monthHeaderBar}>
           <TouchableOpacity
             style={styles.monthDropdownBtn}
@@ -1542,7 +1535,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
 
         {/* ─── Month Financial Executive Summary ─── */}
         <View style={styles.monthSummaryCard}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <View style={styles.monthSummaryHeader}>
             <Text style={styles.monthSummaryTitle}>
               {selectedMonthOption.label} Collection
             </Text>
@@ -1553,20 +1546,32 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
             </View>
           </View>
 
+          {/* Collection Progress Bar */}
+          <View style={styles.collectionProgressBg}>
+            <View
+              style={[
+                styles.collectionProgressFill,
+                { width: `${Math.min(100, Math.max(0, monthCollectionRate))}%` },
+              ]}
+            />
+          </View>
+
           <View style={styles.monthSummaryGrid}>
             <View style={styles.monthSummaryItem}>
               <Text style={styles.monthSummarySub}>EXPECTED</Text>
               <Text style={styles.monthSummaryVal}>₹{monthExpectedRent.toLocaleString('en-IN')}</Text>
             </View>
+            <View style={styles.summaryVerticalDivider} />
             <View style={styles.monthSummaryItem}>
               <Text style={styles.monthSummarySub}>COLLECTED</Text>
-              <Text style={[styles.monthSummaryVal, { color: '#16a34a' }]}>
+              <Text style={styles.monthSummaryVal}>
                 ₹{monthCollectedRent.toLocaleString('en-IN')}
               </Text>
             </View>
+            <View style={styles.summaryVerticalDivider} />
             <View style={styles.monthSummaryItem}>
               <Text style={styles.monthSummarySub}>PENDING DUE</Text>
-              <Text style={[styles.monthSummaryVal, { color: '#dc2626' }]}>
+              <Text style={styles.monthSummaryVal}>
                 ₹{monthPendingDue.toLocaleString('en-IN')}
               </Text>
             </View>
@@ -1578,6 +1583,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           <TextInput
             style={styles.searchInput}
             placeholder="🔍 Search resident by name, phone or room..."
+            placeholderTextColor="#9ca3af"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />
@@ -1599,12 +1605,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               tab === 'ALL'
                 ? `All (${count})`
                 : tab === 'DUE'
-                  ? `🔴 Rent Due (${count})`
+                  ? `Rent Due (${count})`
                   : tab === 'ACTIVE'
                     ? `Active (${count})`
                     : `Vacated (${count})`;
 
-            const isDueTab = tab === 'DUE';
             const isActiveTab = statusFilter === tab;
 
             return (
@@ -1612,16 +1617,15 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                 key={tab}
                 style={[
                   styles.statusFilterBtn,
-                  isActiveTab && styles.statusFilterBtnActive,
-                  isDueTab && isActiveTab && { backgroundColor: '#fee2e2', borderColor: '#fca5a5' },
+                  isActiveTab ? styles.statusFilterBtnActive : styles.statusFilterBtnInactive,
                 ]}
                 onPress={() => setStatusFilter(tab)}
+                activeOpacity={0.8}
               >
                 <Text
                   style={[
                     styles.statusFilterText,
-                    isActiveTab && styles.statusFilterTextActive,
-                    isDueTab && isActiveTab && { color: '#dc2626' },
+                    isActiveTab ? styles.statusFilterTextActive : styles.statusFilterTextInactive,
                   ]}
                 >
                   {label}
@@ -1633,7 +1637,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
 
         {/* List of Tenants */}
         {loading ? (
-          <ActivityIndicator color="#4f46e5" style={{ marginVertical: 40 }} />
+          <ActivityIndicator color="#ea580c" style={{ marginVertical: 40 }} />
         ) : filteredTenants.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={{ fontSize: 26, marginBottom: 8 }}>📋</Text>
@@ -1654,9 +1658,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               ? Math.round(t.outstandingPaise / 100)
               : (t.rentStatus === 'PAID' ? 0 : totalRent);
             const paidRent = Math.max(0, totalRent - dueRent);
-            const isPartial = dueRent > 0 && paidRent > 0;
             const isPaidFull = dueRent === 0;
-            const paidPercent = totalRent > 0 ? Math.min(100, Math.round((paidRent / totalRent) * 100)) : (isPaidFull ? 100 : 0);
 
             const initials = t.fullName
               ? t.fullName.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
@@ -1669,45 +1671,58 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                 onPress={() => handleOpenTenantModal(t)}
                 activeOpacity={0.85}
               >
+                {/* Zone 1: Header with Avatar, Name, Phone, and Status Pill */}
                 <View style={styles.tenantHeader}>
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{initials}</Text>
                   </View>
 
                   <View style={{ flex: 1, marginLeft: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.tenantName}>{t.fullName}</Text>
-                      <Text style={{ fontSize: 11, color: '#4f46e5' }}>✏️</Text>
+                    <Text style={styles.tenantName}>{t.fullName}</Text>
+                    <View style={styles.phoneRow}>
+                      <Text style={{ fontSize: 13, marginRight: 4 }}>📱</Text>
+                      <Text style={styles.tenantPhone}>{t.phone}</Text>
                     </View>
-                    <Text style={styles.tenantPhone}>📱 {t.phone}</Text>
                   </View>
 
                   <View
                     style={[
-                      styles.activeBadge,
-                      { backgroundColor: isAct ? (isPaidFull ? '#ecfdf5' : isPartial ? '#fffbeb' : '#fef2f2') : '#f1f5f9' },
+                      styles.statusPill,
+                      isAct
+                        ? (isPaidFull ? styles.statusPillPaid : styles.statusPillDue)
+                        : styles.statusPillVacated,
                     ]}
                   >
                     <Text
                       style={[
-                        styles.activeBadgeText,
-                        { color: isAct ? (isPaidFull ? '#059669' : isPartial ? '#b45309' : '#dc2626') : '#64748b' },
+                        styles.statusPillText,
+                        isAct
+                          ? (isPaidFull ? styles.statusPillTextPaid : styles.statusPillTextDue)
+                          : styles.statusPillTextVacated,
                       ]}
                     >
-                      {isAct ? (isPaidFull ? '🟢 PAID' : isPartial ? '🟠 PARTIAL' : '🔴 DUE') : 'VACATED'}
+                      {isAct ? (isPaidFull ? 'PAID' : 'DUE') : 'VACATED'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Stay and Room Info */}
-                <View style={styles.detailGrid}>
-                  <View style={styles.detailItem}>
-                    <Text style={styles.metaLabel}>PROPERTY</Text>
-                    <Text style={styles.metaVal}>{t.propertyName || 'Ramesh PG'}</Text>
+                {/* Zone 2: Two-column metadata row for Property and Room/Bed */}
+                <View style={styles.metaRow}>
+                  <View style={styles.metaCol}>
+                    <View style={styles.metaLabelRow}>
+                      <Text style={styles.metaLabel}>PROPERTY</Text>
+                      <Text style={{ fontSize: 11, marginLeft: 4 }}>🏠</Text>
+                    </View>
+                    <Text style={styles.metaVal} numberOfLines={1}>
+                      {t.propertyName || 'Sai Durga Executive Ladies PG'}
+                    </Text>
                   </View>
 
-                  <View style={styles.detailItem}>
-                    <Text style={styles.metaLabel}>ROOM & BED</Text>
+                  <View style={styles.metaCol}>
+                    <View style={styles.metaLabelRow}>
+                      <Text style={styles.metaLabel}>ROOM & BED</Text>
+                      <Text style={{ fontSize: 11, marginLeft: 4 }}>🛏️</Text>
+                    </View>
                     <Text style={styles.metaVal}>
                       {isAct
                         ? `Room ${t.roomNumber || '101'} • ${t.bedLabel || 'Bed 1'}`
@@ -1716,97 +1731,68 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                   </View>
                 </View>
 
-                {/* ─── RENT FINANCIAL BREAKDOWN (TOTAL, PAID & DUE) ─── */}
-                <View style={styles.rentFinancialBox}>
-                  <View style={styles.rentFinRow}>
-                    <View style={styles.rentFinCol}>
-                      <Text style={styles.rentFinLabel}>TOTAL RENT</Text>
-                      <Text style={styles.rentFinValTotal}>₹{totalRent.toLocaleString('en-IN')}</Text>
+                {/* Zone 3: Inset tinted financial summary box (#F9FAFB) */}
+                <View style={styles.financialInsetBox}>
+                  <View style={styles.financialGrid}>
+                    <View style={styles.financialCol}>
+                      <Text style={styles.financialLabel}>TOTAL RENT</Text>
+                      <Text style={styles.financialVal}>₹{totalRent.toLocaleString('en-IN')}</Text>
                     </View>
-
-                    <View style={styles.rentFinCol}>
-                      <Text style={styles.rentFinLabel}>PAID</Text>
-                      <Text style={styles.rentFinValPaid}>₹{paidRent.toLocaleString('en-IN')}</Text>
+                    <View style={styles.financialDivider} />
+                    <View style={styles.financialCol}>
+                      <Text style={styles.financialLabel}>PAID</Text>
+                      <Text style={styles.financialVal}>₹{paidRent.toLocaleString('en-IN')}</Text>
                     </View>
-
-                    <View style={styles.rentFinCol}>
-                      <Text style={styles.rentFinLabel}>DUE PENDING</Text>
-                      <Text style={[styles.rentFinValDue, { color: isPaidFull ? '#059669' : '#dc2626' }]}>
+                    <View style={styles.financialDivider} />
+                    <View style={styles.financialCol}>
+                      <Text style={styles.financialLabel}>DUE PENDING</Text>
+                      <Text
+                        style={[
+                          styles.financialVal,
+                          dueRent > 0 && { color: '#ea580c' },
+                        ]}
+                      >
                         {isPaidFull ? '₹0 (Clear)' : `₹${dueRent.toLocaleString('en-IN')}`}
                       </Text>
                     </View>
                   </View>
 
-                  {/* Visual Progress Bar */}
-                  <View style={styles.rentProgressBarBg}>
-                    <View
-                      style={[
-                        styles.rentProgressBarFill,
-                        {
-                          width: `${paidPercent}%`,
-                          backgroundColor: isPaidFull ? '#10b981' : isPartial ? '#f59e0b' : '#ef4444',
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  <View style={styles.rentProgressSubRow}>
-                    <Text style={styles.rentProgressSubText}>
-                      {isPaidFull
-                        ? '✓ Fully Paid'
-                        : isPartial
-                          ? `Paid ${paidPercent}% • ₹${dueRent.toLocaleString('en-IN')} due`
-                          : `0% Paid • ₹${dueRent.toLocaleString('en-IN')} pending`}
-                    </Text>
-
-                    {dueRent > 0 && (
-                      <View style={[styles.dueAlertMiniTag, { backgroundColor: isPartial ? '#fef3c7' : '#fee2e2' }]}>
-                        <Text style={[styles.dueAlertMiniTagText, { color: isPartial ? '#b45309' : '#dc2626' }]}>
-                          {isPartial ? 'PARTIAL' : 'PENDING'}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+                  {isPaidFull && (
+                    <View style={styles.fullyPaidBadge}>
+                      <Text style={styles.fullyPaidBadgeText}>✓ Fully Paid</Text>
+                    </View>
+                  )}
                 </View>
 
-                {/* Footer with Payment, Reminder and Checkout actions */}
-                <View style={styles.tenantFooter}>
-                  <Text style={styles.idText}>
-                    {t.idProofType || 'AADHAAR'}: {t.idProofNumber || '--'}
+                {/* Zone 4: Refined Action Row */}
+                <View style={styles.actionRow}>
+                  <Text style={styles.aadhaarText}>
+                    AADHAAR: {t.idProofNumber || '--'}
                   </Text>
 
                   {isAct && (
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      {dueRent > 0 && (
-                        <TouchableOpacity
-                          style={styles.cardActionBtnPayDue}
-                          onPress={(e: any) => {
-                            e?.stopPropagation?.();
-                            handleOpenTenantModal(t);
-                          }}
-                        >
-                          <Text style={styles.cardActionBtnPayDueText}>💰 Pay ₹{dueRent.toLocaleString('en-IN')}</Text>
-                        </TouchableOpacity>
-                      )}
-
+                    <View style={styles.actionBtnsGroup}>
                       <TouchableOpacity
-                        style={[styles.cardActionBtnRemind, { backgroundColor: '#25D366' }]}
+                        style={styles.whatsAppBtn}
                         onPress={(e: any) => {
                           e?.stopPropagation?.();
                           handleDirectWhatsAppReminder(t);
                         }}
+                        activeOpacity={0.8}
                       >
-                        <Text style={[styles.cardActionBtnRemindText, { color: '#ffffff' }]}>💬 WhatsApp</Text>
+                        <Text style={{ fontSize: 12, marginRight: 4 }}>💬</Text>
+                        <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.cardCheckoutBtn}
+                        style={styles.exitBtn}
                         onPress={(e: any) => {
                           e?.stopPropagation?.();
                           handleCheckout(t);
                         }}
+                        activeOpacity={0.8}
                       >
-                        <Text style={styles.cardCheckoutText}>Exit</Text>
+                        <Text style={styles.exitBtnText}>Exit</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -2300,10 +2286,10 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f6f4ee',
+    backgroundColor: '#faf8f6',
   },
   header: {
-    backgroundColor: '#fdfcf9',
+    backgroundColor: '#faf8f6',
     paddingTop: 50,
     paddingBottom: 14,
     paddingHorizontal: 16,
@@ -2311,26 +2297,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#e8dec8',
+    borderBottomColor: '#efece9',
   },
   backBtn: {
-    padding: 6,
+    paddingVertical: 6,
+    paddingRight: 6,
   },
   backBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#4f46e5',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#111827',
   },
   headerTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
   },
   addBtn: {
-    backgroundColor: '#4f46e5',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    backgroundColor: '#ea580c',
+    paddingVertical: 7,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   addBtnText: {
     color: '#ffffff',
@@ -2352,99 +2343,118 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
-    paddingVertical: 7,
+    paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 12,
     gap: 6,
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
     shadowColor: '#000',
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.03,
     shadowRadius: 3,
     elevation: 1,
   },
   monthDropdownText: {
-    color: '#0f172a',
-    fontSize: 12,
-    fontWeight: '800',
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '700',
   },
   monthDropdownArrow: {
-    color: '#64748b',
+    color: '#6b7280',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   exportReportBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#6c5ce7',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 12,
-    gap: 5,
-    shadowColor: '#6c5ce7',
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
   },
   exportReportBtnText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '800',
+    color: '#111827',
+    fontSize: 13,
+    fontWeight: '700',
   },
   monthSummaryCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 14,
-    padding: 14,
+    borderRadius: 18,
+    padding: 16,
     marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: '#f97316',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 2,
   },
+  monthSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
   monthSummaryTitle: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#111827',
   },
   monthSummaryBadge: {
-    backgroundColor: '#ecfdf5',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#a7f3d0',
+    backgroundColor: '#ffedd5',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   monthSummaryBadgeText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#059669',
+    color: '#ea580c',
+  },
+  collectionProgressBg: {
+    height: 6,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 3,
+    marginVertical: 12,
+    overflow: 'hidden',
+  },
+  collectionProgressFill: {
+    height: '100%',
+    backgroundColor: '#ea580c',
+    borderRadius: 3,
   },
   monthSummaryGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 10,
-    marginTop: 4,
+    alignItems: 'center',
   },
   monthSummaryItem: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     flex: 1,
   },
+  summaryVerticalDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 8,
+  },
   monthSummarySub: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#64748b',
-    textTransform: 'uppercase',
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6b7280',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   monthSummaryVal: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
   },
   monthPickerItem: {
     flexDirection: 'row',
@@ -2506,41 +2516,48 @@ const styles = StyleSheet.create({
   searchInput: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
+    borderColor: '#e5e7eb',
+    borderRadius: 14,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     fontSize: 13,
-    color: '#0f172a',
+    color: '#111827',
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
   },
   statusFilterRow: {
     flexDirection: 'row',
-    backgroundColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 3,
     marginBottom: 16,
+    gap: 8,
   },
   statusFilterBtn: {
     flex: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 8,
+    justifyContent: 'center',
+    borderRadius: 12,
   },
   statusFilterBtnActive: {
+    backgroundColor: '#ea580c',
+    borderWidth: 1,
+    borderColor: '#ea580c',
+  },
+  statusFilterBtnInactive: {
     backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
   },
   statusFilterText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#64748b',
   },
   statusFilterTextActive: {
-    color: '#4f46e5',
+    color: '#ffffff',
     fontWeight: '800',
+  },
+  statusFilterTextInactive: {
+    color: '#374151',
   },
   formCard: {
     backgroundColor: '#ffffff',
@@ -2793,43 +2810,196 @@ const styles = StyleSheet.create({
   tenantCard: {
     backgroundColor: '#ffffff',
     padding: 16,
-    borderRadius: 14,
-    marginBottom: 12,
-    borderWidth: 1.5,
-    borderColor: '#f97316',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
+    borderRadius: 18,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
     elevation: 2,
   },
   tenantHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#6366f1',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#ffffff',
+    borderWidth: 2,
+    borderColor: '#ea580c',
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
     fontSize: 14,
-    fontWeight: '900',
-    color: '#ffffff',
+    fontWeight: '800',
+    color: '#ea580c',
   },
   tenantName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#111827',
+  },
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
   },
   tenantPhone: {
     fontSize: 12,
+    fontWeight: '600',
+    color: '#4b5563',
+  },
+  statusPill: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  statusPillPaid: {
+    backgroundColor: '#ecfdf5',
+  },
+  statusPillDue: {
+    backgroundColor: '#fee2e2',
+  },
+  statusPillVacated: {
+    backgroundColor: '#f1f5f9',
+  },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  statusPillTextPaid: {
+    color: '#059669',
+  },
+  statusPillTextDue: {
+    color: '#dc2626',
+  },
+  statusPillTextVacated: {
     color: '#64748b',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 10,
+    marginBottom: 12,
+  },
+  metaCol: {
+    flex: 1,
+  },
+  metaLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  metaLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6b7280',
+    letterSpacing: 0.5,
+  },
+  metaVal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 3,
+  },
+  financialInsetBox: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#f3f4f6',
+    padding: 12,
+  },
+  financialGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  financialCol: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  financialDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: '#e5e7eb',
+    marginHorizontal: 8,
+  },
+  financialLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#6b7280',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  financialVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
     marginTop: 2,
   },
+  fullyPaidBadge: {
+    backgroundColor: '#dcfce7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  fullyPaidBadgeText: {
+    color: '#16a34a',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  aadhaarText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6b7280',
+    letterSpacing: 0.5,
+  },
+  actionBtnsGroup: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  whatsAppBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e293b',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    gap: 4,
+  },
+  whatsAppBtnText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  exitBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  exitBtnText: {
+    color: '#dc2626',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  // Legacy aliases
   activeBadge: {
     paddingVertical: 3,
     paddingHorizontal: 8,
@@ -2850,18 +3020,6 @@ const styles = StyleSheet.create({
   },
   detailItem: {
     width: '48%',
-  },
-  metaLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#94a3b8',
-    letterSpacing: 0.5,
-  },
-  metaVal: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1e293b',
-    marginTop: 1,
   },
   tenantFooter: {
     flexDirection: 'row',
