@@ -15,14 +15,14 @@ import {
 import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
-  const { sendOtp, verifyOtp, login } = useAuth();
+  const { sendOtp, verifyOtp, login, loginDummy } = useAuth();
 
   // Authentication mode: 'PHONE_OTP' | 'PASSWORD'
   const [authMode, setAuthMode] = useState<'PHONE_OTP' | 'PASSWORD'>('PHONE_OTP');
 
-  // Phone + OTP State
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  // Phone + OTP State (Defaulted to testing number for fast local checks)
+  const [phone, setPhone] = useState('9876543210');
+  const [otp, setOtp] = useState('123456');
   const [lastOtp, setLastOtp] = useState('123456');
   const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
   const [timer, setTimer] = useState(30);
@@ -61,7 +61,7 @@ export const LoginScreen: React.FC = () => {
     try {
       const res = await sendOtp(cleanPhone);
       setStep('OTP');
-      setOtp('');
+      setOtp(res.demoOtp || '123456');
       if (res.demoOtp) {
         setLastOtp(res.demoOtp);
       }
@@ -70,7 +70,7 @@ export const LoginScreen: React.FC = () => {
       setInfoMessage(res.message || `Verification code sent to +91 ${cleanPhone}`);
     } catch (err: any) {
       setStep('OTP');
-      setOtp('');
+      setOtp('123456');
       setTimer(30);
       setTimerActive(true);
       setInfoMessage(`Verification code sent to +91 ${cleanPhone}`);
@@ -143,6 +143,47 @@ export const LoginScreen: React.FC = () => {
               <Text style={styles.infoBannerText}>✓ {infoMessage}</Text>
             </View>
           )}
+
+          {/* ─── DUMMY LOGIN FOR LOCAL TESTING (USER REQUIREMENT) ─── */}
+          <View style={styles.dummyTestingCard}>
+            <View style={styles.dummyHeaderRow}>
+              <Text style={{ fontSize: 16 }}>⚡</Text>
+              <Text style={styles.dummyTitle}>Local Testing & Checking</Text>
+              <View style={styles.dummyTag}>
+                <Text style={styles.dummyTagText}>DEMO</Text>
+              </View>
+            </View>
+            <Text style={styles.dummySubtitle}>
+              Tap below to bypass OTP and sign in immediately as PG Owner:
+            </Text>
+
+            <TouchableOpacity
+              style={styles.instantDummyBtn}
+              onPress={() => loginDummy('9876543210', 'Ramesh Kumar')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.instantDummyBtnText}>
+                🚀 1-Click Instant Login (PG Owner)
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.dummyQuickRow}>
+              <TouchableOpacity
+                style={styles.dummyMiniPill}
+                onPress={() => loginDummy('9876543210', 'Ramesh Kumar')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.dummyMiniPillText}>🏢 Elite Men's PG</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.dummyMiniPill}
+                onPress={() => loginDummy('9876543220', 'Sai Durga PG')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.dummyMiniPillText}>🏢 Sai Durga Ladies PG</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* PHONE + OTP MODE */}
           {authMode === 'PHONE_OTP' && (
@@ -560,5 +601,83 @@ const styles = StyleSheet.create({
     height: 100,
     alignSelf: 'center',
     marginBottom: 8,
+  },
+  // Dummy Testing Card Styles
+  dummyTestingCard: {
+    backgroundColor: '#fff7ed',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: '#fb923c',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  dummyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  dummyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#9a3412',
+    flex: 1,
+  },
+  dummyTag: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  dummyTagText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#ffffff',
+  },
+  dummySubtitle: {
+    fontSize: 11,
+    color: '#7c2d12',
+    marginBottom: 10,
+    lineHeight: 15,
+  },
+  instantDummyBtn: {
+    backgroundColor: '#ea580c',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  instantDummyBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dummyQuickRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dummyMiniPill: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#fdba74',
+  },
+  dummyMiniPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#c2410c',
   },
 });
