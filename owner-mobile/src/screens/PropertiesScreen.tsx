@@ -21,6 +21,7 @@ import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
+import { logActivity } from '../services/activityLogService';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
@@ -725,6 +726,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           ...existingCustom.filter((c) => c.id !== fullTenant.id && c.phone !== fullTenant.phone),
         ];
         await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(nextCustom));
+        await logActivity({
+          propertyId: activeProperty?.id,
+          type: 'BED_ASSIGNED',
+          title: `${fullTenant.fullName} assigned to ${isRentalMode ? 'Flat' : 'Room'} ${assigningBed.roomNumber}`,
+          subtitle: `${isRentalMode ? 'Unit' : assigningBed.bedLabel}${isAadhaarVerified ? ' • Aadhaar Verified' : ''}`,
+          amountRupees: payingNow > 0 ? payingNow : undefined,
+        });
       } catch {}
 
       const updatedFloors = floors.map((f) => {

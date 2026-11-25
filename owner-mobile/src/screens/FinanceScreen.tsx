@@ -15,6 +15,7 @@ import {
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { apiClient } from '../api/client';
 import { safeStorage } from '../utils/safeStorage';
+import { logActivity } from '../services/activityLogService';
 import { RentInvoice, Expense, Property, Tenant } from '../types';
 import {
   computeCollectionMetrics,
@@ -315,6 +316,13 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem('staynest_cached_expenses', JSON.stringify(updated));
       }
+      await logActivity({
+        propertyId: propId,
+        type: 'EXPENSE_LOGGED',
+        title: title.trim(),
+        subtitle: category.toUpperCase(),
+        amountRupees: parsedAmount,
+      });
 
       Alert.alert('✓ Expense Recorded', `₹${parsedAmount.toLocaleString('en-IN')} logged under ${category}.`);
       setTitle('');

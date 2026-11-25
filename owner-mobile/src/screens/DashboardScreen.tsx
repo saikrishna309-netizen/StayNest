@@ -39,6 +39,13 @@ import {
   computeMonthlyInvoiceTotal,
   FixedMonthlyBill,
 } from '../services/financeSummaryService';
+import {
+  ActivityLogItem,
+  buildRecentActivities,
+  formatActivityTime,
+  getLoggedActivities,
+  logActivity,
+} from '../services/activityLogService';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) => (
@@ -75,6 +82,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [fixedBills, setFixedBills] = useState<FixedMonthlyBill[]>([]);
+  const [loggedActivities, setLoggedActivities] = useState<ActivityLogItem[]>([]);
+  const [backendActivities, setBackendActivities] = useState<ActivityLogItem[]>([]);
 
   // Detailed room structure per property for live occupancy calculation
   const [propertyRoomsMap, setPropertyRoomsMap] = useState<Record<string, Room[]>>({});
@@ -880,12 +889,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleSync = () => loadEnquiries();
+      const handleActivitySync = () => {
+        getLoggedActivities().then(setLoggedActivities).catch(() => {});
+      };
       window.addEventListener('staynest_new_enquiry', handleSync);
       window.addEventListener('staynest_enquiry_updated', handleSync);
+      window.addEventListener('staynest_activity_added', handleActivitySync);
+      window.addEventListener('staynest_expense_added', () => loadData(true));
       window.addEventListener('storage', handleSync);
       return () => {
         window.removeEventListener('staynest_new_enquiry', handleSync);
         window.removeEventListener('staynest_enquiry_updated', handleSync);
+        window.removeEventListener('staynest_activity_added', handleActivitySync);
         window.removeEventListener('storage', handleSync);
       };
     }
@@ -896,12 +911,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
     try {
       // Parallel batch fetching for maximum speed (Fast Data Cache)
-      const [pRes, tRes, invRes, expRes] = await Promise.all([
+      const [pRes, tRes, invRes, expRes, localActs, apiActs] = await Promise.all([
         fastDataCache.getProperties(),
         fastDataCache.getTenants(),
         fastDataCache.getInvoices(),
         fastDataCache.getExpenses(),
+        getLoggedActivities(),
+        apiClient<ActivityLogItem[]>('/owner/activities?limit=10').catch(() => []),
       ]);
+      setLoggedActivities(localActs);
+      if (Array.isArray(apiActs)) {
+        setBackendActivities(apiActs);
+      }
 
       // Multi-PG Setup: Two distinct PGs with completely different names (Requirements 1, 2)
       const defaultMultiPgs: Property[] = [
@@ -1650,6 +1671,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         }),
       });
 
+      await logActivity({
+        propertyId: selectedTenantForAction.propertyId || selectedPropId,
+        type: 'RENT_PAID',
+        title: `Rent received from ${selectedTenantForAction.fullName}`,
+        subtitle: `${selectedTenantForAction.roomNumber ? `Room ${selectedTenantForAction.roomNumber} • ` : ''}${manualPayMode}`,
+        amountRupees: Number(manualPayAmount || 8500),
+      });
+
       Alert.alert(
         '✓ Payment Recorded!',
         `Successfully recorded ₹${Number(manualPayAmount).toLocaleString('en-IN')} via ${manualPayMode} for ${selectedTenantForAction.fullName}.`
@@ -1657,6 +1686,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setSelectedTenantForAction(null);
       loadData();
     } catch {
+      await logActivity({
+        propertyId: selectedTenantForAction.propertyId || selectedPropId,
+        type: 'RENT_PAID',
+        title: `Rent received from ${selectedTenantForAction.fullName}`,
+        subtitle: `${selectedTenantForAction.roomNumber ? `Room ${selectedTenantForAction.roomNumber} • ` : ''}${manualPayMode}`,
+        amountRupees: Number(manualPayAmount || 8500),
+      });
       // Local fallback mark paid
       Alert.alert(
         '✓ Payment Recorded!',
@@ -1971,6 +2007,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
         const mergedCustom = [fullNewTenant, ...customList.filter((ct) => ct.id !== newTenant.id && ct.phone !== onboardPhone.trim())];
         await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(mergedCustom));
+        await logActivity({
+          propertyId: selectedPropId,
+          type: 'TENANT_ADDED',
+          title: `${onboardFullName.trim()} onboarded`,
+          subtitle: `Room ${fullNewTenant.roomNumber || '101'} (${fullNewTenant.bedLabel || 'Bed 1'})`,
+          amountRupees: rentPayingNow > 0 ? rentPayingNow : undefined,
+        });
       } catch {}
 
       const alertMsg = rentDue > 0
@@ -3017,6 +3060,101 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             })}
           </View>
         )}
+
+        {/* ─── 4B. RECENT ACTIVITIES (LAST 5 ACTIVITIES FOR SELECTED PROPERTY) ─── */}
+        {(() => {
+          const recentActivities = buildRecentActivities({
+            propertyId: selectedPropId,
+            defaultPropertyId: properties[0]?.id,
+            tenants,
+            invoices,
+            expenses,
+            loggedActivities,
+            backendActivities,
+            limit: 5,
+          });
+
+          const getActivityBadge = (type: ActivityLogItem['type']) => {
+            switch (type) {
+              case 'RENT_PAID':
+                return { icon: '💰', bg: '#ecfdf5', color: '#15803d', sign: '+' };
+              case 'EXPENSE_LOGGED':
+                return { icon: '🧾', bg: '#fff7ed', color: '#ea580c', sign: '-' };
+              case 'TENANT_ADDED':
+              case 'BED_ASSIGNED':
+                return { icon: '🛏️', bg: '#eff6ff', color: '#2563eb', sign: '' };
+              case 'ISSUE_LOGGED':
+                return { icon: '🔧', bg: '#fef2f2', color: '#dc2626', sign: '' };
+              case 'KYC_VERIFIED':
+                return { icon: '🪪', bg: '#f0fdf4', color: '#16a34a', sign: '' };
+              default:
+                return { icon: '📌', bg: '#f5f3ff', color: '#6d28d9', sign: '' };
+            }
+          };
+
+          return (
+            <View style={styles.recentActSection}>
+              <View style={styles.recentActHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Text style={styles.sectionHeadingNavy}>Recent Activities</Text>
+                  <View style={styles.recentActCountPill}>
+                    <Text style={styles.recentActCountText}>{recentActivities.length}</Text>
+                  </View>
+                </View>
+                <Text style={styles.recentActSubLabel}>Last 5 updates</Text>
+              </View>
+
+              {recentActivities.length === 0 ? (
+                <View style={styles.recentActEmptyCard}>
+                  <Text style={{ fontSize: 22, marginBottom: 4 }}>📋</Text>
+                  <Text style={styles.recentActEmptyTitle}>No Recent Activities Yet</Text>
+                  <Text style={styles.recentActEmptySub}>
+                    Rent payments, tenant check-ins, and logged expenses for this property will appear here.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.recentActCard}>
+                  {recentActivities.map((act, idx) => {
+                    const badge = getActivityBadge(act.type);
+                    return (
+                      <View
+                        key={act.id}
+                        style={[
+                          styles.recentActRow,
+                          idx < recentActivities.length - 1 && styles.recentActRowBorder,
+                        ]}
+                      >
+                        <View style={[styles.recentActIconBox, { backgroundColor: badge.bg }]}>
+                          <Text style={{ fontSize: 16 }}>{badge.icon}</Text>
+                        </View>
+
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <Text style={styles.recentActTitle} numberOfLines={1}>
+                            {act.title}
+                          </Text>
+                          <Text style={styles.recentActSubtitle} numberOfLines={1}>
+                            {act.subtitle}
+                          </Text>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          {typeof act.amountRupees === 'number' && act.amountRupees > 0 && (
+                            <Text style={[styles.recentActAmount, { color: badge.color }]}>
+                              {badge.sign}₹{act.amountRupees.toLocaleString('en-IN')}
+                            </Text>
+                          )}
+                          <Text style={styles.recentActTime}>
+                            {formatActivityTime(act.timestamp)}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          );
+        })()}
 
         {/* ─── SUBSCRIPTION & UNLIMITED SERVICES CARD (REQUIREMENTS 6, 7, 8) ─── */}
         <View style={styles.subCardContainer}>
@@ -6425,6 +6563,104 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
     marginBottom: 24,
+  },
+  // ─── Recent Activities (Last 5) ───
+  recentActSection: {
+    paddingHorizontal: 16,
+    marginBottom: 22,
+  },
+  recentActHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  recentActCountPill: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  recentActCountText: {
+    color: '#ea580c',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  recentActSubLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748b',
+  },
+  recentActCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  recentActRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  recentActRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  recentActIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  recentActTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#0f172a',
+    marginBottom: 2,
+  },
+  recentActSubtitle: {
+    fontSize: 12,
+    color: '#64748b',
+    fontWeight: '500',
+  },
+  recentActAmount: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  recentActTime: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  recentActEmptyCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    padding: 20,
+    alignItems: 'center',
+  },
+  recentActEmptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 4,
+  },
+  recentActEmptySub: {
+    fontSize: 12,
+    color: '#64748b',
+    textAlign: 'center',
   },
   dueTenantCard: {
     backgroundColor: '#ffffff',
