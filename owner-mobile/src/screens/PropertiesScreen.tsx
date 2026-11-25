@@ -21,6 +21,7 @@ import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
+import { fetchCurrentPropertyLocation } from '../utils/locationHelper';
 import { logActivity } from '../services/activityLogService';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
@@ -574,22 +575,32 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       return;
     }
 
-    // Validate Aadhaar number using official Verhoeff checksum if provided
+    // Validate Aadhaar / PAN strictly before onboarding
     const trimmedId = assignIdProofNumber.trim();
+    const cleanIdDigits = trimmedId.replace(/\s+/g, '');
     let isAadhaarVerified = false;
-    let normalizedIdProof = trimmedId;
+    let normalizedIdProof = cleanIdDigits;
 
-    if (assignIdProofType === 'AADHAAR' && trimmedId.length > 0) {
-      const cleanAadhaar = trimmedId.replace(/\D/g, '');
-      if (!validateVerhoeffAadhaar(cleanAadhaar)) {
+    if (assignIdProofType === 'AADHAAR') {
+      const aadhaarDigits = cleanIdDigits.replace(/\D/g, '');
+      const aadhaarCheck = validateVerhoeffAadhaar(aadhaarDigits);
+      if (!/^\d{12}$/.test(aadhaarDigits) || !aadhaarCheck.isValid) {
         Alert.alert(
-          'Invalid Aadhaar Number',
-          'Please enter a valid 12-digit Aadhaar number (Verhoeff checksum failed), or leave it blank to verify later.'
+          'Valid 12-Digit Aadhaar Required',
+          aadhaarCheck.message || 'Please enter a valid 12-digit numeric Aadhaar number (Verhoeff checksum required).'
         );
         return;
       }
       isAadhaarVerified = true;
-      normalizedIdProof = cleanAadhaar;
+      normalizedIdProof = aadhaarDigits;
+    } else if (assignIdProofType === 'PAN') {
+      const upperPan = cleanIdDigits.toUpperCase();
+      if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(upperPan)) {
+        Alert.alert('Valid PAN Required', 'Please enter a valid 10-character PAN number (e.g. ABCDE1234F).');
+        return;
+      }
+      isAadhaarVerified = true;
+      normalizedIdProof = upperPan;
     }
 
     setSubmittingAssign(true);
@@ -915,43 +926,22 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const [capturingLocation, setCapturingLocation] = useState(false);
   const [creatingProperty, setCreatingProperty] = useState(false);
 
-  // Capture Owner's Current GPS Location (Requirement 5)
-  const handleCaptureCurrentLocation = () => {
+  // Capture Owner's Current GPS Location (Real-device permission + reverse geocode)
+  const handleCaptureCurrentLocation = async () => {
     setCapturingLocation(true);
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = Number(position.coords.latitude.toFixed(6));
-          const lng = Number(position.coords.longitude.toFixed(6));
-          setNewPropLat(lat);
-          setNewPropLng(lng);
-          const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
-          setNewPropMapsUrl(mapsUrl);
-          if (!newPropAddress) {
-            setNewPropAddress(`GPS Location Near (${lat}, ${lng})`);
-          }
-          notifyUser('✓ Location Detected', `Coordinates: ${lat}, ${lng}\nGoogle Maps link generated!`);
-          setCapturingLocation(false);
-        },
-        (error) => {
-          console.warn('Geolocation capture warning:', error.message);
-          const fallbackLat = 17.4435;
-          const fallbackLng = 78.3772;
-          setNewPropLat(fallbackLat);
-          setNewPropLng(fallbackLng);
-          setNewPropMapsUrl(`https://www.google.com/maps/search/?api=1&query=${fallbackLat},${fallbackLng}`);
-          notifyUser('Location Set', `Standard coordinates (17.4435, 78.3772) applied.`);
-          setCapturingLocation(false);
-        },
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
-    } else {
-      const fallbackLat = 17.4435;
-      const fallbackLng = 78.3772;
-      setNewPropLat(fallbackLat);
-      setNewPropLng(fallbackLng);
-      setNewPropMapsUrl(`https://www.google.com/maps/search/?api=1&query=${fallbackLat},${fallbackLng}`);
-      notifyUser('Location Set', `Coordinates (17.4435, 78.3772) applied.`);
+    try {
+      const loc = await fetchCurrentPropertyLocation();
+      if (!loc) return;
+      const lat = Number(loc.latitude.toFixed(6));
+      const lng = Number(loc.longitude.toFixed(6));
+      setNewPropLat(lat);
+      setNewPropLng(lng);
+      setNewPropMapsUrl(loc.mapsUrl);
+      if (loc.addressLine) setNewPropAddress(loc.addressLine);
+      if (loc.cityName) setNewPropCity(loc.cityName);
+      if (loc.pincode) setNewPropPincode(loc.pincode);
+      notifyUser('✓ Location Detected', `Coordinates: ${lat}, ${lng}`);
+    } finally {
       setCapturingLocation(false);
     }
   };
@@ -969,9 +959,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         loadPropertiesAndRooms();
       };
       window.addEventListener('staynest_tenant_updated', handleTenantSync);
+      window.addEventListener('staynest_property_created', handleTenantSync);
       window.addEventListener('staynest_expense_added', handleTenantSync);
       return () => {
         window.removeEventListener('staynest_tenant_updated', handleTenantSync);
+        window.removeEventListener('staynest_property_created', handleTenantSync);
         window.removeEventListener('staynest_expense_added', handleTenantSync);
       };
     }
@@ -1294,9 +1286,20 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         }
       });
 
-      // Check cached floors for this property
+      // Check cached floors for this property (safeStorage works on Android/iOS APK + Web)
       let targetFloors: FloorConfig[] | null = null;
-      if (typeof window !== 'undefined' && window.localStorage && targetProp?.id) {
+      if (targetProp?.id) {
+        try {
+          const safeFloorsRaw = await safeStorage.getItem(`@staynest_floors_${targetProp.id}`);
+          if (safeFloorsRaw) {
+            const parsed = JSON.parse(safeFloorsRaw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              targetFloors = parsed;
+            }
+          }
+        } catch {}
+      }
+      if ((!targetFloors || targetFloors.length === 0) && typeof window !== 'undefined' && window.localStorage && targetProp?.id) {
         const cached = window.localStorage.getItem(`staynest_floors_${targetProp.id}`);
         if (cached) {
           try {
@@ -3521,13 +3524,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>Monthly Rent (₹)</Text>
-                  <View style={styles.currencyInputRow}>
+                  <Text style={styles.modalInputLabel}>🔒 Monthly Rent (Locked)</Text>
+                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }]}>
                     <Text style={styles.currencyPrefixLight}>INR</Text>
                     <TextInput
-                      style={styles.modalInnerCurrencyInput}
+                      style={[styles.modalInnerCurrencyInput, { color: '#475569' }]}
                       value={assignRentAmount}
-                      onChangeText={setAssignRentAmount}
+                      editable={false}
+                      selectTextOnFocus={false}
                       keyboardType="numeric"
                       placeholder={String(assigningBed?.rentRupees || 8500)}
                       placeholderTextColor="#94a3b8"
@@ -3535,13 +3539,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>Deposit (₹)</Text>
-                  <View style={styles.currencyInputRow}>
+                  <Text style={styles.modalInputLabel}>🔒 Deposit (Locked)</Text>
+                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }]}>
                     <Text style={styles.currencyPrefixLight}>INR</Text>
                     <TextInput
-                      style={styles.modalInnerCurrencyInput}
+                      style={[styles.modalInnerCurrencyInput, { color: '#475569' }]}
                       value={assignDepositPayingNow}
-                      onChangeText={setAssignDepositPayingNow}
+                      editable={false}
+                      selectTextOnFocus={false}
                       keyboardType="numeric"
                       placeholder="2,500"
                       placeholderTextColor="#94a3b8"

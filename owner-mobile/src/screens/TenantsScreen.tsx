@@ -21,6 +21,7 @@ import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDa
 import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 import { logActivity } from '../services/activityLogService';
+import { buildRentReminderMessage, getOwnerPayoutDetails } from '../services/upiPaymentService';
 import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
 import Svg, { Path } from 'react-native-svg';
 
@@ -758,23 +759,36 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     }
   };
 
-  // Direct 1-Tap WhatsApp Reminder via UltraMsg API (No external app or web login required)
+  // Direct 1-Tap WhatsApp Reminder via UltraMsg API (Targets only tenants with pending_due > 0)
   const handleDirectWhatsAppReminder = async (tenant: Tenant) => {
     const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
     const dueRent = typeof tenant.outstandingPaise === 'number'
       ? Math.round(tenant.outstandingPaise / 100)
       : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
-    const paidRent = Math.max(0, totalRent - dueRent);
 
-    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
-    let message = '';
-    if (dueRent > 0 && paidRent > 0) {
-      message = `📢 *StayNest Rent Reminder*\n\nHello ${tenant.fullName}!\nYour monthly PG rent breakdown for Room ${tenant.roomNumber || '101'}:\n• Total Rent: ₹${totalRent.toLocaleString('en-IN')}\n• Paid so far: ₹${paidRent.toLocaleString('en-IN')}\n• *Remaining Due: ₹${dueRent.toLocaleString('en-IN')}*\n\nPlease clear your pending balance of ₹${dueRent.toLocaleString('en-IN')} via UPI or Cash.\n\nThank you,\n*StayNest PG Living*`;
-    } else if (dueRent > 0) {
-      message = `📢 *StayNest Rent Reminder*\n\nHello ${tenant.fullName}!\nThis is a gentle reminder regarding your monthly PG rent of *₹${dueRent.toLocaleString('en-IN')}* for Room ${tenant.roomNumber || '101'}.\n\nPlease clear the payment via UPI or Cash.\n\nThank you,\n*StayNest PG Living*`;
-    } else {
-      message = `🎉 *StayNest Payment Receipt*\n\nHello ${tenant.fullName}!\nYour PG rent of *₹${totalRent.toLocaleString('en-IN')}* for Room ${tenant.roomNumber || '101'} has been received in full.\n\nThank you for your timely payment!\n*StayNest PG Living*`;
+    if (dueRent <= 0) {
+      Alert.alert('No Pending Due', `${tenant.fullName} has ₹0 pending due. Payment reminders are only sent when due > ₹0.`);
+      return;
     }
+
+    const payout = await getOwnerPayoutDetails();
+    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const propObj = properties.find((p) => p.id === tenant.propertyId);
+    const isRentalProp = propObj?.propertyType === 'RENTAL_BUILDING' || tenant.bedLabel === 'Unit';
+    const roomLabel = isRentalProp
+      ? `Flat ${tenant.roomNumber || '101'}`
+      : `Room ${tenant.roomNumber || '101'} (${tenant.bedLabel || 'Bed 1'})`;
+
+    const message = buildRentReminderMessage({
+      tenantName: tenant.fullName,
+      propertyName: tenant.propertyName || propObj?.name || 'StayNest',
+      roomLabel,
+      monthYear: selectedMonthOption?.label || 'Nov 2026',
+      roomRent: totalRent,
+      totalDue: dueRent,
+      ownerUpiId: payout.upiId,
+      ownerName: payout.accountHolderName || tenant.propertyName || 'StayNest Owner',
+    });
 
     try {
       const params = new URLSearchParams();
@@ -792,20 +806,49 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
 
       Alert.alert(
         'WhatsApp Reminder Delivered! 💬',
-        `Direct WhatsApp reminder successfully sent to ${tenant.fullName} (+91 ${cleanPhone})!`
+        `Payment reminder (₹${dueRent.toLocaleString('en-IN')}${payout.upiId ? ' + UPI Link' : ''}) sent to ${tenant.fullName} (+91 ${cleanPhone})!`
       );
     } catch {
-      Alert.alert('Notice', `WhatsApp reminder dispatched to ${tenant.fullName} (+91 ${cleanPhone}).`);
+      const waUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+      Linking.openURL(waUrl).catch(() =>
+        Alert.alert('Notice', `WhatsApp reminder prepared for ${tenant.fullName} (+91 ${cleanPhone}).`)
+      );
     }
   };
 
   // Send Rent Reminder Modal / Prompt
-  const handleSendReminder = (tenant: Tenant) => {
-    const rentDue = tenant.monthlyRentPaise ? (tenant.monthlyRentPaise / 100).toLocaleString('en-IN') : '8,500';
-    const message = `Hello ${tenant.fullName}, your monthly PG rent of ₹${rentDue} for Room ${tenant.roomNumber || '101'}, Ramesh PG is due. Please pay via UPI or Cash. Thank you!`;
+  const handleSendReminder = async (tenant: Tenant) => {
+    const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
+    const dueRent = typeof tenant.outstandingPaise === 'number'
+      ? Math.round(tenant.outstandingPaise / 100)
+      : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
+
+    if (dueRent <= 0) {
+      Alert.alert('No Pending Due', `${tenant.fullName} has ₹0 pending due. Payment reminders are only sent when due > ₹0.`);
+      return;
+    }
+
+    const payout = await getOwnerPayoutDetails();
+    const propObj = properties.find((p) => p.id === tenant.propertyId);
+    const isRentalProp = propObj?.propertyType === 'RENTAL_BUILDING' || tenant.bedLabel === 'Unit';
+    const roomLabel = isRentalProp
+      ? `Flat ${tenant.roomNumber || '101'}`
+      : `Room ${tenant.roomNumber || '101'} (${tenant.bedLabel || 'Bed 1'})`;
+
+    const message = buildRentReminderMessage({
+      tenantName: tenant.fullName,
+      propertyName: tenant.propertyName || propObj?.name || 'StayNest',
+      roomLabel,
+      monthYear: selectedMonthOption?.label || 'Nov 2026',
+      roomRent: totalRent,
+      totalDue: dueRent,
+      ownerUpiId: payout.upiId,
+      ownerName: payout.accountHolderName || tenant.propertyName || 'StayNest Owner',
+    });
+
     Alert.alert(
       'Payment Reminder',
-      `Send rent payment reminder to ${tenant.fullName} (${tenant.phone})?\n\n"${message}"`,
+      `Send ₹${dueRent.toLocaleString('en-IN')} reminder${payout.upiId ? ` (with UPI link to ${payout.upiId})` : ''} to ${tenant.fullName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -816,14 +859,20 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             Linking.canOpenURL(url)
               .then((supported) => {
                 if (supported) Linking.openURL(url);
-                else Alert.alert('✓ Reminder Sent!', `Notification sent to ${tenant.phone}.`);
+                else handleDirectWhatsAppReminder(tenant);
               })
-              .catch(() => Alert.alert('✓ Reminder Sent!', `Reminder sent to ${tenant.phone}.`));
+              .catch(() => handleDirectWhatsAppReminder(tenant));
           },
         },
         {
           text: 'Send SMS',
-          onPress: () => Alert.alert('✓ SMS Sent!', `Payment reminder sent to ${tenant.phone}.`),
+          onPress: () => {
+            const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+            const smsUrl = `sms:${cleanPhone}?body=${encodeURIComponent(message)}`;
+            Linking.openURL(smsUrl).catch(() =>
+              Alert.alert('✓ SMS Prepared', `Payment reminder ready for ${tenant.phone}.`)
+            );
+          },
         },
       ]
     );
@@ -2001,15 +2050,25 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                   </View>
 
                   <View style={[styles.metaCol, { flex: 0.9 }]}>
-                    <View style={styles.metaLabelRow}>
-                      <Text style={styles.metaLabel}>ROOM & BED</Text>
-                      <Text style={{ fontSize: 11, marginLeft: 4 }}>🛏️</Text>
-                    </View>
-                    <Text style={styles.metaVal} numberOfLines={2}>
-                      {isAct
-                        ? `Room ${t.roomNumber || '101'} • ${t.bedLabel || 'Bed 1'}`
-                        : 'Not Assigned (Vacated)'}
-                    </Text>
+                    {(() => {
+                      const tProp = properties.find((p) => p.id === t.propertyId);
+                      const isRentalTenant = tProp?.propertyType === 'RENTAL_BUILDING' || t.bedLabel === 'Unit';
+                      return (
+                        <>
+                          <View style={styles.metaLabelRow}>
+                            <Text style={styles.metaLabel}>{isRentalTenant ? 'FLAT / UNIT' : 'ROOM & BED'}</Text>
+                            <Text style={{ fontSize: 11, marginLeft: 4 }}>{isRentalTenant ? '🏠' : '🛏️'}</Text>
+                          </View>
+                          <Text style={styles.metaVal} numberOfLines={2}>
+                            {isAct
+                              ? isRentalTenant
+                                ? `Flat ${t.roomNumber || '101'}`
+                                : `Room ${t.roomNumber || '101'} • ${t.bedLabel || 'Bed 1'}`
+                              : 'Not Assigned (Vacated)'}
+                          </Text>
+                        </>
+                      );
+                    })()}
                   </View>
                 </View>
 
@@ -2046,9 +2105,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                   )}
                 </View>
 
-                {/* Zone 4: Refined Action Row */}
+                {/* Zone 4: Refined Action Row (No Overlap on Small Phones) */}
                 <View style={styles.actionRow}>
-                  <Text style={styles.aadhaarText}>
+                  <Text
+                    style={styles.aadhaarText}
+                    numberOfLines={1}
+                    ellipsizeMode="middle"
+                  >
                     AADHAAR: {t.idProofNumber || '--'}
                   </Text>
 
@@ -2071,17 +2134,19 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                         <Text style={styles.callBtnText}>Call</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.whatsAppBtn}
-                        onPress={(e: any) => {
-                          e?.stopPropagation?.();
-                          handleDirectWhatsAppReminder(t);
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <WhatsAppLogoIcon size={12} color="#25D366" />
-                        <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
-                      </TouchableOpacity>
+                      {dueRent > 0 && (
+                        <TouchableOpacity
+                          style={styles.whatsAppBtn}
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            handleDirectWhatsAppReminder(t);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <WhatsAppLogoIcon size={12} color="#25D366" />
+                          <Text style={styles.whatsAppBtnText}>Remind</Text>
+                        </TouchableOpacity>
+                      )}
 
                       <TouchableOpacity
                         style={styles.exitBtn}
@@ -3297,17 +3362,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 14,
+    gap: 8,
   },
   aadhaarText: {
+    flex: 1,
     fontSize: 11,
     fontWeight: '600',
     color: '#6b7280',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    marginRight: 4,
   },
   actionBtnsGroup: {
     flexDirection: 'row',
     gap: 6,
     alignItems: 'center',
+    flexShrink: 0,
   },
   callBtn: {
     flexDirection: 'row',
@@ -3315,8 +3384,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 8,
     gap: 4,
   },
@@ -3329,8 +3398,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1e293b',
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 8,
     gap: 4,
   },

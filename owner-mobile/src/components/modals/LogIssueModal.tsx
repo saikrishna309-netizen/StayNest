@@ -9,6 +9,9 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  SafeAreaView,
+  KeyboardAvoidingView,
+  StatusBar,
 } from 'react-native';
 import { Property, MaintenanceIssue } from '../../types';
 import { safeStorage } from '../../utils/safeStorage';
@@ -277,7 +280,11 @@ export const LogIssueModal: React.FC<LogIssueModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         {/* Top Header Bar */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.7}>
@@ -314,7 +321,7 @@ export const LogIssueModal: React.FC<LogIssueModalProps> = ({
         </View>
 
         {activeTab === 'NEW_ISSUE' ? (
-          <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 40 }}>
+          <ScrollView style={styles.body} contentContainerStyle={{ paddingBottom: 56 }} keyboardShouldPersistTaps="handled">
             {/* 1. Property Selection */}
             <View style={styles.formGroup}>
               <Text style={styles.fieldLabel}>
@@ -621,7 +628,8 @@ export const LogIssueModal: React.FC<LogIssueModalProps> = ({
             )}
           </ScrollView>
         )}
-      </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 };
@@ -636,7 +644,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) + 10 : 14,
     paddingBottom: 14,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,

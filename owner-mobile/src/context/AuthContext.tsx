@@ -115,38 +115,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (authenticatedUser && authenticatedToken) {
+      // Navigate immediately by updating auth state first, persist in parallel
       setAuthToken(authenticatedToken);
       setToken(authenticatedToken);
       setUser(authenticatedUser);
 
-      // Persist session to safeStorage so owner stays logged in on reopen
-      try {
-        await safeStorage.setItem('@staynest_owner_token', authenticatedToken);
-        await safeStorage.setItem('@staynest_owner_user', JSON.stringify(authenticatedUser));
-      } catch (storageErr) {
-        console.log('Storage save note:', storageErr);
-      }
+      Promise.all([
+        safeStorage.setItem('@staynest_owner_token', authenticatedToken),
+        safeStorage.setItem('@staynest_owner_user', JSON.stringify(authenticatedUser)),
+      ]).catch(() => {});
 
-      // ─── Send automated WhatsApp Welcome Message ONLY on first onboarding ───
-      try {
-        const welcomeKey = `@staynest_welcomed_${cleanPhone}`;
-        const hasBeenWelcomed = await safeStorage.getItem(welcomeKey);
-        if (!hasBeenWelcomed) {
-          const welcomeParams = new URLSearchParams();
-          welcomeParams.append('token', '4kcul3wmcwdoh5d0');
-          welcomeParams.append('to', `+91${cleanPhone}`);
-          welcomeParams.append(
-            'body',
-            `🎉 *Welcome to StayNest!* 🏡\n\nHappily manage your PG seamlessly with StayNest Owner App!\n\n• Manage PG rooms, beds & monthly rents\n• Track month-wise collections & profits\n• Send 1-click WhatsApp rent reminders\n\n— *Team StayNest*`
-          );
-          fetch('https://api.ultramsg.com/instance197383/messages/chat', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: welcomeParams.toString(),
-          }).catch(() => {});
-          await safeStorage.setItem(welcomeKey, 'true');
-        }
-      } catch {}
+      // Non-blocking background WhatsApp welcome message on first onboarding
+      void (async () => {
+        try {
+          const welcomeKey = `@staynest_welcomed_${cleanPhone}`;
+          const hasBeenWelcomed = await safeStorage.getItem(welcomeKey);
+          if (!hasBeenWelcomed) {
+            const welcomeParams = new URLSearchParams();
+            welcomeParams.append('token', '4kcul3wmcwdoh5d0');
+            welcomeParams.append('to', `+91${cleanPhone}`);
+            welcomeParams.append(
+              'body',
+              `🎉 *Welcome to StayNest!* 🏡\n\nHappily manage your PG seamlessly with StayNest Owner App!\n\n• Manage PG rooms, beds & monthly rents\n• Track month-wise collections & profits\n• Send 1-click WhatsApp rent reminders\n\n— *Team StayNest*`
+            );
+            fetch('https://api.ultramsg.com/instance197383/messages/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: welcomeParams.toString(),
+            }).catch(() => {});
+            await safeStorage.setItem(welcomeKey, 'true');
+          }
+        } catch {}
+      })();
     }
   };
 

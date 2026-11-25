@@ -9,6 +9,8 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import { Property, DailyFoodMenu } from '../../types';
 import { safeStorage } from '../../utils/safeStorage';
@@ -207,7 +209,7 @@ export const FoodMenuModal: React.FC<FoodMenuModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         {/* Header Bar */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backBtn} activeOpacity={0.7}>
@@ -548,7 +550,7 @@ export const FoodMenuModal: React.FC<FoodMenuModalProps> = ({
             </ScrollView>
           </View>
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 };
@@ -563,7 +565,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 28) + 10 : 14,
     paddingBottom: 14,
     backgroundColor: '#292524',
     borderBottomWidth: 1,

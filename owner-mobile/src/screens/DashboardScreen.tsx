@@ -31,7 +31,9 @@ import {
 import { fastDataCache } from '../services/dataCache';
 import { safeStorage } from '../utils/safeStorage';
 import { pickMultipleImagesFromDevice } from '../utils/imagePicker';
+import { fetchCurrentPropertyLocation } from '../utils/locationHelper';
 import { isValidUuid } from '../services/propertyDataService';
+import { buildRentReminderMessage, getOwnerPayoutDetails } from '../services/upiPaymentService';
 import {
   computeOccupancyMetrics,
   computeCollectionMetrics,
@@ -90,6 +92,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Onboarding Modal State
   const [showOnboardModal, setShowOnboardModal] = useState(false);
+  const [showRecordRentPickerModal, setShowRecordRentPickerModal] = useState(false);
+  const [recordRentSearch, setRecordRentSearch] = useState('');
   const [selectedPropId, setSelectedPropId] = useState(selectedPropertyId || '');
 
   // Keep Dashboard in sync when active property changes on another screen
@@ -514,50 +518,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const handleLocateOnMap = async () => {
     setLocatingMap(true);
     try {
-      const coords = await new Promise<{ lat: number; lng: number }>((resolve) => {
-        if (typeof navigator !== 'undefined' && navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-            () => resolve({ lat: 16.5062, lng: 80.6480 }),
-            { timeout: 6000 }
-          );
-        } else {
-          resolve({ lat: 16.5062, lng: 80.6480 });
-        }
-      });
-
-      setNewPgLat(coords.lat);
-      setNewPgLng(coords.lng);
-
-      try {
-        const resp = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&addressdetails=1`
-        );
-        if (resp.ok) {
-          const data = await resp.json();
-          const addr = data?.address || {};
-          const street = [addr.house_number, addr.road, addr.suburb || addr.neighbourhood]
-            .filter(Boolean)
-            .join(', ');
-          if (street) setNewPgAddress(street);
-          else if (data?.display_name) setNewPgAddress(data.display_name.split(',').slice(0, 2).join(', '));
-          if (addr.city || addr.town || addr.village) {
-            setNewPgCity(addr.city || addr.town || addr.village);
-          }
-          if (addr.state) setNewPgState(addr.state);
-          if (addr.postcode) {
-            const pc = String(addr.postcode).replace(/\D/g, '').slice(0, 6);
-            if (pc.length === 6) setNewPgPincode(pc);
-          }
-          return;
-        }
-      } catch {}
-
-      // Fallback auto-fill if offline
-      if (!newPgAddress.trim()) setNewPgAddress('Opp. PVP Square, MG Road');
-      if (!newPgCity.trim()) setNewPgCity('Vijayawada');
-      if (!newPgState.trim()) setNewPgState('Andhra Pradesh');
-      if (!newPgPincode.trim()) setNewPgPincode('520010');
+      const loc = await fetchCurrentPropertyLocation();
+      if (!loc) return;
+      setNewPgLat(loc.latitude);
+      setNewPgLng(loc.longitude);
+      if (loc.addressLine) setNewPgAddress(loc.addressLine);
+      if (loc.cityName) setNewPgCity(loc.cityName);
+      if (loc.stateName) setNewPgState(loc.stateName);
+      if (loc.pincode) setNewPgPincode(loc.pincode);
     } finally {
       setLocatingMap(false);
     }
@@ -754,7 +722,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       if (!Array.isArray(cachedProps)) cachedProps = [];
       const updatedProps = [created, ...cachedProps.filter((p: any) => p.id !== created.id)];
       await safeStorage.setItem('@staynest_custom_properties', JSON.stringify(updatedProps));
+      await safeStorage.setItem(`@staynest_floors_${createdPropId}`, JSON.stringify(generatedFloors));
+      await safeStorage.setItem(`@staynest_utility_config_${createdPropId}`, JSON.stringify(utilityConfig));
       await safeStorage.setItem('@staynest_active_property_id', created.id);
+      fastDataCache.invalidateAll();
 
       if (typeof window !== 'undefined' && window.localStorage) {
         try {
@@ -763,6 +734,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           window.localStorage.setItem('staynest_active_property_id', created.id);
           window.localStorage.setItem(`staynest_utility_config_${createdPropId}`, JSON.stringify(utilityConfig));
         } catch {}
+      }
+
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('staynest_property_created', { detail: created }));
       }
 
       // 4. Try backend API creation (single transaction with dynamic floor/unit tree)
@@ -1705,16 +1680,33 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  // Handle Send Payment Reminder to Tenant
-  const handleSendReminder = (tenant: Tenant) => {
-    const rentDue = tenant.monthlyRentPaise
-      ? (tenant.monthlyRentPaise / 100).toLocaleString('en-IN')
-      : '8,500';
-    const message = `Hello ${tenant.fullName}, this is a gentle reminder regarding your monthly PG rent of ₹${rentDue} for Room ${tenant.roomNumber || '101'}, Ramesh PG. Please complete the payment at your earliest convenience via UPI or Cash. Thank you!`;
+  // Handle Send Payment Reminder to Tenant (Only when pending due > 0)
+  const handleSendReminder = async (tenant: Tenant) => {
+    const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
+    const dueRent = typeof tenant.outstandingPaise === 'number'
+      ? Math.round(tenant.outstandingPaise / 100)
+      : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
+
+    if (dueRent <= 0) {
+      Alert.alert('No Pending Due', `${tenant.fullName} has ₹0 pending due. Reminders are only sent when due > ₹0.`);
+      return;
+    }
+
+    const payout = await getOwnerPayoutDetails();
+    const message = buildRentReminderMessage({
+      tenantName: tenant.fullName,
+      propertyName: tenant.propertyName || activePropertyName || 'StayNest',
+      roomLabel: `Room ${tenant.roomNumber || '101'}`,
+      monthYear: selectedMonthOption?.label || 'Nov 2026',
+      roomRent: totalRent,
+      totalDue: dueRent,
+      ownerUpiId: payout.upiId,
+      ownerName: payout.accountHolderName || user?.fullName || 'StayNest Owner',
+    });
 
     Alert.alert(
       'Send Rent Reminder',
-      `Send rent payment reminder to ${tenant.fullName} (${tenant.phone})?\n\n"${message}"`,
+      `Send ₹${dueRent.toLocaleString('en-IN')} reminder${payout.upiId ? ` (with UPI link to ${payout.upiId})` : ''} to ${tenant.fullName}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -1726,30 +1718,40 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         {
           text: 'Send SMS',
           onPress: () => {
-            Alert.alert('✓ SMS Sent!', `Payment reminder sent to ${tenant.phone}.`);
+            const clean = tenant.phone.replace(/[^0-9]/g, '');
+            Linking.openURL(`sms:${clean}?body=${encodeURIComponent(message)}`).catch(() =>
+              Alert.alert('✓ SMS Prepared', `Payment reminder ready for ${tenant.phone}.`)
+            );
           },
         },
       ]
     );
   };
 
-  // Direct 1-Tap WhatsApp Reminder via UltraMsg API (Instant delivery, no WhatsApp Web popup)
+  // Direct 1-Tap WhatsApp Reminder via UltraMsg API (Only when pending due > 0, includes NPCI UPI link)
   const handleDirectWhatsAppReminder = async (tenant: Tenant) => {
     const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
     const dueRent = typeof tenant.outstandingPaise === 'number'
       ? Math.round(tenant.outstandingPaise / 100)
       : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
-    const paidRent = Math.max(0, totalRent - dueRent);
 
-    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
-    let message = '';
-    if (dueRent > 0 && paidRent > 0) {
-      message = `📢 *StayNest Rent Reminder*\n\nHello ${tenant.fullName}!\nYour monthly PG rent breakdown for Room ${tenant.roomNumber || '101'}:\n• Total Rent: ₹${totalRent.toLocaleString('en-IN')}\n• Paid so far: ₹${paidRent.toLocaleString('en-IN')}\n• *Remaining Due: ₹${dueRent.toLocaleString('en-IN')}*\n\nPlease clear the pending ₹${dueRent.toLocaleString('en-IN')} balance via UPI or Cash.\n\nThank you,\n*StayNest PG Living*`;
-    } else if (dueRent > 0) {
-      message = `📢 *StayNest Rent Reminder*\n\nHello ${tenant.fullName}!\nThis is a gentle reminder regarding your monthly PG rent of *₹${dueRent.toLocaleString('en-IN')}* for Room ${tenant.roomNumber || '101'}, Ramesh PG.\n\nPlease clear the payment via UPI or Cash.\n\nThank you,\n*StayNest PG Living*`;
-    } else {
-      message = `🎉 *StayNest Payment Receipt*\n\nHello ${tenant.fullName}!\nYour PG rent of *₹${totalRent.toLocaleString('en-IN')}* for Room ${tenant.roomNumber || '101'} has been received in full.\n\nThank you!\n*StayNest PG Living*`;
+    if (dueRent <= 0) {
+      Alert.alert('No Pending Due', `${tenant.fullName} has ₹0 pending due.`);
+      return;
     }
+
+    const payout = await getOwnerPayoutDetails();
+    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const message = buildRentReminderMessage({
+      tenantName: tenant.fullName,
+      propertyName: tenant.propertyName || activePropertyName || 'StayNest',
+      roomLabel: `Room ${tenant.roomNumber || '101'}`,
+      monthYear: selectedMonthOption?.label || 'Nov 2026',
+      roomRent: totalRent,
+      totalDue: dueRent,
+      ownerUpiId: payout.upiId,
+      ownerName: payout.accountHolderName || user?.fullName || 'StayNest Owner',
+    });
 
     try {
       const params = new URLSearchParams();
@@ -1899,13 +1901,34 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Handle Onboard Modal Submit
   const handleOnboardSubmit = async () => {
-    if (!onboardFullName.trim() || !onboardPhone.trim()) {
-      Alert.alert('Required', 'Please enter tenant name and phone number');
+    if (!onboardFullName.trim()) {
+      Alert.alert('Required: Full Name', 'Please enter the resident full name.');
+      return;
+    }
+
+    const cleanPhone = onboardPhone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      Alert.alert('Required: Phone Number', 'Please enter a valid 10-digit mobile number.');
+      return;
+    }
+
+    const cleanAadhaar = onboardIdProof.replace(/\D/g, '');
+    const aadhaarCheck = validateVerhoeffAadhaar(cleanAadhaar);
+    if (!/^\d{12}$/.test(cleanAadhaar) || !aadhaarCheck.isValid) {
+      Alert.alert(
+        'Valid 12-Digit Aadhaar Required',
+        aadhaarCheck.message || 'Please enter a valid 12-digit Aadhaar card number.'
+      );
+      return;
+    }
+
+    if (!selectedPropId) {
+      Alert.alert('Required: Property', 'Please select a property.');
       return;
     }
 
     if (!selectedBedId) {
-      Alert.alert('Required', 'Please select an available bed');
+      Alert.alert('Required', 'Please select an available room/bed.');
       return;
     }
 
@@ -2835,13 +2858,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             {/* 1. Add Tenant */}
             <TouchableOpacity
               style={styles.quickCompactCard}
-              onPress={() => {
-                if (onNavigateTab) {
-                  onNavigateTab('tenants');
-                } else {
-                  setShowOnboardModal(true);
-                }
-              }}
+              onPress={() => setShowOnboardModal(true)}
               activeOpacity={0.75}
             >
               <View style={styles.quickIconCircle}>
@@ -2858,12 +2875,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <TouchableOpacity
               style={styles.quickCompactCard}
               onPress={() => {
-                if (dueTenants.length > 0) {
-                  handleOpenTenantModal(dueTenants[0]);
-                } else if (activeTenants.length > 0) {
-                  handleOpenTenantModal(activeTenants[0]);
+                if (activeTenants.length > 0) {
+                  setRecordRentSearch('');
+                  setShowRecordRentPickerModal(true);
                 } else {
-                  onNavigateTab ? onNavigateTab('tenants') : null;
+                  Alert.alert('No Active Tenants', 'Add a tenant first before recording rent.');
                 }
               }}
               activeOpacity={0.75}
@@ -4093,6 +4109,95 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </Modal>
 
+      {/* ─── MODAL 3B: RECORD RENT TENANT SELECTOR ─── */}
+      <Modal
+        visible={showRecordRentPickerModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowRecordRentPickerModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: '82%' }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View>
+                <Text style={styles.modalTitle}>Select Tenant to Record Rent</Text>
+                <Text style={styles.modalSub}>Tenants with pending dues appear first</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowRecordRentPickerModal(false)}>
+                <Text style={{ fontSize: 18, color: '#64748b', fontWeight: '800' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={[styles.textInput, { marginBottom: 10 }]}
+              value={recordRentSearch}
+              onChangeText={setRecordRentSearch}
+              placeholder="Search tenant name, phone or room..."
+              placeholderTextColor="#94a3b8"
+            />
+
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              {[
+                ...dueTenants,
+                ...activeTenants.filter((at) => !dueTenants.some((dt) => dt.id === at.id)),
+              ]
+                .filter((t) => {
+                  const q = recordRentSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    (t.fullName || '').toLowerCase().includes(q) ||
+                    (t.phone || '').includes(q) ||
+                    (t.roomNumber || '').toLowerCase().includes(q)
+                  );
+                })
+                .map((t) => {
+                  const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
+                  const dueAmt = typeof t.outstandingPaise === 'number'
+                    ? Math.round(t.outstandingPaise / 100)
+                    : (t.rentStatus === 'PAID' ? 0 : totalRent);
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        paddingVertical: 12,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: dueAmt > 0 ? '#fed7aa' : '#e2e8f0',
+                        backgroundColor: dueAmt > 0 ? '#fff7ed' : '#ffffff',
+                        marginBottom: 8,
+                      }}
+                      onPress={() => {
+                        setShowRecordRentPickerModal(false);
+                        handleOpenTenantModal(t);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                          {t.fullName}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: '#64748b' }}>
+                          Room/Flat {t.roomNumber || '101'} • {t.phone}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: dueAmt > 0 ? '#ea580c' : '#16a34a' }}>
+                          {dueAmt > 0 ? `₹${dueAmt.toLocaleString('en-IN')} Due` : '✓ Paid'}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#64748b' }}>Tap to record →</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* ─── MODAL 4: MONTH & YEAR SELECTOR DROPDOWN (Requirements 6 & 7) ─── */}
       <Modal
         visible={showMonthPicker}
@@ -5015,34 +5120,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </ScrollView>
               </View>
 
-              {/* PART 2: BUILDING STRUCTURE & ROOMS */}
+              {/* PART 2: DEFAULT SHARING / UNIT CONFIG (Floors & Units configured in Step 2) */}
               <View style={styles.addPropCard}>
-                <Text style={styles.addPropCardTitle}>2. Building Structure & Rooms</Text>
-
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>Total Floors *</Text>
-                    <TextInput
-                      style={styles.addPropInput}
-                      placeholder="3"
-                      placeholderTextColor="#9ca3af"
-                      keyboardType="numeric"
-                      value={newPgFloors}
-                      onChangeText={setNewPgFloors}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>Rooms per Floor *</Text>
-                    <TextInput
-                      style={styles.addPropInput}
-                      placeholder="2"
-                      placeholderTextColor="#9ca3af"
-                      keyboardType="numeric"
-                      value={newPgRoomsPerFloor}
-                      onChangeText={setNewPgRoomsPerFloor}
-                    />
-                  </View>
-                </View>
+                <Text style={styles.addPropCardTitle}>2. Default Room / Unit Configuration</Text>
 
                 {propertyMode === 'PG' ? (
                   <>
@@ -5085,24 +5165,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   </>
                 )}
 
-                {/* Auto-Generated Setup Box */}
-                {(() => {
-                  const fc = Math.max(0, parseInt(newPgFloors.replace(/\D/g, '') || '0', 10));
-                  const rc = Math.max(0, parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '0', 10));
-                  const bc = newPgSharingType === 'SINGLE' ? 1 : newPgSharingType === 'DOUBLE' ? 2 : newPgSharingType === 'TRIPLE' ? 3 : 4;
-                  const totRooms = fc * rc;
-                  const totBeds = totRooms * bc;
-                  return (
-                    <View style={styles.autoSetupBox}>
-                      <Text style={styles.autoSetupTitle}>📐 Auto-Generated Setup:</Text>
-                      <Text style={styles.autoSetupSub}>
-                        {propertyMode === 'PG'
-                          ? `${fc} Floors × ${rc} Rooms = ${totRooms} Rooms • ${totBeds} Total Beds Capacity`
-                          : `${fc} Floors × ${rc} Units = ${totRooms} Units / Flats (Room-wise Billing)`}
-                      </Text>
-                    </View>
-                  );
-                })()}
+                <View style={styles.autoSetupBox}>
+                  <Text style={styles.autoSetupTitle}>📐 Flexible Floor & Unit Matrix:</Text>
+                  <Text style={styles.autoSetupSub}>
+                    Add any number of floors and customize each room/flat individually in Step 2.
+                  </Text>
+                </View>
               </View>
 
               {/* Quick Mode Note Row */}

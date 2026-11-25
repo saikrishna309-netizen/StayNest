@@ -21,6 +21,11 @@ import { Property } from '../types';
 import { getInitialFloorsForProperty } from '../services/propertyDataService';
 import { GooglePayLogo, PhonePeLogo, PaytmLogo, CardPaymentLogo } from '../components/PaymentLogos';
 import { pickImageFromDevice } from '../utils/imagePicker';
+import {
+  getOwnerPayoutDetails,
+  saveOwnerPayoutDetails,
+  validateUpiId,
+} from '../services/upiPaymentService';
 import Svg, { Path, Circle } from 'react-native-svg';
 
 interface ProfileScreenProps {
@@ -72,6 +77,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [subscribing, setSubscribing] = useState(false);
   const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
 
+  // Bank & UPI Payout Details State
+  const [upiId, setUpiId] = useState('');
+  const [upiVerified, setUpiVerified] = useState(false);
+  const [accountHolderName, setAccountHolderName] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [ifscCode, setIfscCode] = useState('');
+  const [upiError, setUpiError] = useState('');
+  const [savingPayout, setSavingPayout] = useState(false);
+
   // Load custom profile, banner & live properties from safeStorage / API
   useEffect(() => {
     const loadSavedProfileAndProperties = async () => {
@@ -86,6 +101,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           if (parsed.avatarUrl) setAvatarUrl(parsed.avatarUrl);
           if (parsed.bannerUrl) setBannerUrl(parsed.bannerUrl);
         }
+        const savedPayout = await getOwnerPayoutDetails();
+        if (savedPayout.upiId) {
+          setUpiId(savedPayout.upiId);
+          setUpiVerified(savedPayout.upiVerified);
+        }
+        if (savedPayout.accountHolderName) setAccountHolderName(savedPayout.accountHolderName);
+        if (savedPayout.bankName) setBankName(savedPayout.bankName);
+        if (savedPayout.accountNumber) setAccountNumber(savedPayout.accountNumber);
+        if (savedPayout.ifscCode) setIfscCode(savedPayout.ifscCode);
       } catch (e) {
         console.log('Error loading saved profile:', e);
       }
@@ -546,6 +570,179 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               </View>
             );
           })}
+        </View>
+
+        {/* ─── 3B. BANK & UPI PAYOUT DETAILS CARD ─── */}
+        <View style={styles.sectionCard}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
+              💳 Bank & UPI Payout Details
+            </Text>
+            {upiVerified && upiId.trim() ? (
+              <View style={styles.activeGreenBadge}>
+                <Text style={styles.activeGreenBadgeText}>✓ UPI Verified</Text>
+              </View>
+            ) : null}
+          </View>
+          <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+            Used to generate instant PhonePe / GPay / UPI payment links in tenant rent reminders.
+          </Text>
+
+          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+            OWNER UPI ID (e.g. name@ybl / name@okaxis) *
+          </Text>
+          <TextInput
+            style={{
+              backgroundColor: upiError ? '#fef2f2' : '#faf8f6',
+              borderWidth: 1,
+              borderColor: upiError ? '#dc2626' : '#e2e8f0',
+              borderRadius: 10,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 14,
+              color: '#0f172a',
+              marginBottom: upiError ? 4 : 10,
+            }}
+            value={upiId}
+            onChangeText={(val) => {
+              setUpiId(val);
+              setUpiVerified(false);
+              if (upiError) setUpiError('');
+            }}
+            placeholder="e.g. saikrishna@ybl"
+            placeholderTextColor="#94a3b8"
+            autoCapitalize="none"
+          />
+          {upiError ? (
+            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 10 }}>
+              ⚠️ {upiError}
+            </Text>
+          ) : null}
+
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                ACCOUNT HOLDER
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: '#faf8f6',
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  fontSize: 13,
+                  color: '#0f172a',
+                }}
+                value={accountHolderName}
+                onChangeText={setAccountHolderName}
+                placeholder="Full Name"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                BANK NAME
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: '#faf8f6',
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  fontSize: 13,
+                  color: '#0f172a',
+                }}
+                value={bankName}
+                onChangeText={setBankName}
+                placeholder="e.g. HDFC Bank"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                ACCOUNT NUMBER
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: '#faf8f6',
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  fontSize: 13,
+                  color: '#0f172a',
+                }}
+                value={accountNumber}
+                onChangeText={(v) => setAccountNumber(v.replace(/\D/g, ''))}
+                keyboardType="numeric"
+                placeholder="Account No."
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                IFSC CODE
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: '#faf8f6',
+                  borderWidth: 1,
+                  borderColor: '#e2e8f0',
+                  borderRadius: 10,
+                  paddingHorizontal: 10,
+                  paddingVertical: 9,
+                  fontSize: 13,
+                  color: '#0f172a',
+                }}
+                value={ifscCode}
+                onChangeText={(v) => setIfscCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
+                autoCapitalize="characters"
+                placeholder="e.g. HDFC0001234"
+                placeholderTextColor="#94a3b8"
+              />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.managePropertyBtn, savingPayout && { opacity: 0.6 }]}
+            disabled={savingPayout}
+            onPress={async () => {
+              const trimmedUpi = upiId.trim();
+              if (!trimmedUpi || !validateUpiId(trimmedUpi)) {
+                setUpiError('Enter a valid UPI ID (e.g. owner@ybl or owner@okaxis)');
+                return;
+              }
+              setUpiError('');
+              setSavingPayout(true);
+              try {
+                await saveOwnerPayoutDetails({
+                  upiId: trimmedUpi,
+                  upiVerified: true,
+                  accountHolderName: accountHolderName.trim() || fullName,
+                  bankName: bankName.trim(),
+                  accountNumber: accountNumber.trim(),
+                  ifscCode: ifscCode.trim(),
+                });
+                setUpiVerified(true);
+                Alert.alert('✓ Payout Details Saved', `UPI ID ${trimmedUpi} verified and linked to rent reminders.`);
+              } finally {
+                setSavingPayout(false);
+              }
+            }}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.managePropertyBtnText}>
+              {savingPayout ? 'Saving...' : 'Save & Verify Payout Details'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* ─── 4. SETTINGS & ACCOUNT ACTIONS CARD (MATCHING FIRST PHOTO) ─── */}

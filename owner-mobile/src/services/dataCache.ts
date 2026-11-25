@@ -1,4 +1,5 @@
 import { apiClient } from '../api/client';
+import { safeStorage } from '../utils/safeStorage';
 import { Property, Tenant, RentInvoice, Expense } from '../types';
 
 interface CacheEntry<T> {
@@ -12,93 +13,140 @@ class FastDataCache {
   private invoices: CacheEntry<RentInvoice[]> | null = null;
   private expenses: CacheEntry<Expense[]> | null = null;
 
-  private TTL_MS = 60 * 1000; // 60 seconds memory freshness
+  private inFlight = new Map<string, Promise<any>>();
+  private TTL_MS = 60 * 1000; // 60 seconds fresh window
+
+  private async fetchWithSwr<T>(
+    key: string,
+    current: CacheEntry<T> | null,
+    setter: (entry: CacheEntry<T>) => void,
+    fetcher: () => Promise<T>,
+    forceRefresh: boolean,
+    fallbackValue: T
+  ): Promise<T> {
+    const now = Date.now();
+    if (!forceRefresh && current && now - current.timestamp < this.TTL_MS) {
+      return current.data;
+    }
+
+    // Deduplicate concurrent requests for the same key
+    const existingPromise = this.inFlight.get(key);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    // Load persisted SWR snapshot if memory cache is cold
+    if (!current && !forceRefresh) {
+      try {
+        const stored = await safeStorage.getItem(`@staynest_swr_${key}`);
+        if (stored) {
+          const parsed = JSON.parse(stored) as CacheEntry<T>;
+          if (parsed && parsed.data) {
+            setter(parsed);
+            // Trigger background refresh without blocking initial render
+            void this.fetchWithSwr(key, parsed, setter, fetcher, true, fallbackValue);
+            return parsed.data;
+          }
+        }
+      } catch {}
+    }
+
+    const networkPromise = (async () => {
+      try {
+        const fresh = await fetcher();
+        const entry: CacheEntry<T> = { data: fresh, timestamp: Date.now() };
+        setter(entry);
+        safeStorage.setItem(`@staynest_swr_${key}`, JSON.stringify(entry)).catch(() => {});
+        return fresh;
+      } catch {
+        return current?.data ?? fallbackValue;
+      } finally {
+        this.inFlight.delete(key);
+      }
+    })();
+
+    this.inFlight.set(key, networkPromise);
+
+    // Stale-while-revalidate: if stale data exists in memory, return it immediately while refreshing
+    if (!forceRefresh && current) {
+      return current.data;
+    }
+    return networkPromise;
+  }
 
   // ─── PROPERTIES ───
   async getProperties(forceRefresh = false): Promise<Property[]> {
-    const now = Date.now();
-    if (!forceRefresh && this.properties && now - this.properties.timestamp < this.TTL_MS) {
-      return this.properties.data;
-    }
-
-    try {
-      const res = await apiClient<{ content: Property[] }>('/owner/properties');
-      const loaded = res.content || [];
-      this.properties = { data: loaded, timestamp: now };
-      return loaded;
-    } catch {
-      return this.properties?.data || [];
-    }
+    return this.fetchWithSwr(
+      'properties',
+      this.properties,
+      (e) => { this.properties = e; },
+      async () => (await apiClient<{ content: Property[] }>('/owner/properties')).content || [],
+      forceRefresh,
+      []
+    );
   }
 
   setProperties(props: Property[]) {
-    this.properties = { data: props, timestamp: Date.now() };
+    const entry = { data: props, timestamp: Date.now() };
+    this.properties = entry;
+    safeStorage.setItem('@staynest_swr_properties', JSON.stringify(entry)).catch(() => {});
   }
 
   // ─── TENANTS ───
   async getTenants(forceRefresh = false): Promise<Tenant[]> {
-    const now = Date.now();
-    if (!forceRefresh && this.tenants && now - this.tenants.timestamp < this.TTL_MS) {
-      return this.tenants.data;
-    }
-
-    try {
-      const res = await apiClient<{ content: Tenant[] }>('/owner/tenants');
-      const loaded = res.content || [];
-      this.tenants = { data: loaded, timestamp: now };
-      return loaded;
-    } catch {
-      return this.tenants?.data || [];
-    }
+    return this.fetchWithSwr(
+      'tenants',
+      this.tenants,
+      (e) => { this.tenants = e; },
+      async () => (await apiClient<{ content: Tenant[] }>('/owner/tenants')).content || [],
+      forceRefresh,
+      []
+    );
   }
 
   setTenants(tenants: Tenant[]) {
-    this.tenants = { data: tenants, timestamp: Date.now() };
+    const entry = { data: tenants, timestamp: Date.now() };
+    this.tenants = entry;
+    safeStorage.setItem('@staynest_swr_tenants', JSON.stringify(entry)).catch(() => {});
   }
 
   // ─── INVOICES ───
   async getInvoices(forceRefresh = false): Promise<RentInvoice[]> {
-    const now = Date.now();
-    if (!forceRefresh && this.invoices && now - this.invoices.timestamp < this.TTL_MS) {
-      return this.invoices.data;
-    }
-
-    try {
-      const res = await apiClient<{ content: RentInvoice[] }>('/owner/invoices');
-      const loaded = res.content || [];
-      this.invoices = { data: loaded, timestamp: now };
-      return loaded;
-    } catch {
-      return this.invoices?.data || [];
-    }
+    return this.fetchWithSwr(
+      'invoices',
+      this.invoices,
+      (e) => { this.invoices = e; },
+      async () => (await apiClient<{ content: RentInvoice[] }>('/owner/invoices')).content || [],
+      forceRefresh,
+      []
+    );
   }
 
   setInvoices(invoices: RentInvoice[]) {
-    this.invoices = { data: invoices, timestamp: Date.now() };
+    const entry = { data: invoices, timestamp: Date.now() };
+    this.invoices = entry;
+    safeStorage.setItem('@staynest_swr_invoices', JSON.stringify(entry)).catch(() => {});
   }
 
   // ─── EXPENSES ───
   async getExpenses(forceRefresh = false): Promise<Expense[]> {
-    const now = Date.now();
-    if (!forceRefresh && this.expenses && now - this.expenses.timestamp < this.TTL_MS) {
-      return this.expenses.data;
-    }
-
-    try {
-      const res = await apiClient<{ content: Expense[] }>('/owner/expenses');
-      const loaded = res.content || [];
-      this.expenses = { data: loaded, timestamp: now };
-      return loaded;
-    } catch {
-      return this.expenses?.data || [];
-    }
+    return this.fetchWithSwr(
+      'expenses',
+      this.expenses,
+      (e) => { this.expenses = e; },
+      async () => (await apiClient<{ content: Expense[] }>('/owner/expenses')).content || [],
+      forceRefresh,
+      []
+    );
   }
 
   setExpenses(expenses: Expense[]) {
-    this.expenses = { data: expenses, timestamp: Date.now() };
+    const entry = { data: expenses, timestamp: Date.now() };
+    this.expenses = entry;
+    safeStorage.setItem('@staynest_swr_expenses', JSON.stringify(entry)).catch(() => {});
   }
 
-  // Clear all on logout or refresh
+  // Invalidate all caches after mutations (onboard, checkout, pay, add expense)
   invalidateAll() {
     this.properties = null;
     this.tenants = null;
