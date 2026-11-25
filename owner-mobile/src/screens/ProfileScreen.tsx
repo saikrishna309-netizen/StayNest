@@ -117,6 +117,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             },
           ];
         }
+
+        // Merge custom properties saved in safeStorage / localStorage
+        try {
+          const customPropsRaw = await safeStorage.getItem('@staynest_custom_properties');
+          if (customPropsRaw) {
+            const parsedCustom: Property[] = JSON.parse(customPropsRaw);
+            if (Array.isArray(parsedCustom) && parsedCustom.length > 0) {
+              const seenIds = new Set(loadedProps.map((p) => p.id));
+              const uniqueCustom = parsedCustom.filter((p) => p?.id && !seenIds.has(p.id));
+              loadedProps = [...loadedProps, ...uniqueCustom];
+            }
+          }
+        } catch {}
+
         setProperties(loadedProps);
 
         const activeId =
@@ -427,60 +441,111 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             My Properties ({properties.length || 1})
           </Text>
 
-          <View style={styles.propertyPreviewRow}>
-            <Image
-              source={{ uri: propPhotoUrl }}
-              style={styles.propertyThumb}
-              resizeMode="cover"
-            />
-            <View style={{ flex: 1 }}>
-              <View style={styles.propertyTitleRow}>
-                <Text style={styles.pgCardName} numberOfLines={1}>
-                  {pgName}
-                </Text>
-                <View style={styles.activeGreenBadge}>
-                  <Text style={styles.activeGreenBadgeText}>Active</Text>
+          {(properties.length > 0 ? properties : activeProperty ? [activeProperty] : []).map((prop, idx) => {
+            const isPropActive = activeProperty ? prop.id === activeProperty.id : idx === 0;
+            const isRental = prop.propertyType === 'RENTAL_BUILDING';
+            const propFl = getInitialFloorsForProperty(prop.id);
+            const roomsCount = propFl.reduce((s, f) => s + f.rooms.length, 0);
+            const bedsCount = propFl.reduce(
+              (s, f) => s + f.rooms.reduce((rs, r) => rs + r.beds.length, 0),
+              0
+            );
+            const pLoc = prop.cityName || prop.addressLine || location;
+            const pPhoto = prop.primaryPhotoUrl || defaultPgPhoto;
+
+            return (
+              <View
+                key={prop.id}
+                style={{
+                  marginTop: idx > 0 ? 14 : 0,
+                  paddingTop: idx > 0 ? 14 : 0,
+                  borderTopWidth: idx > 0 ? 1 : 0,
+                  borderTopColor: '#f1f5f9',
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.propertyPreviewRow}
+                  onPress={() => onActivePropertyChange?.(prop)}
+                  activeOpacity={0.8}
+                >
+                  <Image
+                    source={{ uri: pPhoto }}
+                    style={styles.propertyThumb}
+                    resizeMode="cover"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.propertyTitleRow}>
+                      <Text style={styles.pgCardName} numberOfLines={1}>
+                        {prop.name}
+                      </Text>
+                      {isPropActive ? (
+                        <View style={styles.activeGreenBadge}>
+                          <Text style={styles.activeGreenBadgeText}>Active</Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.activeGreenBadge, { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }]}>
+                          <Text style={[styles.activeGreenBadgeText, { color: '#ea580c' }]}>Select</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.pgCardLocation} numberOfLines={1}>
+                      📍 {pLoc}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <View style={styles.propertyStatsSummary}>
+                  <Text style={styles.propertyStatsBold}>
+                    {isRental
+                      ? `${propFl.length} Floors • ${roomsCount} Flats`
+                      : `${propFl.length} Floors • ${roomsCount} Rooms • ${bedsCount} Beds`}
+                  </Text>
+                  <Text style={styles.propertyStatsSub}>
+                    {isRental ? '(Rental Building / Flats)' : '(PG / Hostel Sharing)'}
+                  </Text>
                 </View>
+
+                {isPropActive && (
+                  <View style={styles.amenityGridRow}>
+                    {[
+                      { icon: '🏢', label: 'Floors' },
+                      { icon: '🚪', label: isRental ? 'Flats' : 'Rooms' },
+                      { icon: isRental ? '🏠' : '🛏️', label: isRental ? 'Units' : 'Beds' },
+                      { icon: '📶', label: 'Wi-Fi' },
+                      { icon: '❄️', label: 'AC' },
+                      { icon: '🍽️', label: isRental ? 'Maint.' : 'Food' },
+                    ].map((item) => (
+                      <View key={item.label} style={styles.amenityTile}>
+                        <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+                        <Text style={styles.amenityTileLabel}>{item.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.managePropertyBtn,
+                    !isPropActive && { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fdba74' },
+                  ]}
+                  onPress={() => {
+                    onActivePropertyChange?.(prop);
+                    onNavigateTab && onNavigateTab('properties');
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text
+                    style={[
+                      styles.managePropertyBtnText,
+                      !isPropActive && { color: '#ea580c' },
+                    ]}
+                  >
+                    Manage Property →
+                  </Text>
+                </TouchableOpacity>
               </View>
-              <Text style={styles.pgCardLocation} numberOfLines={1}>
-                📍 {propLocation}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.propertyStatsSummary}>
-            <Text style={styles.propertyStatsBold}>
-              {propStats.floors} Floors • {propStats.rooms} Rooms • {propStats.beds} Beds
-            </Text>
-            <Text style={styles.propertyStatsSub}>
-              (Triple, Double & Single Sharing)
-            </Text>
-          </View>
-
-          {/* 6-Item Feature Icon Grid */}
-          <View style={styles.amenityGridRow}>
-            {[
-              { icon: '🏢', label: 'Floors' },
-              { icon: '🚪', label: 'Rooms' },
-              { icon: '🛏️', label: 'Beds' },
-              { icon: '📶', label: 'Wi-Fi' },
-              { icon: '❄️', label: 'AC' },
-              { icon: '🍽️', label: 'Food' },
-            ].map((item) => (
-              <View key={item.label} style={styles.amenityTile}>
-                <Text style={{ fontSize: 16 }}>{item.icon}</Text>
-                <Text style={styles.amenityTileLabel}>{item.label}</Text>
-              </View>
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={styles.managePropertyBtn}
-            onPress={() => onNavigateTab && onNavigateTab('properties')}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.managePropertyBtnText}>Manage Property →</Text>
-          </TouchableOpacity>
+            );
+          })}
         </View>
 
         {/* ─── 4. SETTINGS & ACCOUNT ACTIONS CARD (MATCHING FIRST PHOTO) ─── */}
