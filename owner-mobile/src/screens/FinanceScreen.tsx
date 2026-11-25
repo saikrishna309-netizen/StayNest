@@ -20,6 +20,7 @@ import {
   computeCollectionMetrics,
   computeExpenseAndProfitMetrics,
   computePeriodPnlMetrics,
+  mergePortfolioTenants,
   FixedMonthlyBill,
   MonthlyPnlRecord,
 } from '../services/financeSummaryService';
@@ -123,18 +124,37 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         apiClient<{ content: Tenant[] }>('/owner/tenants').catch(() => ({ content: [] })),
       ]);
 
-      let loadedTenants = tenRes.content || [];
+      let customTenantsList: Tenant[] = [];
       try {
         const storedCustomTenants = await safeStorage.getItem('@staynest_custom_tenants');
         if (storedCustomTenants) {
           const parsedT: Tenant[] = JSON.parse(storedCustomTenants);
-          if (Array.isArray(parsedT) && parsedT.length > 0) {
-            const seenIds = new Set(loadedTenants.map((t) => t.id));
-            const uniqueT = parsedT.filter((ct) => !seenIds.has(ct.id));
-            loadedTenants = [...uniqueT, ...loadedTenants];
+          if (Array.isArray(parsedT)) {
+            customTenantsList = parsedT;
           }
         }
       } catch {}
+
+      let loadedTenants = mergePortfolioTenants(tenRes.content || [], customTenantsList);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cachedT = window.localStorage.getItem('staynest_cached_tenants');
+          const parsedT = cachedT ? JSON.parse(cachedT) : [];
+          loadedTenants = loadedTenants.map((lt) => {
+            const cleanPhone = lt.phone ? lt.phone.replace(/[^0-9]/g, '') : '';
+            const isPaidDirect =
+              window.localStorage.getItem(`staynest_paid_${lt.id}`) === 'PAID' ||
+              (cleanPhone ? window.localStorage.getItem(`staynest_paid_${cleanPhone}`) === 'PAID' : false);
+            const match = Array.isArray(parsedT)
+              ? parsedT.find((p: any) => p.id === lt.id || p.phone === lt.phone || p.fullName === lt.fullName)
+              : null;
+            if (isPaidDirect || (match && match.rentStatus === 'PAID')) {
+              return { ...lt, rentStatus: 'PAID' as const, outstandingPaise: 0 };
+            }
+            return lt;
+          });
+        } catch {}
+      }
       setTenants(loadedTenants);
 
       let loadedExpenses = expRes.content || [];
@@ -547,20 +567,26 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         {/* Executive Quick Stats Banner */}
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>AVG MONTHLY PROFIT</Text>
-            <Text style={[styles.kpiValue, { color: avgMonthlyProfit >= 0 ? '#4d8b6f' : '#dc2626' }]}>
+            <Text style={styles.kpiLabel} numberOfLines={1} adjustsFontSizeToFit>
+              AVG MONTHLY PROFIT
+            </Text>
+            <Text style={[styles.kpiValue, { color: avgMonthlyProfit >= 0 ? '#4d8b6f' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
               {avgMonthlyProfit >= 0 ? '+' : '-'}₹{Math.abs(avgMonthlyProfit).toLocaleString('en-IN')}
             </Text>
           </View>
           <View style={[styles.kpiBox, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#efece9' }]}>
-            <Text style={styles.kpiLabel}>MANDATORY MONTHLY</Text>
-            <Text style={[styles.kpiValue, { color: '#ea580c' }]}>
+            <Text style={styles.kpiLabel} numberOfLines={1} adjustsFontSizeToFit>
+              MANDATORY MONTHLY
+            </Text>
+            <Text style={[styles.kpiValue, { color: '#ea580c' }]} numberOfLines={1} adjustsFontSizeToFit>
               ₹{totalMonthlyBills.toLocaleString('en-IN')}
             </Text>
           </View>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>NET PERIOD SURPLUS</Text>
-            <Text style={[styles.kpiValue, { color: totalPeriodProfit >= 0 ? '#3730a3' : '#dc2626' }]}>
+            <Text style={styles.kpiLabel} numberOfLines={1} adjustsFontSizeToFit>
+              NET PERIOD SURPLUS
+            </Text>
+            <Text style={[styles.kpiValue, { color: totalPeriodProfit >= 0 ? '#3730a3' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
               {totalPeriodProfit >= 0 ? '+' : '-'}₹{Math.abs(totalPeriodProfit).toLocaleString('en-IN')}
             </Text>
           </View>
@@ -1301,19 +1327,22 @@ const styles = StyleSheet.create({
   kpiBox: {
     flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 4,
+    justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   kpiLabel: {
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: '700',
     color: '#6b7280',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
     textTransform: 'uppercase',
+    textAlign: 'center',
   },
   kpiValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    marginTop: 3,
+    marginTop: 4,
+    textAlign: 'center',
   },
   content: {
     padding: 16,
