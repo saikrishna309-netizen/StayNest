@@ -6567,7 +6567,8 @@ const styles = StyleSheet.create({
   // ─── Recent Activities (Last 5) ───
   recentActSection: {
     paddingHorizontal: 16,
-    marginBottom: 22,
+    marginTop: 22,
+    marginBottom: 24,
   },
   recentActHeaderRow: {
     flexDirection: 'row',
@@ -6752,6 +6753,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     marginHorizontal: 16,
+    marginBottom: 6,
     borderWidth: 1,
     borderColor: '#f1f5f9',
   },
