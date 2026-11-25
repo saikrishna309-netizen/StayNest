@@ -112,8 +112,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 }) => {
   const { user } = useAuth();
   const { width: windowWidth } = useWindowDimensions();
-  const effectiveGridWidth = Platform.OS === 'web' && windowWidth > 520 ? Math.min(windowWidth - 48, 920) : windowWidth;
-  const gridTileWidth = Math.max(74, Math.floor((effectiveGridWidth - 32 - 24) / 4));
+  const [gridContainerWidth, setGridContainerWidth] = useState<number>(0);
+  const measuredWidth = gridContainerWidth > 0 ? gridContainerWidth : Math.min(windowWidth - 32, 400);
+  const gridTileWidth = Math.max(70, Math.floor((measuredWidth - 24) / 4));
   const [selectedGridUnit, setSelectedGridUnit] = useState<{
     floorNum: number;
     room: RoomConfig;
@@ -2241,9 +2242,26 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
                     {/* Room Cards: Classic Bed-Grid for PG / Hostel vs 4-Column Grid Matrix for Rental Building */}
                     <View
+                      onLayout={
+                        isRentalMode
+                          ? (e) => {
+                              const w = e.nativeEvent.layout.width;
+                              if (w > 0 && Math.abs(w - gridContainerWidth) > 2) {
+                                setGridContainerWidth(w);
+                              }
+                            }
+                          : undefined
+                      }
                       style={
                         isRentalMode
-                          ? { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }
+                          ? Platform.OS === 'web'
+                            ? ({
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                                gap: 8,
+                                width: '100%',
+                              } as any)
+                            : { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }
                           : { gap: 16 }
                       }
                     >
@@ -2548,7 +2566,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                             key={room.id}
                             style={[
                               styles.gridUnitTile,
-                              { width: gridTileWidth },
+                              Platform.OS === 'web' ? { width: '100%' } : { width: gridTileWidth },
                               isOccupiedUnit ? styles.gridUnitTileOccupied : styles.gridUnitTileVacant,
                             ]}
                             onPress={() =>
