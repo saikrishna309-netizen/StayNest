@@ -16,8 +16,12 @@ import {
 import { safeStorage } from '../utils/safeStorage';
 import { fastDataCache } from '../services/dataCache';
 import { useAuth } from '../context/AuthContext';
+import { apiClient } from '../api/client';
+import { Property } from '../types';
+import { getInitialFloorsForProperty } from '../services/propertyDataService';
 import { GooglePayLogo, PhonePeLogo, PaytmLogo, CardPaymentLogo } from '../components/PaymentLogos';
 import { pickImageFromDevice } from '../utils/imagePicker';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 interface ProfileScreenProps {
   onBackToDashboard: () => void;
@@ -28,13 +32,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
   const { user, updateProfile, logout } = useAuth();
 
   // Profile data
-  const [fullName, setFullName] = useState(user?.fullName || 'Ramesh Kumar');
-  const [email, setEmail] = useState(user?.email || 'ramesh@example.com');
-  const [phone, setPhone] = useState(user?.phone || '9876543210');
+  const [fullName, setFullName] = useState(user?.fullName || 'Saikrishna Naraharisetti');
+  const [email, setEmail] = useState(user?.email || 'saikrishnakrishna235@gmail.com');
+  const [phone, setPhone] = useState(user?.phone || '9866250918');
   const [location, setLocation] = useState('Bengaluru, Karnataka');
   const [pgName, setPgName] = useState('Ramesh PG');
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [propStats, setPropStats] = useState({ floors: 3, rooms: 6, beds: 18 });
 
-  // Custom Editable Images (Requirement 9)
+  // Custom Editable Images
   const defaultAvatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80';
   const defaultBanner = 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=1000&q=80';
   const defaultPgPhoto = 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
@@ -52,16 +58,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
   const [editBannerUrl, setEditBannerUrl] = useState(bannerUrl);
   const [savingProfile, setSavingProfile] = useState(false);
 
-  // Subscription Modal & Auto-Pay State (Requirements 6, 7, 8)
+  // Subscription Modal & Auto-Pay State
   const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [selectedPlanPeriod, setSelectedPlanPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [autoPayMethod, setAutoPayMethod] = useState<'GPAY' | 'PHONEPE' | 'PAYTM' | 'CARD'>('GPAY');
   const [subscribing, setSubscribing] = useState(false);
   const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
 
-  // Load custom profile & banner from safeStorage
+  // Load custom profile, banner & live properties from safeStorage / API
   useEffect(() => {
-    const loadSavedProfile = async () => {
+    const loadSavedProfileAndProperties = async () => {
       try {
         const savedData = await safeStorage.getItem('@staynest_owner_custom_profile');
         if (savedData) {
@@ -76,8 +82,54 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
       } catch (e) {
         console.log('Error loading saved profile:', e);
       }
+
+      try {
+        const propRes = await apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] }));
+        let loadedProps: Property[] = propRes.content || [];
+        if (loadedProps.length === 0) {
+          loadedProps = [
+            {
+              id: 'prop-pg-1',
+              name: "StayNest Elite Men's PG",
+              propertyType: 'HOSTEL',
+              genderPolicy: 'MALE',
+              addressLine: 'Opp. PVP Square, MG Road, Vijayawada',
+              cityName: 'Vijayawada, Andhra Pradesh',
+              foodIncluded: true,
+              primaryPhotoUrl: defaultPgPhoto,
+            },
+            {
+              id: 'prop-pg-2',
+              name: 'Sai Durga Executive Ladies PG',
+              propertyType: 'PG',
+              genderPolicy: 'FEMALE',
+              addressLine: 'Near Benz Circle, Vijayawada',
+              cityName: 'Vijayawada, Andhra Pradesh',
+              foodIncluded: true,
+              primaryPhotoUrl: defaultPgPhoto,
+            },
+          ];
+        }
+        setProperties(loadedProps);
+
+        const activeId =
+          (typeof window !== 'undefined' && window.localStorage
+            ? window.localStorage.getItem('staynest_active_property_id')
+            : '') || loadedProps[0]?.id;
+        const activeProp = loadedProps.find((p) => p.id === activeId) || loadedProps[0];
+        if (activeProp) {
+          setPgName(activeProp.name);
+          const floors = getInitialFloorsForProperty(activeProp.id);
+          const roomsCount = floors.reduce((s, f) => s + f.rooms.length, 0);
+          const bedsCount = floors.reduce(
+            (s, f) => s + f.rooms.reduce((rs, r) => rs + r.beds.length, 0),
+            0
+          );
+          setPropStats({ floors: floors.length, rooms: roomsCount, beds: bedsCount });
+        }
+      } catch {}
     };
-    loadSavedProfile();
+    loadSavedProfileAndProperties();
   }, []);
 
   // Save Profile Changes
@@ -220,6 +272,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
     }
   };
 
+  const activeProperty = properties[0];
+  const propLocation =
+    activeProperty?.cityName || activeProperty?.addressLine || location;
+  const propPhotoUrl = activeProperty?.primaryPhotoUrl || defaultPgPhoto;
+
   return (
     <View style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -231,35 +288,51 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
             resizeMode="contain"
           />
 
-          <View style={styles.topBarRight}>
-            <TouchableOpacity style={styles.iconButton} onPress={handleLogout} activeOpacity={0.7}>
-              <Text style={{ fontSize: 18 }}>🚪</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => {
+              setEditName(fullName);
+              setEditEmail(email);
+              setEditPhone(phone);
+              setEditLocation(location);
+              setEditAvatarUrl(avatarUrl);
+              setEditBannerUrl(bannerUrl);
+              setIsEditModalOpen(true);
+            }}
+            activeOpacity={0.7}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Circle cx="12" cy="8" r="4" stroke="#374151" strokeWidth="1.8" />
+              <Path
+                d="M4 20c0-3.8 3.6-6 8-6s8 2.2 8 6"
+                stroke="#374151"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </Svg>
+          </TouchableOpacity>
         </View>
 
-        {/* ─── 2. HERO PROFILE CARD WITH EDITABLE BANNER & AVATAR (EXACT SCREENSHOT) ─── */}
+        {/* ─── 2. HERO PROFILE CARD (MATCHING FIRST PHOTO) ─── */}
         <View style={styles.profileHeroCard}>
-          {/* Background Illustration Banner */}
+          {/* Background Banner */}
           <View style={styles.bannerWrapper}>
             <Image
               source={{ uri: bannerUrl }}
               style={styles.bannerImage}
               resizeMode="cover"
             />
-            {/* Banner Change Pill Button */}
             <TouchableOpacity
               style={styles.editBannerPill}
               onPress={handleUploadBannerFromDevice}
-              activeOpacity={0.8}
+              activeOpacity={0.85}
             >
-              <Text style={styles.editBannerPillText}>📷 Change Banner (Upload)</Text>
+              <Text style={styles.editBannerPillText}>🖼️ Change Banner</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Profile Card Foreground Content */}
+          {/* Profile Foreground Row */}
           <View style={styles.profileContentRow}>
-            {/* Circular Avatar with Crown, Online Indicator & Local Photo Picker (Point 10) */}
             <TouchableOpacity
               style={styles.avatarWrapper}
               onPress={handleUploadAvatarFromDevice}
@@ -269,358 +342,167 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
                 source={{ uri: avatarUrl }}
                 style={styles.avatarImage}
               />
-              {/* Camera edit overlay badge */}
-              <View style={styles.avatarCameraBadge}>
-                <Text style={{ fontSize: 9 }}>📷</Text>
-              </View>
-              {/* Gold Crown Badge */}
-              <View style={styles.crownBadge}>
-                <Text style={{ fontSize: 11 }}>👑</Text>
-              </View>
-              {/* Green Online Dot */}
-              <View style={styles.onlineDot} />
             </TouchableOpacity>
 
-            {/* Profile Info Details */}
             <View style={styles.profileDetailsCol}>
-              <Text style={styles.profileName}>{fullName}</Text>
-
-              {/* PG Owner Tag */}
-              <View style={styles.ownerTagRow}>
-                <View style={styles.ownerTagPill}>
-                  <Text style={{ fontSize: 11 }}>👑</Text>
-                  <Text style={styles.ownerTagText}>PG Owner</Text>
-                </View>
-              </View>
-
-              <Text style={styles.profileContactText}>📞 +91 {phone}</Text>
-              <Text style={styles.profileContactText} numberOfLines={1}>✉️ {email}</Text>
-              <Text style={styles.profileLocationText}>📍 {location}</Text>
-            </View>
-
-            {/* Edit Profile Button */}
-            <TouchableOpacity
-              style={styles.editProfileBtn}
-              onPress={() => {
-                setEditName(fullName);
-                setEditEmail(email);
-                setEditPhone(phone);
-                setEditLocation(location);
-                setEditAvatarUrl(avatarUrl);
-                setEditBannerUrl(bannerUrl);
-                setIsEditModalOpen(true);
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.editProfileBtnText}>✏️ Edit Profile</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ─── 3. FOUR STAT PILLS (ROW OF 4) ─── */}
-        <View style={styles.statsRow}>
-          <View style={styles.statPill}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#e0f2fe' }]}>
-              <Text style={{ fontSize: 16 }}>🏠</Text>
-            </View>
-            <Text style={styles.statNumber}>1</Text>
-            <Text style={styles.statLabel}>Properties</Text>
-          </View>
-
-          <View style={styles.statPill}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#dcfce7' }]}>
-              <Text style={{ fontSize: 16 }}>👥</Text>
-            </View>
-            <Text style={styles.statNumber}>45</Text>
-            <Text style={styles.statLabel}>Total Beds</Text>
-          </View>
-
-          <View style={styles.statPill}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#ede9fe' }]}>
-              <Text style={{ fontSize: 16 }}>👤</Text>
-            </View>
-            <Text style={styles.statNumber}>32</Text>
-            <Text style={styles.statLabel}>Occupied</Text>
-          </View>
-
-          <View style={styles.statPill}>
-            <View style={[styles.statIconCircle, { backgroundColor: '#ffedd5' }]}>
-              <Text style={{ fontSize: 16 }}>🛏️</Text>
-            </View>
-            <Text style={styles.statNumber}>13</Text>
-            <Text style={styles.statLabel}>Available</Text>
-          </View>
-        </View>
-
-        {/* ─── 4. MIDDLE TWO CARDS (PG DETAILS & SUBSCRIPTION PLAN) ─── */}
-        <View style={styles.cardsRow}>
-          {/* Card A: PG Details */}
-          <View style={styles.halfCard}>
-            <TouchableOpacity
-              style={styles.cardHeaderNav}
-              onPress={() => onNavigateTab && onNavigateTab('properties')}
-              activeOpacity={0.7}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>🏢</Text>
-                <Text style={styles.cardHeaderTitle}>PG Details</Text>
-              </View>
-              <Text style={styles.chevronIcon}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.pgPhotoContainer}>
-              <Image
-                source={{ uri: defaultPgPhoto }}
-                style={styles.pgPhotoImage}
-                resizeMode="cover"
-              />
-            </View>
-
-            <View style={styles.pgInfoBox}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                <Text style={styles.pgCardName}>{pgName}</Text>
-                <View style={styles.activeGreenBadge}>
-                  <Text style={styles.activeGreenBadgeText}>Active</Text>
-                </View>
-              </View>
-
-              <Text style={styles.pgCardLocation}>📍 {location}</Text>
-              <Text style={styles.pgCardFeature}>🏢 3 Floors | 12 Rooms</Text>
-              <Text style={styles.pgCardFeature}>👥 Triple, Double & Single Sharing</Text>
-              <Text style={styles.pgCardFeature}>📶 Wi-Fi, AC, Food Included</Text>
-
-              <TouchableOpacity
-                style={styles.viewPropertyBtn}
-                onPress={() => onNavigateTab && onNavigateTab('properties')}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.viewPropertyBtnText}>View Property Details →</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Card B: Subscription Plan */}
-          <View style={styles.halfCard}>
-            <TouchableOpacity
-              style={styles.cardHeaderNav}
-              onPress={() => setIsSubscriptionModalOpen(true)}
-              activeOpacity={0.7}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>👑</Text>
-                <Text style={styles.cardHeaderTitle}>Subscription Plan</Text>
-              </View>
-              <Text style={styles.chevronIcon}>›</Text>
-            </TouchableOpacity>
-
-            <View style={styles.subPlanCardContent}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={styles.starBadgePill}>
-                  <Text style={{ fontSize: 11 }}>⭐</Text>
-                  <Text style={styles.starBadgeText}>Premium Plan</Text>
-                </View>
-                <View style={styles.activeGreenBadge}>
-                  <Text style={styles.activeGreenBadgeText}>Active</Text>
-                </View>
-              </View>
-
-              <View style={styles.subPriceWrap}>
-                <Text style={styles.subPriceBig}>
-                  ₹99 <Text style={styles.subPricePerMonth}>/ month</Text>
+              {/* Name + Edit Profile Pill */}
+              <View style={styles.nameAndEditRow}>
+                <Text style={styles.profileName} numberOfLines={2}>
+                  {fullName}
                 </Text>
-                <Text style={styles.subCrownWatermark}>👑</Text>
+                <TouchableOpacity
+                  style={styles.editProfileBtn}
+                  onPress={() => {
+                    setEditName(fullName);
+                    setEditEmail(email);
+                    setEditPhone(phone);
+                    setEditLocation(location);
+                    setEditAvatarUrl(avatarUrl);
+                    setEditBannerUrl(bannerUrl);
+                    setIsEditModalOpen(true);
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.editProfileBtnText}>✏️ Edit Profile</Text>
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.subFeatureList}>
-                <View style={styles.subFeatureItem}>
-                  <Text style={styles.subGreenCheck}>✓</Text>
-                  <Text style={styles.subFeatureItemText}>Manage up to 5 PGs</Text>
-                </View>
-                <View style={styles.subFeatureItem}>
-                  <Text style={styles.subGreenCheck}>✓</Text>
-                  <Text style={styles.subFeatureItemText}>Unlimited WhatsApp Messages</Text>
-                </View>
-                <View style={styles.subFeatureItem}>
-                  <Text style={styles.subGreenCheck}>✓</Text>
-                  <Text style={styles.subFeatureItemText}>Advanced Reports & Analytics</Text>
-                </View>
-                <View style={styles.subFeatureItem}>
-                  <Text style={styles.subGreenCheck}>✓</Text>
-                  <Text style={styles.subFeatureItemText}>Priority Support</Text>
-                </View>
+              {/* PG Owner Badge */}
+              <View style={styles.ownerTagPill}>
+                <Text style={{ fontSize: 11 }}>👑</Text>
+                <Text style={styles.ownerTagText}>PG Owner</Text>
               </View>
 
-              <Text style={styles.nextBillingText}>📅 Next Billing: 15 Dec 2026</Text>
-
-              <TouchableOpacity
-                style={styles.manageSubBtn}
-                onPress={() => setIsSubscriptionModalOpen(true)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.manageSubBtnText}>Manage Subscription</Text>
-              </TouchableOpacity>
+              {/* Contact Info */}
+              <View style={styles.contactStack}>
+                <Text style={styles.profileContactText}>📞 +91 {phone}</Text>
+                <View style={styles.emailRow}>
+                  <Text style={[styles.profileContactText, { flex: 1 }]} numberOfLines={1}>
+                    ✉️ {email}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+                        navigator.clipboard.writeText(email).catch(() => {});
+                      }
+                      Alert.alert('Copied', `${email} copied to clipboard.`);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: 6 }}>📋</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.profileContactText}>📍 {location}</Text>
+              </View>
             </View>
           </View>
         </View>
 
-        {/* ─── 5. LOWER TWO CARDS (MY TENANTS & QUICK ACTIONS) ─── */}
-        <View style={styles.cardsRow}>
-          {/* Card C: My Tenants */}
-          <View style={styles.halfCard}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>👥</Text>
-                <Text style={styles.cardHeaderTitle}>My Tenants</Text>
-              </View>
-            </View>
+        {/* ─── 3. MY PROPERTIES CARD (MATCHING FIRST PHOTO) ─── */}
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionCardTitle}>
+            My Properties ({properties.length || 1})
+          </Text>
 
-            <View style={styles.tenantsRow}>
-              {[
-                { name: 'Amit Sharma', room: 'Room 101-B', status: 'PAID', photo: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80' },
-                { name: 'Rahul Kumar', room: 'Room 101-A', status: 'DUE', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80' },
-                { name: 'Priya Singh', room: 'Room 102-A', status: 'PAID', photo: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80' },
-                { name: 'Arjun Reddy', room: 'Room 201-C', status: 'PAID', photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80' },
-              ].map((t, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.tenantPillCol}
-                  onPress={() => onNavigateTab && onNavigateTab('tenants')}
-                  activeOpacity={0.7}
-                >
-                  <Image source={{ uri: t.photo }} style={styles.tenantAvatarThumb} />
-                  <Text style={styles.tenantThumbName} numberOfLines={1}>{t.name}</Text>
-                  <Text style={styles.tenantThumbRoom}>{t.room}</Text>
-                  <View style={[styles.statusSmallBadge, t.status === 'PAID' ? styles.statusPaidBg : styles.statusDueBg]}>
-                    <Text style={[styles.statusSmallText, t.status === 'PAID' ? styles.statusPaidText : styles.statusDueText]}>
-                      {t.status === 'PAID' ? 'Paid' : 'Due'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
+          <View style={styles.propertyPreviewRow}>
+            <Image
+              source={{ uri: propPhotoUrl }}
+              style={styles.propertyThumb}
+              resizeMode="cover"
+            />
+            <View style={{ flex: 1 }}>
+              <View style={styles.propertyTitleRow}>
+                <Text style={styles.pgCardName} numberOfLines={1}>
+                  {pgName}
+                </Text>
+                <View style={styles.activeGreenBadge}>
+                  <Text style={styles.activeGreenBadgeText}>Active</Text>
+                </View>
+              </View>
+              <Text style={styles.pgCardLocation} numberOfLines={1}>
+                📍 {propLocation}
+              </Text>
             </View>
           </View>
 
-          {/* Card D: Quick Actions (Styled matching bottom navigation board color palette) */}
-          <View style={[styles.halfCard, styles.quickActionsCardWarm]}>
-            <View style={styles.sectionHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <View style={styles.quickActionsIconCircle}>
-                  <Text style={{ fontSize: 13 }}>⚡</Text>
-                </View>
-                <Text style={styles.quickActionsCardTitle}>Quick Actions</Text>
-              </View>
-            </View>
-
-            <View style={styles.quickGrid}>
-              <TouchableOpacity
-                style={styles.quickActionTileWarm}
-                onPress={() => onNavigateTab && onNavigateTab('tenants')}
-                activeOpacity={0.75}
-              >
-                <View style={styles.quickTileIconBadge}>
-                  <Text style={styles.quickTileIconWarm}>👤+</Text>
-                </View>
-                <Text style={styles.quickTileLabelWarm}>Add Tenant</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.quickActionTileWarm}
-                onPress={() => onNavigateTab && onNavigateTab('tenants')}
-                activeOpacity={0.75}
-              >
-                <View style={styles.quickTileIconBadge}>
-                  <Text style={styles.quickTileIconWarm}>₹</Text>
-                </View>
-                <Text style={styles.quickTileLabelWarm}>Record Rent</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.quickActionTileWarm}
-                onPress={() => onNavigateTab && onNavigateTab('management')}
-                activeOpacity={0.75}
-              >
-                <View style={styles.quickTileIconBadge}>
-                  <Text style={styles.quickTileIconWarm}>📄</Text>
-                </View>
-                <Text style={styles.quickTileLabelWarm}>Add Expense</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.quickActionTileWarm}
-                onPress={() => onNavigateTab && onNavigateTab('management')}
-                activeOpacity={0.75}
-              >
-                <View style={styles.quickTileIconBadge}>
-                  <Text style={styles.quickTileIconWarm}>📊</Text>
-                </View>
-                <Text style={styles.quickTileLabelWarm}>View Reports</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.propertyStatsSummary}>
+            <Text style={styles.propertyStatsBold}>
+              {propStats.floors} Floors • {propStats.rooms} Rooms • {propStats.beds} Beds
+            </Text>
+            <Text style={styles.propertyStatsSub}>
+              (Triple, Double & Single Sharing)
+            </Text>
           </View>
 
-          {/* ─── SYSTEM & DATA CACHE CONTROLS ─── */}
-          <View style={{ marginTop: 22, marginBottom: 20 }}>
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#fff7ed',
-                borderWidth: 1.5,
-                borderColor: '#fed7aa',
-                borderRadius: 14,
-                paddingVertical: 14,
-                paddingHorizontal: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                marginBottom: 10,
-              }}
-              onPress={async () => {
-                try {
-                  await safeStorage.removeItem('@staynest_custom_tenants');
-                  await safeStorage.removeItem('@staynest_custom_properties');
-                  fastDataCache.invalidateAll();
-                  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                    window.localStorage.removeItem('staynest_custom_properties');
-                    window.localStorage.removeItem('staynest_customer_enquiries');
-                  }
-                  Alert.alert(
-                    'Local Cache Cleared! 🧹',
-                    'All cached data has been removed. The app is fetching fresh, live data from the backend.'
-                  );
-                } catch (err: any) {
-                  Alert.alert('Error', err.message || 'Could not clear cache');
+          {/* 6-Item Feature Icon Grid */}
+          <View style={styles.amenityGridRow}>
+            {[
+              { icon: '🏢', label: 'Floors' },
+              { icon: '🚪', label: 'Rooms' },
+              { icon: '🛏️', label: 'Beds' },
+              { icon: '📶', label: 'Wi-Fi' },
+              { icon: '❄️', label: 'AC' },
+              { icon: '🍽️', label: 'Food' },
+            ].map((item) => (
+              <View key={item.label} style={styles.amenityTile}>
+                <Text style={{ fontSize: 16 }}>{item.icon}</Text>
+                <Text style={styles.amenityTileLabel}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={styles.managePropertyBtn}
+            onPress={() => onNavigateTab && onNavigateTab('properties')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.managePropertyBtnText}>Manage Property →</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── 4. SETTINGS & ACCOUNT ACTIONS CARD (MATCHING FIRST PHOTO) ─── */}
+        <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={async () => {
+              try {
+                await safeStorage.removeItem('@staynest_custom_tenants');
+                await safeStorage.removeItem('@staynest_custom_properties');
+                fastDataCache.invalidateAll();
+                if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                  window.localStorage.removeItem('staynest_custom_properties');
+                  window.localStorage.removeItem('staynest_customer_enquiries');
                 }
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontSize: 16 }}>🧹</Text>
-              <Text style={{ color: '#ea580c', fontWeight: '900', fontSize: 13 }}>
-                Clear Local Cache & Fetch Live Backend
-              </Text>
-            </TouchableOpacity>
+                Alert.alert(
+                  'Live Data Synced! 🔄',
+                  'Local cache cleared. The app is fetching fresh live data from the backend.'
+                );
+              } catch (err: any) {
+                Alert.alert('Error', err.message || 'Could not clear cache');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.settingsRowText}>Sync Live Backend Data (Clear Cache)</Text>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
 
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#f8fafc',
-                borderWidth: 1,
-                borderColor: '#e2e8f0',
-                borderRadius: 14,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-              }}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <Text style={{ fontSize: 15 }}>🚪</Text>
-              <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>
-                Log Out from Account
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setIsSubscriptionModalOpen(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.settingsRowText}>App Preferences & Subscription</Text>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.logoutRowText}>Log Out</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -881,7 +763,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#faf8f6',
   },
   scrollContent: {
     paddingBottom: 130,
@@ -893,14 +775,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    paddingTop: Platform.OS === 'android' ? 42 : 12,
+    paddingBottom: 12,
+    backgroundColor: '#faf8f6',
   },
   logoImage: {
-    height: 38,
-    width: 140,
+    height: 34,
+    width: 128,
   },
   topBarRight: {
     flexDirection: 'row',
@@ -908,50 +789,36 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#f8fafc',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-  },
-  notifBadge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    backgroundColor: '#ef4444',
-    borderRadius: 10,
-    minWidth: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  notifBadgeText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontWeight: '900',
+    borderColor: '#efece9',
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
 
   // ─── Hero Profile Card with Banner ───
   profileHeroCard: {
     backgroundColor: '#ffffff',
     marginHorizontal: 16,
-    marginTop: 14,
-    borderRadius: 24,
+    marginTop: 6,
+    borderRadius: 20,
     overflow: 'hidden',
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-    borderWidth: 1.5,
-    borderColor: '#f97316',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#efece9',
   },
   bannerWrapper: {
-    height: 130,
+    height: 115,
     width: '100%',
     position: 'relative',
     backgroundColor: '#fef3c7',
@@ -969,34 +836,168 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 16,
     shadowColor: '#000',
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
   editBannerPillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#111827',
   },
   profileContentRow: {
     paddingHorizontal: 16,
     paddingBottom: 16,
-    paddingTop: 8,
+    paddingTop: 10,
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
   },
   avatarWrapper: {
     position: 'relative',
-    marginTop: -38,
+    marginTop: -42,
   },
   avatarImage: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     borderWidth: 3.5,
     borderColor: '#ffffff',
-    backgroundColor: '#cbd5e1',
+    backgroundColor: '#e5e7eb',
+  },
+  nameAndEditRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  contactStack: {
+    marginTop: 8,
+    gap: 4,
+  },
+  emailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  // ─── My Properties Card ───
+  sectionCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  sectionCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  propertyPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+  },
+  propertyThumb: {
+    width: 68,
+    height: 68,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+  },
+  propertyTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  propertyStatsSummary: {
+    marginTop: 12,
+  },
+  propertyStatsBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  propertyStatsSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  amenityGridRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginTop: 12,
+  },
+  amenityTile: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingVertical: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  amenityTileLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  managePropertyBtn: {
+    backgroundColor: '#d96b27',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 14,
+  },
+  managePropertyBtnText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  // ─── Settings & Account Actions Card ───
+  settingsCard: {
+    backgroundColor: '#ffffff',
+    marginHorizontal: 16,
+    marginTop: 14,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f3f4f6',
+  },
+  settingsRowText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  settingsChevron: {
+    fontSize: 18,
+    color: '#6b7280',
+    fontWeight: '600',
+  },
+  logoutRowText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#991b1b',
   },
   crownBadge: {
     position: 'absolute',
@@ -1055,12 +1056,14 @@ const styles = StyleSheet.create({
   },
   profileDetailsCol: {
     flex: 1,
+    marginLeft: 12,
   },
   profileName: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: -0.3,
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
+    letterSpacing: -0.2,
   },
   ownerTagRow: {
     flexDirection: 'row',
@@ -1070,47 +1073,43 @@ const styles = StyleSheet.create({
   ownerTagPill: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     gap: 4,
-    backgroundColor: '#fef3c7',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#fde68a',
+    backgroundColor: '#ffedd5',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
+    marginTop: 5,
   },
   ownerTagText: {
-    color: '#b45309',
+    color: '#9a3412',
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
   },
   profileContactText: {
     fontSize: 12,
-    color: '#475569',
+    color: '#374151',
     marginTop: 1,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   profileLocationText: {
     fontSize: 12,
-    color: '#64748b',
+    color: '#6b7280',
     marginTop: 2,
     fontWeight: '500',
   },
   editProfileBtn: {
     backgroundColor: '#ffffff',
-    borderWidth: 1.5,
-    borderColor: '#e2e8f0',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
   },
   editProfileBtnText: {
     fontSize: 11,
-    fontWeight: '800',
-    color: '#0f172a',
+    fontWeight: '700',
+    color: '#111827',
   },
 
   // ─── 4 Stat Pills ───
