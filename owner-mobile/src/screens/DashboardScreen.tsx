@@ -2563,28 +2563,43 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
 
                 {(() => {
-                  const displayRate = collectionRate;
-                  const is100 = displayRate >= 100;
-                  const is75 = displayRate >= 75;
-                  const is50 = displayRate >= 50;
+                  const pct = Math.max(0, Math.min(100, collectionRate));
+                  const size = 44;
+                  const strokeWidth = 4.5;
+                  const radius = (size - strokeWidth) / 2;
+                  const circumference = 2 * Math.PI * radius;
+                  const strokeDashoffset = circumference * (1 - pct / 100);
+                  const ringColor = pct === 0 ? 'rgba(255, 255, 255, 0.2)' : '#22c55e';
 
                   return (
-                    <View
-                      style={[
-                        styles.heroMiniRingOuter,
-                        is100
-                          ? { borderColor: '#22c55e', borderTopColor: '#22c55e', borderRightColor: '#22c55e', borderBottomColor: '#22c55e', borderLeftColor: '#22c55e' }
-                          : is75
-                          ? { borderTopColor: '#22c55e', borderRightColor: '#22c55e', borderBottomColor: '#22c55e', borderLeftColor: 'rgba(255, 255, 255, 0.2)' }
-                          : is50
-                          ? { borderTopColor: '#22c55e', borderRightColor: '#22c55e', borderBottomColor: 'rgba(255, 255, 255, 0.2)', borderLeftColor: 'rgba(255, 255, 255, 0.2)' }
-                          : { borderTopColor: '#22c55e', borderRightColor: 'rgba(255, 255, 255, 0.2)', borderBottomColor: 'rgba(255, 255, 255, 0.2)', borderLeftColor: 'rgba(255, 255, 255, 0.2)' },
-                      ]}
-                    >
-                      <View style={styles.heroMiniRingInner}>
-                        <Text style={styles.heroMiniRingText}>
-                          {displayRate}%
-                        </Text>
+                    <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
+                      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                        <Circle
+                          cx={size / 2}
+                          cy={size / 2}
+                          r={radius}
+                          stroke="rgba(255, 255, 255, 0.2)"
+                          strokeWidth={strokeWidth}
+                          fill="none"
+                        />
+                        {pct > 0 && (
+                          <Circle
+                            cx={size / 2}
+                            cy={size / 2}
+                            r={radius}
+                            stroke={ringColor}
+                            strokeWidth={strokeWidth}
+                            strokeDasharray={`${circumference} ${circumference}`}
+                            strokeDashoffset={strokeDashoffset}
+                            strokeLinecap="round"
+                            fill="none"
+                            rotation="-90"
+                            origin={`${size / 2}, ${size / 2}`}
+                          />
+                        )}
+                      </Svg>
+                      <View style={{ position: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={styles.heroMiniRingText}>{pct}%</Text>
                       </View>
                     </View>
                   );
