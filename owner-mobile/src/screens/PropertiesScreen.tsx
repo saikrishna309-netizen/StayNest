@@ -3467,19 +3467,31 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 ))}
               </View>
 
-              <Text style={styles.modalInputLabel}>ID Proof Number</Text>
+              <Text style={styles.modalInputLabel}>ID Proof Number *</Text>
               <TextInput
                 style={styles.modalTextInput}
                 value={assignIdProofNumber}
-                onChangeText={setAssignIdProofNumber}
+                onChangeText={(val) => {
+                  if (assignIdProofType === 'AADHAAR') {
+                    const digits = val.replace(/\D/g, '').slice(0, 12);
+                    const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
+                    setAssignIdProofNumber(formatted);
+                  } else if (assignIdProofType === 'PAN') {
+                    setAssignIdProofNumber(val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10));
+                  } else {
+                    setAssignIdProofNumber(val.toUpperCase().slice(0, 20));
+                  }
+                }}
                 placeholder={assignIdProofType === 'AADHAAR' ? '12-digit Aadhaar (e.g. 5432 8765 1098)' : 'Enter ID Number'}
                 placeholderTextColor="#94a3b8"
-                keyboardType={assignIdProofType === 'AADHAAR' ? 'numeric' : 'default'}
+                keyboardType={assignIdProofType === 'AADHAAR' ? 'number-pad' : 'default'}
                 maxLength={assignIdProofType === 'AADHAAR' ? 14 : 20}
+                autoCapitalize={assignIdProofType === 'PAN' ? 'characters' : 'none'}
               />
               {assignIdProofType === 'AADHAAR' && assignIdProofNumber.trim().length > 0 && (() => {
                 const digits = assignIdProofNumber.replace(/\D/g, '');
-                const isValid = validateVerhoeffAadhaar(digits);
+                const aadhaarCheck = validateVerhoeffAadhaar(digits);
+                const isValid = /^\d{12}$/.test(digits) && aadhaarCheck.isValid;
                 return (
                   <View
                     style={{
@@ -3504,7 +3516,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                         ? '✓ Valid 12-Digit Aadhaar (KYC Verified)'
                         : digits.length < 12
                           ? `Enter ${12 - digits.length} more digits (${digits.length}/12)`
-                          : '⚠️ Invalid Aadhaar Number (Checksum failed)'}
+                          : `⚠️ ${aadhaarCheck.message || 'Invalid Aadhaar Number (Checksum failed)'}`}
                     </Text>
                   </View>
                 );
@@ -3525,32 +3537,20 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalInputLabel}>🔒 Monthly Rent (Locked)</Text>
-                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }]}>
+                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', paddingVertical: 11 }]}>
                     <Text style={styles.currencyPrefixLight}>INR</Text>
-                    <TextInput
-                      style={[styles.modalInnerCurrencyInput, { color: '#475569' }]}
-                      value={assignRentAmount}
-                      editable={false}
-                      selectTextOnFocus={false}
-                      keyboardType="numeric"
-                      placeholder={String(assigningBed?.rentRupees || 8500)}
-                      placeholderTextColor="#94a3b8"
-                    />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>
+                      {Number(assignRentAmount || assigningBed?.rentRupees || 8500).toLocaleString('en-IN')}
+                    </Text>
                   </View>
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalInputLabel}>🔒 Deposit (Locked)</Text>
-                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1' }]}>
+                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', paddingVertical: 11 }]}>
                     <Text style={styles.currencyPrefixLight}>INR</Text>
-                    <TextInput
-                      style={[styles.modalInnerCurrencyInput, { color: '#475569' }]}
-                      value={assignDepositPayingNow}
-                      editable={false}
-                      selectTextOnFocus={false}
-                      keyboardType="numeric"
-                      placeholder="2,500"
-                      placeholderTextColor="#94a3b8"
-                    />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>
+                      {Number(assignDepositPayingNow || 2500).toLocaleString('en-IN')}
+                    </Text>
                   </View>
                 </View>
               </View>
@@ -3559,9 +3559,12 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               <View style={styles.currencyInputRow}>
                 <Text style={styles.currencyPrefixLight}>INR</Text>
                 <TextInput
-                  style={styles.modalInnerCurrencyInput}
+                  style={[
+                    styles.modalInnerCurrencyInput,
+                    Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null,
+                  ]}
                   value={assignRentPayingNow}
-                  onChangeText={setAssignRentPayingNow}
+                  onChangeText={(val) => setAssignRentPayingNow(val.replace(/\D/g, ''))}
                   keyboardType="numeric"
                   placeholder={String(assignRentAmount || assigningBed?.rentRupees || 8500)}
                   placeholderTextColor="#94a3b8"
