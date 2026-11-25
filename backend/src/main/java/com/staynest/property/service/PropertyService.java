@@ -12,6 +12,7 @@ import com.staynest.property.entity.*;
 import com.staynest.property.repository.*;
 import com.staynest.room.entity.Room;
 import com.staynest.room.repository.RoomRepository;
+import com.staynest.subscription.service.SubscriptionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ public class PropertyService {
     private final BedRepository bedRepository;
     private final BookingRepository bookingRepository;
     private final InventoryHoldRepository inventoryHoldRepository;
+    private final SubscriptionService subscriptionService;
 
     public PropertyService(PropertyRepository propertyRepository,
                            PropertyPhotoRepository propertyPhotoRepository,
@@ -43,7 +45,8 @@ public class PropertyService {
                            RoomRepository roomRepository,
                            BedRepository bedRepository,
                            BookingRepository bookingRepository,
-                           InventoryHoldRepository inventoryHoldRepository) {
+                           InventoryHoldRepository inventoryHoldRepository,
+                           SubscriptionService subscriptionService) {
         this.propertyRepository = propertyRepository;
         this.propertyPhotoRepository = propertyPhotoRepository;
         this.cityRepository = cityRepository;
@@ -53,6 +56,7 @@ public class PropertyService {
         this.bedRepository = bedRepository;
         this.bookingRepository = bookingRepository;
         this.inventoryHoldRepository = inventoryHoldRepository;
+        this.subscriptionService = subscriptionService;
     }
 
     // --- Public Discovery Methods ---
@@ -146,6 +150,12 @@ public class PropertyService {
 
     @Transactional
     public PropertyDetailResponse createDraftProperty(UUID ownerId, CreatePropertyRequest request) {
+        if (propertyRepository.findByOwnerId(ownerId).size() >= 1 && !subscriptionService.hasActiveProSubscription(ownerId)) {
+            throw new ForbiddenException(
+                    "Free plan includes 1 property. Start your 1-Month Free Trial (₹0 today, ₹99/mo after) to manage unlimited properties."
+            );
+        }
+
         UUID cityId = request.getCityId();
         if (cityId == null || !cityRepository.existsById(cityId)) {
             // Fallback to first existing city if available

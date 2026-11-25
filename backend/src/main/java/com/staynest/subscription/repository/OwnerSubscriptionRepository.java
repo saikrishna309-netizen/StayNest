@@ -11,6 +11,7 @@ import java.util.UUID;
 @Repository
 public interface OwnerSubscriptionRepository extends JpaRepository<OwnerSubscription, UUID> {
     Optional<OwnerSubscription> findTopByOwnerIdOrderByCreatedAtDesc(UUID ownerId);
+    Optional<OwnerSubscription> findByGatewaySubscriptionId(String gatewaySubscriptionId);
     List<OwnerSubscription> findByOwnerId(UUID ownerId);
 }
 

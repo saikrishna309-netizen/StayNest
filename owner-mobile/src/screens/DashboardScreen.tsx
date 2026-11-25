@@ -23,6 +23,13 @@ import { validateVerhoeffAadhaar, parseAadhaarQrPayload } from '../utils/aadhaar
 import { ElectricityBillModal } from '../components/modals/ElectricityBillModal';
 import { LogIssueModal } from '../components/modals/LogIssueModal';
 import { FoodMenuModal } from '../components/modals/FoodMenuModal';
+import { SubscriptionPaywallModal } from '../components/modals/SubscriptionPaywallModal';
+import {
+  canAddProperty,
+  getSubscriptionState,
+  isProActive,
+  SubscriptionState,
+} from '../services/subscriptionService';
 import {
   FloorUnitMatrixBuilder,
   MatrixFloor,
@@ -151,22 +158,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // ─── SUBSCRIPTION & AUTO-PAY STATE (REQUIREMENTS 6, 7, 8) ───
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showPropertyPaywallModal, setShowPropertyPaywallModal] = useState(false);
+  const [subState, setSubState] = useState<SubscriptionState | null>(null);
   const [selectedPlanPeriod, setSelectedPlanPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [subscriptionActive, setSubscriptionActive] = useState(false);
   const [autoPayMethod, setAutoPayMethod] = useState<'GPAY' | 'PHONEPE' | 'PAYTM' | 'CARD'>('GPAY');
   const [subscribing, setSubscribing] = useState(false);
 
-  // Load subscription state from localStorage
+  // Load subscription state from subscriptionService + onDataChanged
   useEffect(() => {
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const sub = window.localStorage.getItem('staynest_owner_subscription');
-        if (sub) {
-          const parsed = JSON.parse(sub);
-          if (parsed.active) setSubscriptionActive(true);
-        }
-      }
-    } catch {}
+    const syncSub = () => {
+      getSubscriptionState().then((s) => {
+        setSubState(s);
+        setSubscriptionActive(isProActive(s));
+      }).catch(() => {});
+    };
+    syncSub();
+    return onDataChanged(syncSub);
   }, []);
 
   const handleConfirmAutoPay = async () => {
@@ -4873,11 +4881,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
             </ScrollView>
 
-            {/* + Add New PG Button */}
+            {/* + Add New PG Button (Enforces Free 1-Property Limit) */}
             <TouchableOpacity
               style={styles.addNewPgBtn}
-              onPress={() => {
+              onPress={async () => {
                 setShowPgDropdown(false);
+                const latestSub = subState || (await getSubscriptionState());
+                if (!canAddProperty(latestSub, properties.length)) {
+                  setShowPropertyPaywallModal(true);
+                  return;
+                }
                 setShowAddPgModal(true);
               }}
               activeOpacity={0.8}
@@ -5511,6 +5524,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Upgrade to Pro Paywall Modal (1-Property Limit) */}
+      <SubscriptionPaywallModal
+        visible={showPropertyPaywallModal}
+        reason="PROPERTY_LIMIT"
+        onClose={() => setShowPropertyPaywallModal(false)}
+        onActivated={(nextSub) => {
+          setSubState(nextSub);
+          setSubscriptionActive(isProActive(nextSub));
+        }}
+      />
     </View>
   );
 };

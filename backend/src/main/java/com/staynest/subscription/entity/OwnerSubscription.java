@@ -30,6 +30,12 @@ public class OwnerSubscription {
 
     private boolean autoRenew = true;
 
+    private String planTier = "PRO_TRIAL"; // FREE, PRO_TRIAL, PRO_ACTIVE
+
+    private String autopayStatus = "ACTIVE"; // NONE, PENDING, ACTIVE, CANCELLED
+
+    private String gatewaySubscriptionId;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -97,6 +103,30 @@ public class OwnerSubscription {
 
     public void setAutoRenew(boolean autoRenew) {
         this.autoRenew = autoRenew;
+    }
+
+    public String getPlanTier() {
+        return planTier;
+    }
+
+    public void setPlanTier(String planTier) {
+        this.planTier = planTier;
+    }
+
+    public String getAutopayStatus() {
+        return autopayStatus;
+    }
+
+    public void setAutopayStatus(String autopayStatus) {
+        this.autopayStatus = autopayStatus;
+    }
+
+    public String getGatewaySubscriptionId() {
+        return gatewaySubscriptionId;
+    }
+
+    public void setGatewaySubscriptionId(String gatewaySubscriptionId) {
+        this.gatewaySubscriptionId = gatewaySubscriptionId;
     }
 
     public Instant getCreatedAt() {

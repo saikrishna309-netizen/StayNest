@@ -53,12 +53,41 @@ public class SubscriptionController {
         return ResponseEntity.ok(subscriptionService.getCurrentSubscription(user.getId()));
     }
 
+    @PostMapping("/subscriptions/create-mandate")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(summary = "Create a UPI AutoPay mandate (1-Month Free Trial, ₹99/mo after)")
+    public ResponseEntity<Map<String, Object>> createAutoPayMandate(
+            @AuthenticationPrincipal UserPrincipal user,
+            @RequestBody(required = false) Map<String, String> body) {
+        String preferredApp = body != null ? body.get("preferredApp") : "GPAY";
+        return ResponseEntity.ok(subscriptionService.createAutoPayMandate(user.getId(), preferredApp));
+    }
+
+    @PostMapping("/subscriptions/cancel-autopay")
+    @SecurityRequirement(name = "bearerAuth")
+    @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @Operation(summary = "Cancel recurring UPI AutoPay mandate at period end")
+    public ResponseEntity<Map<String, Object>> cancelAutoPay(@AuthenticationPrincipal UserPrincipal user) {
+        return ResponseEntity.ok(subscriptionService.cancelAutoPay(user.getId()));
+    }
+
+    @PostMapping("/webhooks/subscription")
+    @Operation(summary = "Process Razorpay/Cashfree/PhonePe UPI AutoPay subscription webhook")
+    public ResponseEntity<Map<String, String>> processUnifiedWebhook(
+            @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature,
+            @RequestBody Map<String, Object> payload) {
+        subscriptionService.handleSubscriptionWebhook("gateway", signature, payload != null ? payload.toString() : null, payload);
+        return ResponseEntity.ok(Map.of("status", "processed"));
+    }
+
     @PostMapping("/subscriptions/webhooks/{provider}")
     @Operation(summary = "Process subscription recurring billing provider webhook events")
     public ResponseEntity<Map<String, String>> processSubscriptionWebhook(
             @PathVariable String provider,
+            @RequestHeader(value = "X-Razorpay-Signature", required = false) String signature,
             @RequestBody Map<String, Object> payload) {
-        subscriptionService.handleSubscriptionWebhook(provider, payload);
+        subscriptionService.handleSubscriptionWebhook(provider, signature, payload != null ? payload.toString() : null, payload);
         return ResponseEntity.ok(Map.of("status", "processed"));
     }
 }

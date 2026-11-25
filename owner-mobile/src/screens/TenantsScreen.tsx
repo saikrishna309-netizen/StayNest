@@ -34,6 +34,15 @@ import {
   saveMonthlyBill,
   MonthlyBillRecord,
 } from '../services/monthlyBillService';
+import {
+  canSendWhatsAppReminder,
+  getMonthlyReminderCount,
+  getSubscriptionState,
+  incrementMonthlyReminderCount,
+  isProActive,
+  SubscriptionState,
+} from '../services/subscriptionService';
+import { SubscriptionPaywallModal } from '../components/modals/SubscriptionPaywallModal';
 import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
 import Svg, { Path } from 'react-native-svg';
 
@@ -170,6 +179,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const [billMaintenance, setBillMaintenance] = useState(0);
   const [billPaidAmount, setBillPaidAmount] = useState(0);
   const [savingBill, setSavingBill] = useState(false);
+  const [subState, setSubState] = useState<SubscriptionState | null>(null);
+  const [waRemindersUsed, setWaRemindersUsed] = useState(0);
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const formScrollRef = useRef<any>(null);
   const fieldPositions = useRef<Record<string, number>>({});
@@ -265,12 +277,16 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tRes, pRes, billsList] = await Promise.all([
+      const [tRes, pRes, billsList, loadedSub, usedCount] = await Promise.all([
         apiClient<{ content: Tenant[] }>('/owner/tenants').catch(() => ({ content: [] })),
         apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
         getAllMonthlyBills(),
+        getSubscriptionState(),
+        getMonthlyReminderCount(selectedMonth),
       ]);
       setMonthlyBills(billsList);
+      setSubState(loadedSub);
+      setWaRemindersUsed(usedCount);
       let loadedTenants = tRes.content || [];
       let loadedProps = pRes.content || [];
       try {
@@ -907,6 +923,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
       return;
     }
 
+    const currentSub = subState || (await getSubscriptionState());
+    const quota = await canSendWhatsAppReminder(currentSub, selectedMonth);
+    if (!quota.allowed) {
+      setShowPaywallModal(true);
+      return;
+    }
+
     const payout = await getOwnerPayoutDetails();
     const clean91Phone = normalizeIndianPhone(tenant.phone);
     const propObj = properties.find((p) => p.id === tenant.propertyId);
@@ -915,7 +938,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
       ? `Flat ${tenant.roomNumber || '101'}`
       : `Room ${tenant.roomNumber || '101'} (${tenant.bedLabel || 'Bed 1'})`;
 
-    const dispatchWhatsApp = (upiIdToUse?: string) => {
+    const dispatchWhatsApp = async (upiIdToUse?: string) => {
+      const nextCount = await incrementMonthlyReminderCount(selectedMonth);
+      setWaRemindersUsed(nextCount);
       const message = buildRentReminderMessage({
         tenantName: tenant.fullName,
         propertyName: tenant.propertyName || propObj?.name || 'StayNest',
@@ -2111,6 +2136,33 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           })}
         </View>
 
+        {/* Freemium WhatsApp Reminder Usage Pill */}
+        {subState && !isProActive(subState) ? (
+          <TouchableOpacity
+            onPress={() => setShowPaywallModal(true)}
+            activeOpacity={0.8}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: waRemindersUsed >= 5 ? '#fef2f2' : '#fff7ed',
+              borderWidth: 1,
+              borderColor: waRemindersUsed >= 5 ? '#fecaca' : '#fed7aa',
+              borderRadius: 12,
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              marginBottom: 12,
+            }}
+          >
+            <Text style={{ fontSize: 12, fontWeight: '700', color: waRemindersUsed >= 5 ? '#dc2626' : '#9a3412' }}>
+              💬 {Math.min(waRemindersUsed, 5)}/5 Free Reminders Used This Month
+            </Text>
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#ea580c' }}>
+              Upgrade Pro →
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
         {/* List of Tenants */}
         {loading ? (
           <ActivityIndicator color="#ea580c" style={{ marginVertical: 40 }} />
@@ -3003,6 +3055,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Upgrade to Pro Paywall Sheet */}
+      <SubscriptionPaywallModal
+        visible={showPaywallModal}
+        reason="WHATSAPP_LIMIT"
+        onClose={() => setShowPaywallModal(false)}
+        onActivated={(nextSub) => setSubState(nextSub)}
+      />
 
       {/* Screen 2: Monthly Rent & Utility Invoice Modal */}
       <MonthlyInvoiceModal

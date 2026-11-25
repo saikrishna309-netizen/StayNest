@@ -30,6 +30,9 @@
         "ACCESS_COARSE_LOCATION"
       ]
     },
+    "plugins": [
+      "./plugins/withUpiQueries"
+    ],
     "extra": {
       "apiUrl": "https://staynest-6ylx.onrender.com/api/v1",
       "eas": {

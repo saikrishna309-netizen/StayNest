@@ -26,6 +26,15 @@ import {
   saveOwnerPayoutDetails,
   validateUpiId,
 } from '../services/upiPaymentService';
+import {
+  cancelProAutoPay,
+  formatDisplayDate,
+  getSubscriptionState,
+  isProActive,
+  SubscriptionState,
+} from '../services/subscriptionService';
+import { SubscriptionPaywallModal } from '../components/modals/SubscriptionPaywallModal';
+import { onDataChanged } from '../utils/appEvents';
 import Svg, { Path, Circle } from 'react-native-svg';
 
 interface ProfileScreenProps {
@@ -73,7 +82,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [selectedPlanPeriod, setSelectedPlanPeriod] = useState<'MONTHLY' | 'YEARLY'>('MONTHLY');
   const [autoPayMethod, setAutoPayMethod] = useState<'GPAY' | 'PHONEPE' | 'PAYTM' | 'CARD'>('GPAY');
   const [subscribing, setSubscribing] = useState(false);
-  const [isSubscriptionActive, setIsSubscriptionActive] = useState(true);
+  const [isSubscriptionActive, setIsSubscriptionActive] = useState(false);
+  const [subState, setSubState] = useState<SubscriptionState | null>(null);
+  const [showProPaywall, setShowProPaywall] = useState(false);
+
+  useEffect(() => {
+    const syncSub = () => {
+      getSubscriptionState().then((s) => {
+        setSubState(s);
+        setIsSubscriptionActive(isProActive(s));
+      }).catch(() => {});
+    };
+    syncSub();
+    return onDataChanged(syncSub);
+  }, []);
 
   // Bank & UPI Payout Details State
   const [upiId, setUpiId] = useState('');
@@ -768,6 +790,80 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           )}
         </View>
 
+        {/* ─── 3C. SUBSCRIPTION & AUTOPAY CARD ─── */}
+        <View style={styles.sectionCard}>
+          {subState && isProActive(subState) ? (
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
+                  👑 Pro Plan • {subState.autopayStatus === 'CANCELLED' ? 'Cancels at Period End' : 'AutoPay Active'}
+                </Text>
+                <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#15803d' }}>
+                    {subState.plan === 'PRO_TRIAL' ? 'PRO TRIAL' : 'PRO ACTIVE'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12.5, color: '#475569', marginBottom: 12 }}>
+                {subState.autopayStatus === 'CANCELLED'
+                  ? `Pro access remains active until ${formatDisplayDate(subState.nextBillingDate)}.`
+                  : `Next Auto-Debit: ₹99 on ${formatDisplayDate(subState.nextBillingDate)}`}
+              </Text>
+              {subState.autopayStatus !== 'CANCELLED' && (
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#fef2f2',
+                    borderWidth: 1,
+                    borderColor: '#fecaca',
+                    borderRadius: 10,
+                    paddingVertical: 10,
+                    alignItems: 'center',
+                  }}
+                  onPress={() => {
+                    const doCancel = async () => {
+                      const updated = await cancelProAutoPay();
+                      setSubState(updated);
+                      Alert.alert('AutoPay Cancelled', `You won't be charged ₹99. Pro stays active until ${formatDisplayDate(updated.nextBillingDate)}.`);
+                    };
+                    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                      if (window.confirm('Cancel ₹99/mo UPI AutoPay?')) doCancel();
+                    } else {
+                      Alert.alert('Cancel AutoPay', 'Stop recurring ₹99/mo auto-debit? Your Pro access continues until the end of the current period.', [
+                        { text: 'Keep Pro', style: 'cancel' },
+                        { text: 'Cancel AutoPay', style: 'destructive', onPress: doCancel },
+                      ]);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#dc2626' }}>Cancel AutoPay</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
+                  👑 StayNest Plan
+                </Text>
+                <View style={{ backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#475569' }}>FREE PLAN</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+                Includes 1 Property & 5 WhatsApp reminders/month. Start your 1-Month Free Trial (₹0 today, ₹99/mo after).
+              </Text>
+              <TouchableOpacity
+                style={styles.managePropertyBtn}
+                onPress={() => setShowProPaywall(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.managePropertyBtnText}>Start 1-Month Free Trial (₹0 Today)</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+
         {/* ─── 4. SETTINGS & ACCOUNT ACTIONS CARD (MATCHING FIRST PHOTO) ─── */}
         <View style={styles.settingsCard}>
           <TouchableOpacity
@@ -1064,6 +1160,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
         </View>
       </Modal>
+      <SubscriptionPaywallModal
+        visible={showProPaywall}
+        reason="UPGRADE"
+        onClose={() => setShowProPaywall(false)}
+        onActivated={(nextSub) => {
+          setSubState(nextSub);
+          setIsSubscriptionActive(isProActive(nextSub));
+        }}
+      />
     </View>
   );
 };
