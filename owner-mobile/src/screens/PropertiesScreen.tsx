@@ -75,6 +75,7 @@ interface PropertiesScreenProps {
 
 interface FloorConfig {
   floorNumber: number;
+  label?: string;
   rooms: RoomConfig[];
 }
 
@@ -85,6 +86,7 @@ interface RoomConfig {
   sharingType: string;
   rentRupees: number;
   depositRupees: number;
+  maintenanceRupees?: number;
   ac: boolean;
   attachedBathroom: boolean;
   beds: BedConfig[];
@@ -200,6 +202,18 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     tenantName: string;
     tenantPhone?: string;
     tenantId?: string;
+  } | null>(null);
+
+  // Modal for renaming or removing a floor
+  const [editingFloor, setEditingFloor] = useState<{
+    floorNumber: number;
+    label: string;
+  } | null>(null);
+
+  // Modal for viewing tenants inside a room
+  const [viewingRoomTenants, setViewingRoomTenants] = useState<{
+    roomNumber: string;
+    occupants: Tenant[];
   } | null>(null);
 
   // Modal for comprehensive bed management (+ Add Bed, Delete Bed, Vacate, Call)
@@ -2003,62 +2017,87 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     ? propertiesList.slice(0, 2)
     : [activeProperty || { id: 'b1', name: 'Building 01', genderPolicy: 'BOYS' as any }];
 
+  const isRentalMode = activeProperty?.propertyType === 'RENTAL_BUILDING';
+  const totalRoomsCount = displayFloors.reduce((sum, fl) => sum + fl.rooms.length, 0);
+
   return (
     <View style={styles.container}>
-      {/* ─── TOP BRAND & ACTIONS HEADER (IMAGE 2 STYLE) ─── */}
+      {/* ─── TOP HEADER (UNIFIED ALABASTER & BURNT-ORANGE SAAS STYLE) ─── */}
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <Image
-            source={require('../../assets/logo.png')}
-            style={styles.headerLogo}
-            resizeMode="contain"
-          />
-
-          <View style={styles.headerCenterAbsolute} pointerEvents="none">
-            <Text style={styles.pageTitleHeader} numberOfLines={1}>Room Management</Text>
-          </View>
-
-          <View style={styles.headerRightActions}>
-            <TouchableOpacity style={styles.headerIconBtn}>
-              <OutlineSearchIcon color="#475569" size={18} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerIconBtn}>
-              <OutlineBellIcon color="#475569" size={18} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Property Selector Bar */}
-        <TouchableOpacity
-          style={styles.propertySelectorBar}
-          onPress={() => setShowPropertyPicker(true)}
-          activeOpacity={0.85}
-        >
-          <Image
-            source={{
-              uri:
-                buildingPhoto ||
-                activeProperty?.primaryPhotoUrl ||
-                'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=200&q=80',
-            }}
-            style={styles.propThumbImage}
-            resizeMode="cover"
-          />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Text style={styles.activePropName} numberOfLines={1}>
+        <View style={styles.unifiedHeaderRow}>
+          <TouchableOpacity
+            style={{ flex: 1, paddingRight: 10 }}
+            onPress={() => setShowPropertyPicker(true)}
+            activeOpacity={0.75}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.unifiedPropTitle} numberOfLines={1}>
                 {activeProperty?.name || "StayNest Elite Men's PG"}
               </Text>
-              <View style={styles.genderTag}>
-                <Text style={styles.genderTagText}>{activeProperty?.genderPolicy || 'BOYS'}</Text>
-              </View>
+              <Text style={{ fontSize: 12, color: '#6b7280' }}>▾</Text>
             </View>
-            <Text style={styles.activePropLoc} numberOfLines={1}>
-              📍 {activeProperty?.addressLine || 'Opp. PVP Square, MG Road'}, {activeProperty?.cityName || 'Vijayawada'}
+            <Text style={styles.unifiedPropSub} numberOfLines={1}>
+              {isRentalMode ? 'Rental Building' : 'PG / Hostel'} • {displayFloors.length}{' '}
+              {displayFloors.length === 1 ? 'Floor' : 'Floors'} • {totalRoomsCount}{' '}
+              {isRentalMode ? (totalRoomsCount === 1 ? 'Flat' : 'Flats') : (totalRoomsCount === 1 ? 'Room' : 'Rooms')}
             </Text>
-          </View>
-          <Text style={styles.dropdownChevron}>▼</Text>
-        </TouchableOpacity>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.topAddFloorBtn}
+            onPress={handleIncreaseFloors}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.topAddFloorBtnText}>+ Add Floor</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Floor Filter Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.floorFilterScroll}
+        >
+          <TouchableOpacity
+            style={[
+              styles.floorFilterPill,
+              selectedFloorFilter === 'ALL' && styles.floorFilterPillActive,
+            ]}
+            onPress={() => setSelectedFloorFilter('ALL')}
+          >
+            <Text
+              style={[
+                styles.floorFilterText,
+                selectedFloorFilter === 'ALL' && styles.floorFilterTextActive,
+              ]}
+            >
+              All Floors ({totalRoomsCount})
+            </Text>
+          </TouchableOpacity>
+
+          {displayFloors.map((fl) => {
+            const isActive = selectedFloorFilter === fl.floorNumber;
+            return (
+              <TouchableOpacity
+                key={`fl-filter-${fl.floorNumber}`}
+                style={[
+                  styles.floorFilterPill,
+                  isActive && styles.floorFilterPillActive,
+                ]}
+                onPress={() => setSelectedFloorFilter(fl.floorNumber)}
+              >
+                <Text
+                  style={[
+                    styles.floorFilterText,
+                    isActive && styles.floorFilterTextActive,
+                  ]}
+                >
+                  {fl.label || `Floor ${fl.floorNumber}`} ({fl.rooms.length})
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* ─── MAIN CONTENT SCROLLVIEW ─── */}
@@ -2066,442 +2105,273 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Loading Indicator */}
         {loading ? (
           <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#4f46e5" />
+            <ActivityIndicator size="large" color="#ea580c" />
             <Text style={styles.loadingText}>Loading property structure...</Text>
           </View>
         ) : (
           <>
-            {/* ════════════════════════════════════════════════════════════
-                MODE A: ROOM-WISE FLOOR-BY-FLOOR UI (MATCHING SCREENSHOT)
-               ════════════════════════════════════════════════════════════ */}
             {viewMode === 'OVERVIEW' && (
-              <View style={{ gap: 20 }}>
-                {/* ─── BUILDING EXTERIOR PHOTO CARD (Point 8) ─── */}
-                <View style={styles.buildingPhotoCard}>
-                  <Image
-                    source={{
-                      uri:
-                        buildingPhoto ||
-                        activeProperty?.primaryPhotoUrl ||
-                        'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-                    }}
-                    style={styles.buildingPhotoImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.buildingPhotoOverlay}>
-                    <View style={styles.buildingPhotoBadge}>
-                      <Text style={styles.buildingPhotoBadgeText}>🖼️ Building Photo (Website & App)</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                      <TouchableOpacity
-                        style={styles.buildingPhotoUploadBtn}
-                        onPress={handleUpdateBuildingPhoto}
-                        activeOpacity={0.85}
-                      >
-                        <Text style={styles.buildingPhotoUploadBtnText}>📷 Upload / Edit Photo</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-
-                {/* ─── 1. TOP FLOOR TABS BAR ─── */}
-                <View style={styles.floorFilterBar}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.floorFilterScroll}
-                  >
-                    <TouchableOpacity
-                      style={[
-                        styles.floorFilterPill,
-                        selectedFloorFilter === 'ALL' && styles.floorFilterPillActive,
-                      ]}
-                      onPress={() => setSelectedFloorFilter('ALL')}
-                    >
-                      <Text
-                        style={[
-                          styles.floorFilterText,
-                          selectedFloorFilter === 'ALL' && styles.floorFilterTextActive,
-                        ]}
-                      >
-                        All Floors ({displayFloors.length})
-                      </Text>
-                    </TouchableOpacity>
-
-                    {displayFloors.map((fl) => {
-                      const isActive = selectedFloorFilter === fl.floorNumber;
-                      return (
-                        <TouchableOpacity
-                          key={`fl-filter-${fl.floorNumber}`}
-                          style={[
-                            styles.floorFilterPill,
-                            isActive && styles.floorFilterPillActive,
-                          ]}
-                          onPress={() => setSelectedFloorFilter(fl.floorNumber)}
-                        >
-                          <Text
-                            style={[
-                              styles.floorFilterText,
-                              isActive && styles.floorFilterTextActive,
-                            ]}
-                          >
-                            Floor {fl.floorNumber}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-
-                    <TouchableOpacity
-                      style={styles.addFloorHeaderPill}
-                      onPress={handleIncreaseFloors}
-                    >
-                      <Text style={styles.addFloorHeaderPillText}>+ Add Floor</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
-                </View>
-
-                {/* ─── 2. FLOORS ONE BY ONE ─── */}
+              <View style={{ gap: 18 }}>
                 {(selectedFloorFilter === 'ALL'
                   ? displayFloors
                   : displayFloors.filter((f) => f.floorNumber === selectedFloorFilter)
-                ).map((floor) => {
-                  const floorBedsCount = floor.rooms.reduce((acc, r) => acc + r.beds.length, 0);
-                  const sharingTypesSummary = Array.from(
-                    new Set(floor.rooms.map((r) => formatSharingBadge(r.beds.length)))
-                  ).join(', ');
+                ).map((floor) => (
+                  <View key={`floor-sec-${floor.floorNumber}`} style={styles.floorBlockWrap}>
+                    {/* Floor Section Header */}
+                    <View style={styles.floorSectionHeader}>
+                      <Text style={styles.floorSectionTitle}>
+                        {floor.label || `Floor ${floor.floorNumber}`}
+                      </Text>
 
-                  return (
-                    <View key={`floor-sec-${floor.floorNumber}`} style={styles.floorSectionCard}>
-                      {/* Floor Header Bar */}
-                      <View style={styles.floorSectionHeader}>
-                        <View>
-                          <Text style={styles.floorSectionTitle}>
-                            🏢 Floor {floor.floorNumber}
-                          </Text>
-                          <Text style={styles.floorSectionSub}>
-                            {floor.rooms.length} {floor.rooms.length === 1 ? 'Room' : 'Rooms'} {sharingTypesSummary ? `(${sharingTypesSummary})` : ''} • {floorBedsCount} Beds
-                          </Text>
-                        </View>
-
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                         <TouchableOpacity
-                          style={styles.floorHeaderAddRoomBtn}
                           onPress={() => handleIncreaseRooms(floor.floorNumber)}
-                          activeOpacity={0.8}
+                          activeOpacity={0.75}
                         >
-                          <Text style={styles.floorHeaderAddRoomBtnText}>+ Add Room</Text>
+                          <Text style={styles.inlineAddRoomLink}>
+                            + {isRentalMode ? 'Add Flat' : 'Add Room'}
+                          </Text>
                         </TouchableOpacity>
-                      </View>
-
-                      {/* Rooms on this Floor (Room Wise) */}
-                      <View style={{ gap: 16 }}>
-                        {floor.rooms.map((room) => {
-                          const roomSharingLabel = formatSharingBadge(room.beds.length);
-
-                          return (
-                            <View key={room.id} style={styles.roomWiseCard}>
-                              {/* Room Top Bar */}
-                              <View style={styles.roomWiseTopBar}>
-                                <View style={styles.roomWiseLeftInfo}>
-                                  <View style={styles.roomWiseNumBadge}>
-                                    <Text style={styles.roomWiseNumText}>
-                                      Room {room.roomNumber}
-                                    </Text>
-                                  </View>
-
-                                  {/* Clean Sharing Label: e.g. "Double Sharing", "Four Sharing" */}
-                                  <View style={styles.roomWiseTypeBadge}>
-                                    <Text style={styles.roomWiseTypeText}>
-                                      {roomSharingLabel}
-                                    </Text>
-                                  </View>
-
-                                  <View style={styles.roomWiseRentBadge}>
-                                    <Text style={styles.roomWiseRentText}>
-                                      ₹{room.rentRupees.toLocaleString('en-IN')}/mo
-                                    </Text>
-                                  </View>
-                                </View>
-
-                                {/* Room Action Buttons: 🛏️ Add/Edit Beds & ⚙️ Edit Room */}
-                                <View style={styles.roomWiseActionButtons}>
-                                  <TouchableOpacity
-                                    style={styles.roomWiseAddBedBtn}
-                                    onPress={() => setManagingBedsRoom({ floorNum: floor.floorNumber, roomId: room.id })}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={styles.roomWiseAddBedBtnText}>🛏️ Add/Edit Beds</Text>
-                                  </TouchableOpacity>
-
-                                  <TouchableOpacity
-                                    style={styles.roomWiseSettingsBtn}
-                                    onPress={() => setEditingRoomDetails({ floorNum: floor.floorNumber, room })}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={styles.roomWiseSettingsBtnText}>⚙️ Edit Room</Text>
-                                  </TouchableOpacity>
-                                </View>
-                              </View>
-
-                              {/* Beds Grid inside Room (Matching Screenshot, Sequential Unique Numbers 1, 2, 3...) */}
-                              <View style={styles.roomBedsGridRow}>
-                                {room.beds.map((bed, bedIdx) => {
-                                  // Strictly unique sequential bed number 1, 2, 3, 4... per room
-                                  const bedNumStr = String(bedIdx + 1);
-                                  const occupant =
-                                    bedOccupantMap.get(bed.id) ||
-                                    bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`) ||
-                                    bedOccupantMap.get(`${room.roomNumber}-Bed ${bedNumStr}`) ||
-                                    bedOccupantMap.get(`${room.roomNumber}-${bedNumStr}`);
-                                  const isOccupied = !!occupant;
-
-                                  if (isOccupied && occupant) {
-                                    const tenantName = occupant.fullName;
-                                    const styleIdx = bedIdx % BED_STYLES.length;
-                                    const styleObj = BED_STYLES[styleIdx];
-
-                                    return (
-                                      <TouchableOpacity
-                                        key={bed.id}
-                                        style={[
-                                          styles.bedBoxCard,
-                                          bed.photo
-                                            ? styles.bedBoxWithPhoto
-                                            : { backgroundColor: styleObj.bg, borderColor: styleObj.border },
-                                        ]}
-                                        onPress={() =>
-                                          setOccupiedBedAction({
-                                            floorNum: floor.floorNumber,
-                                            roomId: room.id,
-                                            roomNumber: room.roomNumber,
-                                            bed,
-                                            tenantName,
-                                            tenantPhone: occupant?.phone || '9876543210',
-                                            tenantId: occupant?.id,
-                                          })
-                                        }
-                                        activeOpacity={0.8}
-                                      >
-                                        {bed.photo ? (
-                                          <>
-                                            <Image
-                                              source={{ uri: bed.photo }}
-                                              style={styles.bedBoxImageCover}
-                                              resizeMode="cover"
-                                            />
-                                            {/* Highlight Number Badge in Top Left */}
-                                            <View style={styles.bedNumberHighlightBadge}>
-                                              <Text style={styles.bedNumberHighlightText}>{bedNumStr}</Text>
-                                            </View>
-                                            {/* Edit & Delete Action Badges in Top Right */}
-                                            <View style={styles.bedActionBadgeRow}>
-                                              <TouchableOpacity
-                                                style={styles.bedPhotoEditBtn}
-                                                onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
-                                                activeOpacity={0.8}
-                                              >
-                                                <Text style={{ fontSize: 9 }}>✏️</Text>
-                                              </TouchableOpacity>
-                                              <TouchableOpacity
-                                                style={styles.bedPhotoDeleteBtn}
-                                                onPress={() => handleDeleteBedPhoto(floor.floorNumber, room.id, bed.id, `Bed ${bedNumStr}`)}
-                                                activeOpacity={0.8}
-                                              >
-                                                <Text style={{ fontSize: 9, color: '#ffffff', fontWeight: '900' }}>✕</Text>
-                                              </TouchableOpacity>
-                                            </View>
-                                            {/* Highlighted Tenant Name Pill at Bottom */}
-                                            <View style={styles.bedTenantHighlightBar}>
-                                              <Text style={styles.bedTenantHighlightText} numberOfLines={1}>
-                                                {tenantName}
-                                              </Text>
-                                            </View>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <TouchableOpacity
-                                              style={styles.bedInlineAddPhotoBtn}
-                                              onPress={(e: any) => {
-                                                e?.stopPropagation?.();
-                                                handleUploadBedPhoto(floor.floorNumber, room.id, bed.id);
-                                              }}
-                                              activeOpacity={0.8}
-                                            >
-                                              <CameraMicroIcon color="#94a3b8" size={11} />
-                                            </TouchableOpacity>
-                                            <BedVectorIcon color="#64748b" size={24} />
-                                            <Text style={[styles.bedBoxNumber, { color: styleObj.numColor }]}>
-                                              {bedNumStr}
-                                            </Text>
-                                            <Text style={[styles.bedBoxTenantName, { color: styleObj.textColor }]} numberOfLines={1}>
-                                              {tenantName}
-                                            </Text>
-                                          </>
-                                        )}
-                                      </TouchableOpacity>
-                                    );
-                                  } else {
-                                    // Vacant Bed Card (+ Add Mark, with NO wrong mark / NO red X badge)
-                                    return (
-                                      <TouchableOpacity
-                                        key={bed.id}
-                                        style={[
-                                          styles.bedBoxVacantCard,
-                                          bed.photo && styles.bedBoxWithPhoto,
-                                        ]}
-                                        onPress={() =>
-                                          openAssignModalForBed({
-                                            floorNum: floor.floorNumber,
-                                            roomId: room.id,
-                                            roomNumber: room.roomNumber,
-                                            bedId: bed.id,
-                                            bedLabel: `Bed ${bedNumStr}`,
-                                            rentRupees: room.rentRupees,
-                                          })
-                                        }
-                                        activeOpacity={0.8}
-                                      >
-                                        {bed.photo ? (
-                                          <>
-                                            <Image
-                                              source={{ uri: bed.photo }}
-                                              style={styles.bedBoxImageCover}
-                                              resizeMode="cover"
-                                            />
-                                            {/* Highlight Number Badge in Top Left */}
-                                            <View style={[styles.bedNumberHighlightBadge, { backgroundColor: '#3b82f6' }]}>
-                                              <Text style={styles.bedNumberHighlightText}>{bedNumStr}</Text>
-                                            </View>
-                                            {/* Edit & Delete Action Badges in Top Right */}
-                                            <View style={styles.bedActionBadgeRow}>
-                                              <TouchableOpacity
-                                                style={styles.bedPhotoEditBtn}
-                                                onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
-                                                activeOpacity={0.8}
-                                              >
-                                                <Text style={{ fontSize: 9 }}>✏️</Text>
-                                              </TouchableOpacity>
-                                              <TouchableOpacity
-                                                style={styles.bedPhotoDeleteBtn}
-                                                onPress={() => handleDeleteBedPhoto(floor.floorNumber, room.id, bed.id, `Bed ${bedNumStr}`)}
-                                                activeOpacity={0.8}
-                                              >
-                                                <Text style={{ fontSize: 9, color: '#ffffff', fontWeight: '900' }}>✕</Text>
-                                              </TouchableOpacity>
-                                            </View>
-                                            {/* Highlighted + Add Pill at Bottom */}
-                                            <View style={[styles.bedTenantHighlightBar, { backgroundColor: 'rgba(234, 88, 12, 0.95)' }]}>
-                                              <Text style={styles.bedTenantHighlightText}>+ Add</Text>
-                                            </View>
-                                          </>
-                                        ) : (
-                                          <>
-                                            <TouchableOpacity
-                                              style={styles.bedInlineAddPhotoBtn}
-                                              onPress={(e: any) => {
-                                                e?.stopPropagation?.();
-                                                handleUploadBedPhoto(floor.floorNumber, room.id, bed.id);
-                                              }}
-                                              activeOpacity={0.8}
-                                            >
-                                              <CameraMicroIcon color="#94a3b8" size={11} />
-                                            </TouchableOpacity>
-                                            <BedVectorIcon color="#94a3b8" size={24} />
-                                            <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
-                                            <Text style={styles.bedBoxAddText}>+ Add</Text>
-                                          </>
-                                        )}
-                                      </TouchableOpacity>
-                                    );
-                                  }
-                                })}
-
-                                {/* Inline + Add Bed Option */}
-                                <TouchableOpacity
-                                  style={styles.inlineAddBedCard}
-                                  onPress={() => handleIncreaseBeds(floor.floorNumber, room.id)}
-                                  activeOpacity={0.8}
-                                >
-                                  <Text style={styles.inlineAddBedPlus}>+</Text>
-                                  <Text style={styles.inlineAddBedText}>Add Bed</Text>
-                                </TouchableOpacity>
-                              </View>
-
-                              {/* Room Photos Gallery (Point 7) */}
-                              <View style={styles.roomPhotosSection}>
-                                <View style={styles.roomPhotosHeaderRow}>
-                                  <Text style={styles.roomPhotosTitle}>
-                                    📷 Room Photos ({room.photos?.length || 0})
-                                  </Text>
-                                  <TouchableOpacity
-                                    style={styles.addRoomPhotoBtn}
-                                    onPress={() => setTargetPhotoRoom({ floorNum: floor.floorNumber, room })}
-                                    activeOpacity={0.8}
-                                  >
-                                    <Text style={styles.addRoomPhotoBtnText}>+ Add Photo</Text>
-                                  </TouchableOpacity>
-                                </View>
-
-                                {room.photos && room.photos.length > 0 ? (
-                                  <ScrollView
-                                    horizontal
-                                    showsHorizontalScrollIndicator={false}
-                                    contentContainerStyle={styles.roomPhotosScroll}
-                                  >
-                                    {room.photos.map((photoUri, pIdx) => (
-                                      <View key={`photo-${room.id}-${pIdx}`} style={styles.roomPhotoThumbWrapper}>
-                                        <Image
-                                          source={{ uri: photoUri }}
-                                          style={styles.roomPhotoThumb}
-                                          resizeMode="cover"
-                                        />
-                                        <TouchableOpacity
-                                          style={styles.deletePhotoBadge}
-                                          onPress={() => handleDeleteRoomPhoto(floor.floorNumber, room.id, pIdx)}
-                                          activeOpacity={0.8}
-                                        >
-                                          <Text style={styles.deletePhotoBadgeText}>✕</Text>
-                                        </TouchableOpacity>
-                                      </View>
-                                    ))}
-                                  </ScrollView>
-                                ) : (
-                                  <Text style={styles.noRoomPhotosText}>
-                                    No room photos yet. Tap "+ Add Photo" to upload from device.
-                                  </Text>
-                                )}
-                              </View>
-                            </View>
-                          );
-                        })}
-
-                        {/* Dotted Button to Add Room to this Floor */}
                         <TouchableOpacity
-                          style={styles.floorAddRoomDottedBtn}
-                          onPress={() => handleIncreaseRooms(floor.floorNumber)}
-                          activeOpacity={0.8}
+                          onPress={() =>
+                            setEditingFloor({
+                              floorNumber: floor.floorNumber,
+                              label: floor.label || `Floor ${floor.floorNumber}`,
+                            })
+                          }
+                          activeOpacity={0.75}
                         >
-                          <Text style={styles.floorAddRoomDottedText}>
-                            + Add Room to Floor {floor.floorNumber}
-                          </Text>
+                          <Text style={{ fontSize: 15, color: '#6b7280' }}>✏️</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
-                  );
-                })}
 
-                {/* ─── 3. BOTTOM ADD FLOOR BUTTON ─── */}
-                <TouchableOpacity
-                  style={styles.addFloorLargeBtn}
-                  onPress={handleIncreaseFloors}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.addFloorLargeBtnText}>
-                    🏢 + Add Floor {floors.length + 1}
-                  </Text>
-                </TouchableOpacity>
+                    {/* Unified Room / Flat Cards (No Individual Bed Boxes) */}
+                    <View style={{ gap: 12 }}>
+                      {floor.rooms.map((room) => {
+                        const roomPhotos = room.photos || [];
+                        const totalBedsInRoom = isRentalMode ? 1 : Math.max(1, room.beds.length);
+
+                        // Collect active occupants for this room
+                        const roomOccupants: Tenant[] = [];
+                        let firstVacantBed: BedConfig | null = null;
+
+                        if (isRentalMode) {
+                          const occ =
+                            bedOccupantMap.get(room.id) ||
+                            tenants.find(
+                              (t) =>
+                                t.active !== false &&
+                                t.stayStatus !== 'TERMINATED' &&
+                                t.roomNumber === room.roomNumber
+                            );
+                          if (occ) roomOccupants.push(occ);
+                        } else {
+                          room.beds.forEach((bed, bIdx) => {
+                            const bNum = String(bIdx + 1);
+                            const occ =
+                              bedOccupantMap.get(bed.id) ||
+                              bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`) ||
+                              bedOccupantMap.get(`${room.roomNumber}-Bed ${bNum}`) ||
+                              bedOccupantMap.get(`${room.roomNumber}-${bNum}`);
+                            if (occ) {
+                              roomOccupants.push(occ);
+                            } else if (!firstVacantBed) {
+                              firstVacantBed = bed;
+                            }
+                          });
+                        }
+
+                        const occupiedCount = roomOccupants.length;
+                        const freeBeds = Math.max(0, totalBedsInRoom - occupiedCount);
+                        const isFull = freeBeds === 0;
+                        const configLabel = isRentalMode
+                          ? room.sharingType || '1BHK'
+                          : `${totalBedsInRoom}-Share`;
+                        const maintAmount = room.maintenanceRupees || 0;
+
+                        return (
+                          <View key={room.id} style={styles.unifiedRoomCard}>
+                            {/* Top Row: Media Slot + Room Info */}
+                            <View style={styles.unifiedRoomTopRow}>
+                              {/* 1. Left Media Slot */}
+                              <TouchableOpacity
+                                style={styles.mediaSlotWrap}
+                                onPress={() => setTargetPhotoRoom({ floorNum: floor.floorNumber, room })}
+                                activeOpacity={0.8}
+                              >
+                                {roomPhotos.length > 0 ? (
+                                  <View style={styles.mediaThumbContainer}>
+                                    <Image
+                                      source={{ uri: roomPhotos[0] }}
+                                      style={styles.mediaThumbImg}
+                                      resizeMode="cover"
+                                    />
+                                    <View style={styles.mediaCountBadge}>
+                                      <Text style={styles.mediaCountBadgeText}>
+                                        🖼️ {roomPhotos.length} {roomPhotos.length === 1 ? 'Photo' : 'Photos'}
+                                      </Text>
+                                    </View>
+                                  </View>
+                                ) : (
+                                  <View style={styles.mediaPlaceholderBox}>
+                                    <Text style={{ fontSize: 18, color: '#6b7280' }}>📷</Text>
+                                    <Text style={styles.mediaPlaceholderText}>Add Photos</Text>
+                                  </View>
+                                )}
+                              </TouchableOpacity>
+
+                              {/* 2. Right Info Column */}
+                              <View style={{ flex: 1 }}>
+                                <View style={styles.roomCardHeaderRow}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                    <Text style={styles.unifiedRoomTitle} numberOfLines={1}>
+                                      {isRentalMode ? 'Flat' : 'Room'} {room.roomNumber}
+                                    </Text>
+                                    <View style={styles.configPillBadge}>
+                                      <Text style={styles.configPillText}>{configLabel}</Text>
+                                    </View>
+                                  </View>
+
+                                  <TouchableOpacity
+                                    style={styles.editRoomPillBtn}
+                                    onPress={() => setEditingRoomDetails({ floorNum: floor.floorNumber, room })}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.editRoomPillText}>✏️ Edit</Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                {/* 3. Pricing & Maintenance Row */}
+                                <View style={styles.pricingMaintRow}>
+                                  <Text style={styles.unifiedRentText}>
+                                    ₹{room.rentRupees.toLocaleString('en-IN')}
+                                    <Text style={styles.unifiedRentUnit}>
+                                      {isRentalMode ? '/mo' : '/bed'}
+                                    </Text>
+                                  </Text>
+
+                                  <View style={styles.maintPillBadge}>
+                                    <Text style={styles.maintPillText}>
+                                      {maintAmount > 0
+                                        ? `+ ₹${maintAmount.toLocaleString('en-IN')} maint.`
+                                        : 'Maint. Included'}
+                                    </Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+
+                            {/* Divider */}
+                            <View style={styles.cardDividerLine} />
+
+                            {/* 4. Bottom Occupancy Footer & Primary Action */}
+                            <View style={styles.unifiedCardFooter}>
+                              {isRentalMode ? (
+                                <>
+                                  <Text style={styles.occupancyStatusText}>
+                                    {occupiedCount > 0 ? (
+                                      <>
+                                        <Text style={{ fontWeight: '800', color: '#111827' }}>Occupied</Text>
+                                        {' • '}
+                                        {roomOccupants[0]?.fullName}
+                                      </>
+                                    ) : (
+                                      <Text style={{ fontWeight: '700', color: '#4b5563' }}>Vacant</Text>
+                                    )}
+                                  </Text>
+
+                                  {occupiedCount > 0 ? (
+                                    <TouchableOpacity
+                                      style={styles.viewTenantsBtn}
+                                      onPress={() =>
+                                        setViewingRoomTenants({
+                                          roomNumber: room.roomNumber,
+                                          occupants: roomOccupants,
+                                        })
+                                      }
+                                      activeOpacity={0.8}
+                                    >
+                                      <Text style={styles.viewTenantsBtnText}>View / Invoice</Text>
+                                    </TouchableOpacity>
+                                  ) : (
+                                    <TouchableOpacity
+                                      style={styles.assignTenantCtaBtn}
+                                      onPress={() =>
+                                        openAssignModalForBed({
+                                          floorNum: floor.floorNumber,
+                                          roomId: room.id,
+                                          roomNumber: room.roomNumber,
+                                          bedId: room.beds[0]?.id || `unit-${room.id}`,
+                                          bedLabel: 'Unit',
+                                          rentRupees: room.rentRupees,
+                                        })
+                                      }
+                                      activeOpacity={0.85}
+                                    >
+                                      <Text style={styles.assignTenantCtaText}>+ Assign Tenant</Text>
+                                    </TouchableOpacity>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <Text style={styles.occupancyStatusText}>
+                                    <Text style={{ fontWeight: '800', color: '#111827' }}>
+                                      {occupiedCount}/{totalBedsInRoom}
+                                    </Text>
+                                    {' Occupied • '}
+                                    {isFull
+                                      ? 'Full'
+                                      : `${freeBeds} ${freeBeds === 1 ? 'Bed' : 'Beds'} Free`}
+                                  </Text>
+
+                                  {isFull ? (
+                                    <TouchableOpacity
+                                      style={styles.viewTenantsBtn}
+                                      onPress={() =>
+                                        setViewingRoomTenants({
+                                          roomNumber: room.roomNumber,
+                                          occupants: roomOccupants,
+                                        })
+                                      }
+                                      activeOpacity={0.8}
+                                    >
+                                      <Text style={styles.viewTenantsBtnText}>View Tenants</Text>
+                                    </TouchableOpacity>
+                                  ) : (
+                                    <TouchableOpacity
+                                      style={styles.assignTenantCtaBtn}
+                                      onPress={() => {
+                                        const targetBed = firstVacantBed || {
+                                          id: `b-${room.id}-${occupiedCount + 1}`,
+                                          bedLabel: `Bed ${occupiedCount + 1}`,
+                                          status: 'AVAILABLE' as const,
+                                        };
+                                        openAssignModalForBed({
+                                          floorNum: floor.floorNumber,
+                                          roomId: room.id,
+                                          roomNumber: room.roomNumber,
+                                          bedId: targetBed.id,
+                                          bedLabel: targetBed.bedLabel,
+                                          rentRupees: room.rentRupees,
+                                        });
+                                      }}
+                                      activeOpacity={0.85}
+                                    >
+                                      <Text style={styles.assignTenantCtaText}>+ Assign Tenant</Text>
+                                    </TouchableOpacity>
+                                  )}
+                                </>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
 
                 {/* Quick Switch to Advanced Builder if needed */}
                 <View style={styles.bottomSwitchBar}>
@@ -3909,6 +3779,156 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           </View>
         </View>
       </Modal>
+
+      {/* Modal: Edit / Rename / Remove Floor */}
+      <Modal
+        visible={!!editingFloor}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingFloor(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={styles.modalTitle}>Edit Floor {editingFloor?.floorNumber}</Text>
+              <TouchableOpacity onPress={() => setEditingFloor(null)}>
+                <Text style={{ fontSize: 18, color: '#6b7280' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.inputLabel}>Floor Name / Label</Text>
+            <TextInput
+              style={styles.modalTextInput}
+              value={editingFloor?.label || ''}
+              onChangeText={(val) =>
+                setEditingFloor((prev) => (prev ? { ...prev, label: val } : null))
+              }
+              placeholder="e.g. Ground Floor or Floor 1"
+            />
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  borderRadius: 12,
+                  paddingVertical: 11,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#fecaca',
+                  backgroundColor: '#fef2f2',
+                }}
+                onPress={() => {
+                  if (!editingFloor) return;
+                  const targetNum = editingFloor.floorNumber;
+                  const propId = activeProperty?.id || 'prop-pg-1';
+                  setFloors((prev) => {
+                    const next = prev.filter((f) => f.floorNumber !== targetNum);
+                    safeStorage.setItem(`@staynest_floors_${propId}`, JSON.stringify(next)).catch(() => {});
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                      window.localStorage.setItem(`staynest_floors_${propId}`, JSON.stringify(next));
+                    }
+                    return next;
+                  });
+                  setEditingFloor(null);
+                }}
+              >
+                <Text style={{ color: '#dc2626', fontWeight: '800', fontSize: 12 }}>Remove Floor</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1.5,
+                  borderRadius: 12,
+                  paddingVertical: 11,
+                  alignItems: 'center',
+                  backgroundColor: '#ea580c',
+                }}
+                onPress={() => {
+                  if (!editingFloor) return;
+                  const propId = activeProperty?.id || 'prop-pg-1';
+                  setFloors((prev) => {
+                    const next = prev.map((f) =>
+                      f.floorNumber === editingFloor.floorNumber
+                        ? { ...f, label: editingFloor.label.trim() || `Floor ${f.floorNumber}` }
+                        : f
+                    );
+                    safeStorage.setItem(`@staynest_floors_${propId}`, JSON.stringify(next)).catch(() => {});
+                    if (typeof window !== 'undefined' && window.localStorage) {
+                      window.localStorage.setItem(`staynest_floors_${propId}`, JSON.stringify(next));
+                    }
+                    return next;
+                  });
+                  setEditingFloor(null);
+                }}
+              >
+                <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 12 }}>Save Floor</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: View Tenants in Room / Unit */}
+      <Modal
+        visible={!!viewingRoomTenants}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setViewingRoomTenants(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={styles.modalTitle}>
+                {isRentalMode ? 'Flat' : 'Room'} {viewingRoomTenants?.roomNumber} Tenants
+              </Text>
+              <TouchableOpacity onPress={() => setViewingRoomTenants(null)}>
+                <Text style={{ fontSize: 18, color: '#6b7280' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ gap: 10, marginTop: 8 }}>
+              {(viewingRoomTenants?.occupants || []).map((occ) => (
+                <View
+                  key={occ.id}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#faf8f6',
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: '#efece9',
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '800', color: '#111827' }}>
+                      {occ.fullName}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                      📱 {occ.phone} {occ.bedLabel ? `• ${occ.bedLabel}` : ''}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: occ.rentStatus === 'PAID' ? '#ecfdf5' : '#fee2e2',
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: '800',
+                        color: occ.rentStatus === 'PAID' ? '#059669' : '#dc2626',
+                      }}
+                    >
+                      {occ.rentStatus === 'PAID' ? 'PAID' : 'DUE'}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
@@ -3916,15 +3936,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#faf8f6',
   },
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#faf8f6',
     paddingTop: 50,
-    paddingBottom: 12,
+    paddingBottom: 10,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
   },
   headerTop: {
     flexDirection: 'row',
@@ -6207,5 +6225,219 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94a3b8',
     fontStyle: 'italic',
+  },
+  // ─── Unified Room / Flat Card & Header Styles ───
+  unifiedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  unifiedPropTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#111827',
+    letterSpacing: -0.3,
+  },
+  unifiedPropSub: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  topAddFloorBtn: {
+    backgroundColor: '#ea580c',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  topAddFloorBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  floorBlockWrap: {
+    gap: 10,
+  },
+  inlineAddRoomLink: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#ea580c',
+  },
+  unifiedRoomCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  unifiedRoomTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mediaSlotWrap: {
+    width: 90,
+    height: 80,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  mediaThumbContainer: {
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+  },
+  mediaThumbImg: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    right: 4,
+    backgroundColor: 'rgba(17, 24, 39, 0.72)',
+    borderRadius: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 5,
+    alignItems: 'center',
+  },
+  mediaCountBadgeText: {
+    color: '#ffffff',
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  mediaPlaceholderBox: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderStyle: 'dashed',
+    borderColor: '#d1d5db',
+    backgroundColor: '#faf8f6',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 3,
+  },
+  mediaPlaceholderText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#4b5563',
+  },
+  roomCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  unifiedRoomTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  configPillBadge: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  configPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  editRoomPillBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  editRoomPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  pricingMaintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    flexWrap: 'wrap',
+  },
+  unifiedRentText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  unifiedRentUnit: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  maintPillBadge: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  maintPillText: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#4b5563',
+  },
+  cardDividerLine: {
+    height: 1,
+    backgroundColor: '#f3f4f6',
+    marginVertical: 12,
+  },
+  unifiedCardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  occupancyStatusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+    flex: 1,
+    paddingRight: 8,
+  },
+  viewTenantsBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  viewTenantsBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  assignTenantCtaBtn: {
+    backgroundColor: '#ea580c',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  assignTenantCtaText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#ffffff',
   },
 });
