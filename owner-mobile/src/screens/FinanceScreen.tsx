@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,42 +11,27 @@ import {
   RefreshControl,
   Modal,
   Platform,
-  Animated,
 } from 'react-native';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { apiClient } from '../api/client';
-import { RentInvoice, Expense, Property } from '../types';
+import { safeStorage } from '../utils/safeStorage';
+import { RentInvoice, Expense, Property, Tenant } from '../types';
+import {
+  computeCollectionMetrics,
+  computeExpenseAndProfitMetrics,
+  computePeriodPnlMetrics,
+  FixedMonthlyBill,
+  MonthlyPnlRecord,
+} from '../services/financeSummaryService';
 
 interface FinanceScreenProps {
   onBack: () => void;
 }
 
-interface FixedMonthlyBill {
-  id: string;
-  title: string;
-  category: string;
-  monthlyAmount: number;
-  icon: string;
-  isPaidThisMonth: boolean;
-  dueDate: string;
-}
-
-interface MonthlyPnlRecord {
-  id: string;
-  month: string;
-  short: string;
-  year: string;
-  revenue: number;
-  expense: number;
-  profit: number;
-  isGain: boolean;
-  notes?: string;
-  isCustom?: boolean;
-}
-
 export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
@@ -63,7 +48,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [category, setCategory] = useState('ELECTRICITY');
   const [submittingExpense, setSubmittingExpense] = useState(false);
 
-  // Edit Expense State (Requirement 4: Recent expenses editable after entering)
+  // Edit Expense State
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editAmount, setEditAmount] = useState('');
@@ -72,74 +57,10 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingExpense, setDeletingExpense] = useState(false);
 
-  // Fixed Monthly Operating Bills (Requirement 4: Mandatory recurring PG bills)
-  const [fixedBills, setFixedBills] = useState<FixedMonthlyBill[]>([
-    {
-      id: 'fix-1',
-      title: 'Building Monthly Lease Rent',
-      category: 'BUILDING_RENT',
-      monthlyAmount: 60000,
-      icon: '🏢',
-      isPaidThisMonth: true,
-      dueDate: '1st of month',
-    },
-    {
-      id: 'fix-2',
-      title: 'Cook & Kitchen Staff Salary',
-      category: 'SALARY',
-      monthlyAmount: 25000,
-      icon: '👨‍🍳',
-      isPaidThisMonth: true,
-      dueDate: '5th of month',
-    },
-    {
-      id: 'fix-3',
-      title: 'Cleaning & Housekeeping Staff',
-      category: 'SALARY',
-      monthlyAmount: 12000,
-      icon: '🧹',
-      isPaidThisMonth: true,
-      dueDate: '5th of month',
-    },
-    {
-      id: 'fix-4',
-      title: 'Commercial Electricity (BESCOM)',
-      category: 'UTILITIES',
-      monthlyAmount: 18000,
-      icon: '⚡',
-      isPaidThisMonth: false,
-      dueDate: '10th of month',
-    },
-    {
-      id: 'fix-5',
-      title: 'Water Tanker & Supply',
-      category: 'UTILITIES',
-      monthlyAmount: 8000,
-      icon: '💧',
-      isPaidThisMonth: false,
-      dueDate: 'Every Monday',
-    },
-    {
-      id: 'fix-6',
-      title: 'High-Speed Commercial Wi-Fi',
-      category: 'INTERNET',
-      monthlyAmount: 3500,
-      icon: '📶',
-      isPaidThisMonth: true,
-      dueDate: '15th of month',
-    },
-    {
-      id: 'fix-7',
-      title: 'Security CCTV & Maintenance',
-      category: 'MAINTENANCE',
-      monthlyAmount: 5000,
-      icon: '🛡️',
-      isPaidThisMonth: false,
-      dueDate: '20th of month',
-    },
-  ]);
+  // Fixed Monthly Operating Bills (loaded from storage/API; empty if none configured yet)
+  const [fixedBills, setFixedBills] = useState<FixedMonthlyBill[]>([]);
 
-  // Historical P&L Past Month Tracking (Requirement 1: Add/Track Previous Year & Month P&L)
+  // Historical P&L Past Month Tracking
   const [showAddPastMonthModal, setShowAddPastMonthModal] = useState(false);
   const [selectedPnlYear, setSelectedPnlYear] = useState<'ALL' | '2026' | '2025' | '2024'>('2026');
   const [selectedBarMonth, setSelectedBarMonth] = useState<string | null>('Nov 2026');
@@ -148,32 +69,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const [pastRevenueInput, setPastRevenueInput] = useState('');
   const [pastExpenseInput, setPastExpenseInput] = useState('');
   const [pastNotesInput, setPastNotesInput] = useState('');
-  const [customPastMonths, setCustomPastMonths] = useState<MonthlyPnlRecord[]>([
-    {
-      id: 'hist-2025-12',
-      month: 'Dec 2025',
-      short: 'Dec',
-      year: '2025',
-      revenue: 185000,
-      expense: 139000,
-      profit: 46000,
-      isGain: true,
-      notes: 'Winter admissions surge',
-      isCustom: true,
-    },
-    {
-      id: 'hist-2025-11',
-      month: 'Nov 2025',
-      short: 'Nov',
-      year: '2025',
-      revenue: 178000,
-      expense: 142000,
-      profit: 36000,
-      isGain: true,
-      notes: 'Festive baseline operational month',
-      isCustom: true,
-    },
-  ]);
+  const [customPastMonths, setCustomPastMonths] = useState<MonthlyPnlRecord[]>([]);
 
   // Standard Templates for Quick Logging
   const STANDARD_EXPENSES = [
@@ -220,11 +116,26 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const loadFinanceData = async (silent = false) => {
     if (!silent && expenses.length === 0) setLoading(true);
     try {
-      const [invRes, expRes, propRes] = await Promise.all([
-        apiClient<{ content: RentInvoice[] }>('/owner/rent-invoices'),
-        apiClient<{ content: Expense[] }>('/owner/expenses'),
+      const [invRes, expRes, propRes, tenRes] = await Promise.all([
+        apiClient<{ content: RentInvoice[] }>('/owner/rent-invoices').catch(() => ({ content: [] })),
+        apiClient<{ content: Expense[] }>('/owner/expenses').catch(() => ({ content: [] })),
         apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
+        apiClient<{ content: Tenant[] }>('/owner/tenants').catch(() => ({ content: [] })),
       ]);
+
+      let loadedTenants = tenRes.content || [];
+      try {
+        const storedCustomTenants = await safeStorage.getItem('@staynest_custom_tenants');
+        if (storedCustomTenants) {
+          const parsedT: Tenant[] = JSON.parse(storedCustomTenants);
+          if (Array.isArray(parsedT) && parsedT.length > 0) {
+            const seenIds = new Set(loadedTenants.map((t) => t.id));
+            const uniqueT = parsedT.filter((ct) => !seenIds.has(ct.id));
+            loadedTenants = [...uniqueT, ...loadedTenants];
+          }
+        }
+      } catch {}
+      setTenants(loadedTenants);
 
       let loadedExpenses = expRes.content || [];
 
@@ -435,6 +346,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     setFixedBills(updated);
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem('staynest_fixed_bills', JSON.stringify(updated));
+      window.dispatchEvent(new Event('staynest_expense_added'));
     }
   };
 
@@ -503,76 +415,97 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     }
   };
 
-  // Base 2026 Monthly Profit & Loss Records
-  const currentMonthRentInflow = invoices.length > 0 ? invoices.reduce((s, i) => s + i.totalAmountPaise, 0) / 100 : 255000;
-  const currentMonthExpenses = expenses.length > 0 ? expenses.reduce((s, e) => s + e.amountPaise, 0) / 100 : totalMonthlyBills;
+  // Single Source of Truth: Current Month Collection & Expense Metrics
+  const currentMonthCollection = computeCollectionMetrics(tenants, selectedMonth, invoices);
+  const currentMonthExpenseProfit = computeExpenseAndProfitMetrics({
+    collectedRent: currentMonthCollection.collectedRent,
+    fixedBills,
+    loggedExpenses: expenses,
+    selectedMonth,
+  });
 
-  const BASE_MONTHLY_P_AND_L: MonthlyPnlRecord[] = [
-    { id: 'base-2026-06', month: 'Jun 2026', short: 'Jun', year: '2026', revenue: 195000, expense: 142000, profit: 53000, isGain: true, isCustom: false },
-    { id: 'base-2026-07', month: 'Jul 2026', short: 'Jul', year: '2026', revenue: 205000, expense: 154000, profit: 51000, isGain: true, isCustom: false },
-    { id: 'base-2026-08', month: 'Aug 2026', short: 'Aug', year: '2026', revenue: 215000, expense: 168000, profit: 47000, isGain: true, isCustom: false },
-    { id: 'base-2026-09', month: 'Sep 2026', short: 'Sep', year: '2026', revenue: 220000, expense: 172000, profit: 48000, isGain: true, isCustom: false },
-    { id: 'base-2026-10', month: 'Oct 2026', short: 'Oct', year: '2026', revenue: 235000, expense: 165000, profit: 70000, isGain: true, isCustom: false },
-    {
-      id: 'base-2026-11',
-      month: 'Nov 2026',
-      short: 'Nov',
-      year: '2026',
-      revenue: currentMonthRentInflow,
-      expense: currentMonthExpenses,
-      profit: currentMonthRentInflow - currentMonthExpenses,
-      isGain: (currentMonthRentInflow - currentMonthExpenses) >= 0,
-      isCustom: false,
-    },
+  const MONTH_SHORT_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const formatMonthKeyMeta = (monthKey: string) => {
+    const [yr, mStr] = monthKey.split('-');
+    const mIdx = Math.max(0, Math.min(11, (parseInt(mStr, 10) || 1) - 1));
+    const short = MONTH_SHORT_NAMES[mIdx];
+    return { short, year: yr, month: `${short} ${yr}` };
+  };
+
+  // Build monthly P&L dynamically from underlying invoices, tenants, expenses & fixed bills
+  const dynamicMonthMap = new Map<string, { revenue: number; expense: number }>();
+
+  // 1. Aggregate invoices by YYYY-MM
+  invoices.forEach((inv) => {
+    const rawDate = inv.billingMonth || inv.dueDate || inv.createdAt || '';
+    const key = rawDate.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) return;
+    const entry = dynamicMonthMap.get(key) || { revenue: 0, expense: 0 };
+    const amt = (inv.paidAmountPaise || (inv.status === 'PAID' ? inv.totalAmountPaise : 0) || 0) / 100;
+    entry.revenue += amt;
+    dynamicMonthMap.set(key, entry);
+  });
+
+  // 2. Aggregate expenses by YYYY-MM
+  expenses.forEach((exp) => {
+    const rawDate = exp.transactionDate || exp.expenseDate || exp.date || exp.createdAt || '';
+    const key = rawDate.slice(0, 7);
+    if (!/^\d{4}-\d{2}$/.test(key)) return;
+    const entry = dynamicMonthMap.get(key) || { revenue: 0, expense: 0 };
+    entry.expense += (exp.amountPaise || 0) / 100;
+    dynamicMonthMap.set(key, entry);
+  });
+
+  // 3. Ensure selectedMonth reflects exact Single Source of Truth (Collection - [Paid Mandatory Bills + Variable Expenses])
+  dynamicMonthMap.set(selectedMonth, {
+    revenue: currentMonthCollection.collectedRent,
+    expense: currentMonthExpenseProfit.totalExpenses,
+  });
+
+  const computedRecords: MonthlyPnlRecord[] = Array.from(dynamicMonthMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, vals]) => {
+      const meta = formatMonthKeyMeta(key);
+      const rev = Math.round(vals.revenue);
+      const exp = Math.round(vals.expense);
+      const profit = rev - exp;
+      return {
+        id: `dyn-${key}`,
+        month: meta.month,
+        short: meta.short,
+        year: meta.year,
+        monthKey: key,
+        revenue: rev,
+        expense: exp,
+        profit,
+        isGain: profit >= 0,
+        isCustom: false,
+      };
+    });
+
+  // Combine user-added historical months with dynamically computed months (custom overrides if same month)
+  const customMonthNames = new Set(customPastMonths.map((c) => c.month));
+  const allMonthlyRecords: MonthlyPnlRecord[] = [
+    ...customPastMonths,
+    ...computedRecords.filter((r) => !customMonthNames.has(r.month)),
   ];
 
-  // Combined records (base + user-added custom past months/years)
-  const allMonthlyRecords: MonthlyPnlRecord[] = [...customPastMonths, ...BASE_MONTHLY_P_AND_L];
-
   // Filtered by selected year
-  const filteredMonthlyRecords = selectedPnlYear === 'ALL'
+  const displayPnlRecords = selectedPnlYear === 'ALL'
     ? allMonthlyRecords
     : allMonthlyRecords.filter((d) => d.year === selectedPnlYear);
 
-  const displayPnlRecords = filteredMonthlyRecords.length > 0 ? filteredMonthlyRecords : BASE_MONTHLY_P_AND_L;
-  const maxVal = Math.max(...displayPnlRecords.map((d) => Math.max(d.revenue, d.expense)), 260000);
-  const totalPeriodProfit = displayPnlRecords.reduce((sum, d) => sum + d.profit, 0);
-  const avgMonthlyProfit = Math.round(totalPeriodProfit / displayPnlRecords.length);
+  const maxVal = displayPnlRecords.length > 0
+    ? Math.max(...displayPnlRecords.map((d) => Math.max(d.revenue, d.expense)), 1)
+    : 1;
 
-  // Selected bar detail inspection
-  const inspectedMonthData = displayPnlRecords.find((d) => d.month === selectedBarMonth) || displayPnlRecords[displayPnlRecords.length - 1];
+  const { netPeriodSurplus: totalPeriodProfit, avgMonthlyProfit } = computePeriodPnlMetrics(displayPnlRecords);
 
-  // Light orange animated shining border glow (Requirement 4)
-  const borderGlowAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(borderGlowAnim, {
-          toValue: 1,
-          duration: 1800,
-          useNativeDriver: false,
-        }),
-        Animated.timing(borderGlowAnim, {
-          toValue: 0,
-          duration: 1800,
-          useNativeDriver: false,
-        }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [borderGlowAnim]);
-
-  const animatedBorderColor = borderGlowAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: ['#fed7aa', '#fb923c', '#fed7aa'],
-  });
-
-  const animatedShadowOpacity = borderGlowAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.06, 0.22, 0.06],
-  });
+  // Selected bar detail inspection (safe when empty)
+  const inspectedMonthData = displayPnlRecords.length > 0
+    ? (displayPnlRecords.find((d) => d.month === selectedBarMonth) || displayPnlRecords[displayPnlRecords.length - 1])
+    : null;
 
   return (
     <View style={styles.container}>
@@ -614,21 +547,21 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         {/* Executive Quick Stats Banner */}
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Avg Monthly Profit</Text>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>
-              +₹{avgMonthlyProfit.toLocaleString('en-IN')}
+            <Text style={styles.kpiLabel}>AVG MONTHLY PROFIT</Text>
+            <Text style={[styles.kpiValue, { color: avgMonthlyProfit >= 0 ? '#4d8b6f' : '#dc2626' }]}>
+              {avgMonthlyProfit >= 0 ? '+' : '-'}₹{Math.abs(avgMonthlyProfit).toLocaleString('en-IN')}
             </Text>
           </View>
-          <View style={[styles.kpiBox, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#e2e8f0' }]}>
-            <Text style={styles.kpiLabel}>Mandatory Monthly</Text>
+          <View style={[styles.kpiBox, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#efece9' }]}>
+            <Text style={styles.kpiLabel}>MANDATORY MONTHLY</Text>
             <Text style={[styles.kpiValue, { color: '#ea580c' }]}>
               ₹{totalMonthlyBills.toLocaleString('en-IN')}
             </Text>
           </View>
           <View style={styles.kpiBox}>
-            <Text style={styles.kpiLabel}>Net Period Surplus</Text>
-            <Text style={[styles.kpiValue, { color: '#4f46e5' }]}>
-              +₹{totalPeriodProfit.toLocaleString('en-IN')}
+            <Text style={styles.kpiLabel}>NET PERIOD SURPLUS</Text>
+            <Text style={[styles.kpiValue, { color: totalPeriodProfit >= 0 ? '#3730a3' : '#dc2626' }]}>
+              {totalPeriodProfit >= 0 ? '+' : '-'}₹{Math.abs(totalPeriodProfit).toLocaleString('en-IN')}
             </Text>
           </View>
         </View>
@@ -640,16 +573,16 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            colors={['#ea580c', '#3b82f6']}
+            colors={['#ea580c', '#4d8b6f']}
             tintColor="#ea580c"
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── 2. INTERACTIVE MONTHLY PROFIT & LOSS GRAPH (REQUIREMENT 1 & 4) ─── */}
-        <Animated.View style={[styles.chartCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
+        {/* ─── 2. INTERACTIVE MONTHLY PROFIT & LOSS GRAPH ─── */}
+        <View style={styles.chartCard}>
           <View style={styles.chartHeaderRow}>
-            <View>
+            <View style={{ flex: 1, paddingRight: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ fontSize: 16 }}>📈</Text>
                 <Text style={styles.chartTitle}>Monthly Profit & Loss Track</Text>
@@ -684,70 +617,91 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
             <View style={styles.chartLegend}>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#10b981' }]} />
+                <View style={[styles.legendDot, { backgroundColor: '#6d9e86' }]} />
                 <Text style={styles.legendText}>Rent</Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#f97316' }]} />
+                <View style={[styles.legendDot, { backgroundColor: '#ea580c' }]} />
                 <Text style={styles.legendText}>Expenses</Text>
               </View>
             </View>
           </View>
 
           {/* Bar Chart Visualization */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chartScrollContent}
-          >
-            <View style={styles.chartBarsContainer}>
-              {displayPnlRecords.map((item, idx) => {
-                const revH = Math.max(16, Math.min(100, Math.round((item.revenue / maxVal) * 95)));
-                const expH = Math.max(16, Math.min(100, Math.round((item.expense / maxVal) * 95)));
-                const isSelected = selectedBarMonth === item.month;
+          {loading && displayPnlRecords.length === 0 ? (
+            <ActivityIndicator color="#ea580c" style={{ marginVertical: 40 }} />
+          ) : displayPnlRecords.length === 0 ? (
+            <View style={{ paddingVertical: 28, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#6b7280' }}>
+                No financial records for {selectedPnlYear === 'ALL' ? 'any year' : selectedPnlYear} yet.
+              </Text>
+              <Text style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                Log an expense or tap "+ Add Past Month" to track P&L.
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chartScrollContent}
+            >
+              <View style={styles.chartBarsContainer}>
+                {displayPnlRecords.map((item, idx) => {
+                  const revH = item.revenue > 0 ? Math.max(12, Math.min(100, Math.round((item.revenue / maxVal) * 95))) : 6;
+                  const expH = item.expense > 0 ? Math.max(12, Math.min(100, Math.round((item.expense / maxVal) * 95))) : 6;
+                  const isSelected = inspectedMonthData?.month === item.month;
 
-                return (
-                  <TouchableOpacity
-                    key={item.id || idx}
-                    style={[styles.barGroup, isSelected && styles.barGroupSelected]}
-                    onPress={() => setSelectedBarMonth(item.month)}
-                    activeOpacity={0.7}
-                  >
-                    {/* Profit Pill Top Badge */}
-                    <View
-                      style={[
-                        styles.barProfitBadge,
-                        item.isGain ? { backgroundColor: '#dcfce7' } : { backgroundColor: '#fee2e2' },
-                      ]}
+                  return (
+                    <TouchableOpacity
+                      key={item.id || idx}
+                      style={[styles.barGroup, isSelected && styles.barGroupSelected]}
+                      onPress={() => setSelectedBarMonth(item.month)}
+                      activeOpacity={0.7}
                     >
-                      <Text
+                      {/* Profit Pill Top Badge */}
+                      <View
                         style={[
-                          styles.barProfitBadgeText,
-                          item.isGain ? { color: '#16a34a' } : { color: '#dc2626' },
+                          styles.barProfitBadge,
+                          isSelected
+                            ? { backgroundColor: '#ffedd5' }
+                            : item.isGain
+                              ? { backgroundColor: '#e6f4ea' }
+                              : { backgroundColor: '#fee2e2' },
                         ]}
                       >
-                        {item.isGain ? '+' : '-'}₹{Math.round(Math.abs(item.profit) / 1000)}k
+                        <Text
+                          style={[
+                            styles.barProfitBadgeText,
+                            isSelected
+                              ? { color: '#c2410c' }
+                              : item.isGain
+                                ? { color: '#15803d' }
+                                : { color: '#dc2626' },
+                          ]}
+                        >
+                          {item.isGain ? '+' : '-'}₹{Math.round(Math.abs(item.profit) / 1000)}k
+                        </Text>
+                      </View>
+
+                      {/* Dual Bars: Revenue & Expense */}
+                      <View style={styles.barsPillarRow}>
+                        <View style={[styles.singleBar, { height: revH, backgroundColor: '#7aa992' }]} />
+                        <View style={[styles.singleBar, { height: expH, backgroundColor: '#ea580c' }]} />
+                      </View>
+
+                      {/* Month Label */}
+                      <Text style={[styles.barMonthLabel, isSelected && { color: '#ea580c', fontWeight: '900' }]}>
+                        {item.short}
                       </Text>
-                    </View>
-
-                    {/* Dual Bars: Revenue & Expense */}
-                    <View style={styles.barsPillarRow}>
-                      <View style={[styles.singleBar, { height: revH, backgroundColor: '#10b981' }]} />
-                      <View style={[styles.singleBar, { height: expH, backgroundColor: '#f97316' }]} />
-                    </View>
-
-                    {/* Month Label */}
-                    <Text style={[styles.barMonthLabel, isSelected && { color: '#ea580c', fontWeight: '900' }]}>
-                      {item.short}
-                    </Text>
-                    <Text style={[styles.barStatusText, { color: item.isGain ? '#059669' : '#dc2626' }]}>
-                      {item.isGain ? 'Gain' : 'Loss'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </ScrollView>
+                      <Text style={[styles.barStatusText, { color: item.isGain ? '#4d8b6f' : '#dc2626' }]}>
+                        {item.isGain ? 'Gain' : 'Loss'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          )}
 
           {/* Interactive Selected Month Breakdown Card */}
           {inspectedMonthData && (
@@ -773,25 +727,25 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
               <View style={styles.inspectedMetricsRow}>
                 <View style={styles.inspectedMetricBox}>
-                  <Text style={styles.inspectedMetricLabel}>Rent Inflow</Text>
-                  <Text style={[styles.inspectedMetricValue, { color: '#059669' }]}>
+                  <Text style={styles.inspectedMetricLabel}>RENT INFLOW</Text>
+                  <Text style={[styles.inspectedMetricValue, { color: '#4d8b6f' }]}>
                     ₹{inspectedMonthData.revenue.toLocaleString('en-IN')}
                   </Text>
                 </View>
 
                 <View style={styles.inspectedMetricBox}>
-                  <Text style={styles.inspectedMetricLabel}>Expenses</Text>
+                  <Text style={styles.inspectedMetricLabel}>EXPENSES</Text>
                   <Text style={[styles.inspectedMetricValue, { color: '#ea580c' }]}>
                     ₹{inspectedMonthData.expense.toLocaleString('en-IN')}
                   </Text>
                 </View>
 
                 <View style={styles.inspectedMetricBox}>
-                  <Text style={styles.inspectedMetricLabel}>Net Margin</Text>
+                  <Text style={styles.inspectedMetricLabel}>NET MARGIN</Text>
                   <Text
                     style={[
                       styles.inspectedMetricValue,
-                      { color: inspectedMonthData.isGain ? '#16a34a' : '#dc2626' },
+                      { color: inspectedMonthData.isGain ? '#15803d' : '#dc2626' },
                     ]}
                   >
                     {inspectedMonthData.isGain ? '+' : '-'}₹{Math.abs(inspectedMonthData.profit).toLocaleString('en-IN')}
@@ -810,10 +764,10 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               💡 Tap any month bar to inspect revenue vs expenses, or add past years anytime.
             </Text>
           </View>
-        </Animated.View>
+        </View>
 
-        {/* ─── 3. FIXED MONTHLY MANDATORY BILLS (REQUIREMENT 4: "MUST PAY EVERY MONTH") ─── */}
-        <Animated.View style={[styles.fixedBillsCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
+        {/* ─── 3. FIXED MONTHLY MANDATORY BILLS ─── */}
+        <View style={styles.fixedBillsCard}>
           <View style={styles.fixedBillsHeaderRow}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -856,13 +810,13 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               </Text>
               <Text style={styles.billsTotalAmount}>
                 ₹{(timeframeMode === 'MONTHLY' ? totalMonthlyBills : totalYearlyBills).toLocaleString('en-IN')}
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#6b7280' }}>
                   {timeframeMode === 'MONTHLY' ? ' / month' : ' / year'}
                 </Text>
               </Text>
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Text style={{ fontSize: 11, color: '#16a34a', fontWeight: '800' }}>
+              <Text style={{ fontSize: 11, color: '#15803d', fontWeight: '800' }}>
                 Paid: ₹{paidBillsThisMonth.toLocaleString('en-IN')}
               </Text>
               <Text style={{ fontSize: 11, color: '#dc2626', fontWeight: '800', marginTop: 2 }}>
@@ -872,53 +826,61 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
           </View>
 
           {/* List of Mandatory Bills */}
-          <View style={{ gap: 8, marginTop: 12 }}>
-            {fixedBills.map((bill) => {
-              const displayAmount = timeframeMode === 'MONTHLY' ? bill.monthlyAmount : bill.monthlyAmount * 12;
+          {fixedBills.length === 0 ? (
+            <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+              <Text style={{ fontSize: 12, color: '#6b7280', fontWeight: '600' }}>
+                No mandatory operating bills configured yet.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ gap: 10, marginTop: 12 }}>
+              {fixedBills.map((bill) => {
+                const displayAmount = timeframeMode === 'MONTHLY' ? bill.monthlyAmount : bill.monthlyAmount * 12;
 
-              return (
-                <View key={bill.id} style={styles.billRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <View style={styles.billIconCircle}>
-                      <Text style={{ fontSize: 16 }}>{bill.icon}</Text>
+                return (
+                  <View key={bill.id} style={styles.billRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <View style={styles.billIconCircle}>
+                        <Text style={{ fontSize: 16 }}>{bill.icon}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.billTitle}>{bill.title}</Text>
+                        <Text style={styles.billDueInfo}>Due: {bill.dueDate}</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.billTitle}>{bill.title}</Text>
-                      <Text style={styles.billDueInfo}>Due: {bill.dueDate}</Text>
+
+                    <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                      <Text style={styles.billAmount}>₹{displayAmount.toLocaleString('en-IN')}</Text>
+                      <Text style={styles.billPerText}>{timeframeMode === 'MONTHLY' ? '/mo' : '/yr'}</Text>
                     </View>
-                  </View>
 
-                  <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
-                    <Text style={styles.billAmount}>₹{displayAmount.toLocaleString('en-IN')}</Text>
-                    <Text style={styles.billPerText}>{timeframeMode === 'MONTHLY' ? '/mo' : '/yr'}</Text>
-                  </View>
-
-                  {/* Status Button (Paid / Pending) */}
-                  <TouchableOpacity
-                    style={[
-                      styles.billStatusPill,
-                      bill.isPaidThisMonth ? styles.billStatusPaid : styles.billStatusPending,
-                    ]}
-                    onPress={() => handleToggleBillStatus(bill.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text
+                    {/* Status Button (Paid / Pending) */}
+                    <TouchableOpacity
                       style={[
-                        styles.billStatusText,
-                        bill.isPaidThisMonth ? { color: '#059669' } : { color: '#b45309' },
+                        styles.billStatusPill,
+                        bill.isPaidThisMonth ? styles.billStatusPaid : styles.billStatusPending,
                       ]}
+                      onPress={() => handleToggleBillStatus(bill.id)}
+                      activeOpacity={0.8}
                     >
-                      {bill.isPaidThisMonth ? '✓ Paid' : '⏳ Due'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-        </Animated.View>
+                      <Text
+                        style={[
+                          styles.billStatusText,
+                          bill.isPaidThisMonth ? { color: '#15803d' } : { color: '#b45309' },
+                        ]}
+                      >
+                        {bill.isPaidThisMonth ? '✓ Paid' : '⏳ Due'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         {/* ─── 4. QUICK ADD STANDARD EXPENSES TEMPLATES ─── */}
-        <Animated.View style={[styles.quickExpensesCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
+        <View style={styles.quickExpensesCard}>
           <Text style={styles.quickExpensesTitle}>⚡ QUICK ADD OPERATIONAL EXPENSE</Text>
           <Text style={styles.quickExpensesSub}>Tap any template to pre-fill expense amount & category:</Text>
           <View style={styles.templatesGrid}>
@@ -942,11 +904,11 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               </TouchableOpacity>
             ))}
           </View>
-        </Animated.View>
+        </View>
 
         {/* ─── 5. LOG EXPENSE FORM ─── */}
         {showExpenseForm && (
-          <Animated.View style={[styles.formCard, { borderColor: animatedBorderColor, shadowOpacity: animatedShadowOpacity }]}>
+          <View style={styles.formCard}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={styles.formTitle}>Log Operational Expense</Text>
               <TouchableOpacity onPress={() => setShowExpenseForm(false)}>
@@ -994,10 +956,10 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                 {submittingExpense ? 'Saving...' : 'Add Expense Record'}
               </Text>
             </TouchableOpacity>
-          </Animated.View>
+          </View>
         )}
 
-        {/* ─── 6. RECENT EXPENSES WITH EDIT & DELETE BUTTONS (REQUIREMENT 4) ─── */}
+        {/* ─── 6. RECENT EXPENSES WITH EDIT & DELETE BUTTONS ─── */}
         <View style={{ marginTop: 24, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
             <Text style={styles.sectionTitle}>RECENT EXPENSES ({expenses.length})</Text>
@@ -1017,7 +979,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
             const expDate = e.transactionDate || e.date || 'Recent';
 
             return (
-              <Animated.View key={e.id} style={[styles.expCard, { borderColor: animatedBorderColor }]}>
+              <View key={e.id} style={styles.expCard}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.expTitle}>{expTitle}</Text>
                   <Text style={styles.expCategory}>
@@ -1031,7 +993,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                   </Text>
                 </View>
 
-                {/* Edit & Delete Action Buttons (Requirement 4) */}
+                {/* Edit & Delete Action Buttons */}
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   <TouchableOpacity
                     style={styles.expActionBtn}
@@ -1049,7 +1011,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                     <Text style={{ fontSize: 13 }}>🗑️</Text>
                   </TouchableOpacity>
                 </View>
-              </Animated.View>
+              </View>
             );
           })
         )}
@@ -1266,15 +1228,15 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#faf8f6',
   },
   header: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#faf8f6',
     paddingTop: 50,
     paddingBottom: 14,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
+    borderBottomColor: '#efece9',
   },
   headerTopRow: {
     flexDirection: 'row',
@@ -1283,26 +1245,32 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   backBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#efece9',
   },
   backBtnText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#475569',
+    fontWeight: '700',
+    color: '#111827',
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#111827',
   },
   addBtn: {
     backgroundColor: '#ea580c',
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.16,
+    shadowRadius: 4,
+    elevation: 2,
   },
   addBtnText: {
     fontSize: 12,
@@ -1311,11 +1279,15 @@ const styles = StyleSheet.create({
   },
   kpiRow: {
     flexDirection: 'row',
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    paddingVertical: 8,
+    borderColor: '#efece9',
+    paddingVertical: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   kpiBox: {
     flex: 1,
@@ -1325,13 +1297,14 @@ const styles = StyleSheet.create({
   kpiLabel: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#6b7280',
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   kpiValue: {
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 2,
+    fontSize: 14,
+    fontWeight: '800',
+    marginTop: 3,
   },
   content: {
     padding: 16,
@@ -1340,14 +1313,14 @@ const styles = StyleSheet.create({
   // Profit & Loss Chart Card
   chartCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#efece9',
     marginBottom: 16,
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
   },
   chartHeaderRow: {
@@ -1357,23 +1330,23 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   chartTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
   },
   chartSub: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#6b7280',
     marginTop: 2,
   },
   chartLegend: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   legendDot: {
     width: 8,
@@ -1381,15 +1354,15 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   legendText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#475569',
+    color: '#374151',
   },
   chartScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   chartBarsContainer: {
     flexDirection: 'row',
@@ -1397,110 +1370,108 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     width: '100%',
     minWidth: 320,
-    height: 150,
+    height: 156,
     paddingTop: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#f3f4f6',
     paddingBottom: 8,
   },
   barGroup: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    minWidth: 46,
-    paddingHorizontal: 4,
+    minWidth: 48,
+    paddingHorizontal: 5,
+    paddingVertical: 6,
   },
   barProfitBadge: {
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
+    borderRadius: 6,
     marginBottom: 6,
   },
   barProfitBadgeText: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '800',
   },
   barsPillarRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 3,
+    gap: 4,
   },
   singleBar: {
-    width: 12,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
+    width: 13,
+    borderTopLeftRadius: 6,
+    borderTopRightRadius: 6,
   },
   barMonthLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#111827',
     marginTop: 6,
   },
   barStatusText: {
     fontSize: 9,
-    fontWeight: '800',
+    fontWeight: '700',
     marginTop: 1,
   },
   chartFooterRow: {
-    marginTop: 10,
+    marginTop: 12,
   },
   chartFooterNote: {
     fontSize: 11,
-    color: '#475569',
+    color: '#6b7280',
     fontWeight: '600',
   },
   // Fixed Bills Card
   fixedBillsCard: {
     backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#efece9',
     marginBottom: 16,
-    shadowColor: '#ea580c',
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 2,
   },
   fixedBillsHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   fixedBillsTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#334155',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#111827',
   },
   fixedBillsSub: {
     fontSize: 11,
-    color: '#64748b',
-    marginTop: 1,
+    color: '#6b7280',
+    marginTop: 2,
   },
   timeframeToggle: {
     flexDirection: 'row',
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    padding: 2,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 10,
+    padding: 3,
   },
   toggleOption: {
     paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: 6,
+    paddingHorizontal: 11,
+    borderRadius: 8,
   },
   toggleOptionActive: {
-    backgroundColor: '#ffffff',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
+    backgroundColor: '#ea580c',
   },
   toggleOptionText: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#4b5563',
   },
   toggleOptionTextActive: {
-    color: '#ea580c',
+    color: '#ffffff',
     fontWeight: '800',
   },
   billsTotalBanner: {
@@ -1508,55 +1479,53 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#fff7ed',
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
     borderColor: '#fed7aa',
   },
   billsTotalSub: {
     fontSize: 11,
     fontWeight: '700',
-    color: '#9a3412',
+    color: '#7c2d12',
   },
   billsTotalAmount: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
-    color: '#ea580c',
+    color: '#d96b27',
     marginTop: 2,
   },
   billRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fffaf5',
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1.5,
-    borderColor: '#fed7aa',
+    backgroundColor: '#ffffff',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#efece9',
   },
   billIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#ffffff',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#f3f4f6',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#fed7aa',
   },
   billTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#334155',
+    color: '#111827',
   },
   billDueInfo: {
-    fontSize: 10,
-    color: '#64748b',
+    fontSize: 11,
+    color: '#6b7280',
     marginTop: 1,
   },
   billAmount: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#334155',
+    color: '#111827',
   },
   billPerText: {
     fontSize: 9,
@@ -1806,42 +1775,42 @@ const styles = StyleSheet.create({
   addPastMonthBtn: {
     backgroundColor: '#fff7ed',
     borderWidth: 1,
-    borderColor: '#fdba74',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
+    borderColor: '#fed7aa',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
   },
   addPastMonthBtnText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#ea580c',
+    color: '#d96b27',
   },
   filterAndLegendRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   yearFilterRow: {
     flexDirection: 'row',
-    gap: 5,
+    gap: 6,
   },
   yearChip: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 5,
-    backgroundColor: '#f1f5f9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#e5e7eb',
   },
   yearChipActive: {
     backgroundColor: '#ea580c',
-    borderColor: '#c2410c',
+    borderColor: '#ea580c',
   },
   yearChipText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#374151',
   },
   yearChipTextActive: {
     color: '#ffffff',
@@ -1849,32 +1818,32 @@ const styles = StyleSheet.create({
   },
   barGroupSelected: {
     backgroundColor: '#fff7ed',
-    borderRadius: 6,
+    borderRadius: 14,
   },
   inspectedMonthCard: {
-    marginTop: 12,
-    backgroundColor: '#f8fafc',
-    borderRadius: 12,
-    padding: 10,
+    marginTop: 14,
+    backgroundColor: '#faf8f6',
+    borderRadius: 14,
+    padding: 12,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: '#efece9',
   },
   inspectedMonthHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
   inspectedMonthTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#111827',
   },
   customBadge: {
     backgroundColor: '#fef3c7',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
     borderWidth: 1,
     borderColor: '#fde68a',
   },
@@ -1886,33 +1855,38 @@ const styles = StyleSheet.create({
   inspectedMetricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 6,
+    gap: 8,
   },
   inspectedMetricBox: {
     flex: 1,
     backgroundColor: '#ffffff',
-    borderRadius: 8,
-    padding: 8,
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#f1f5f9',
+    borderColor: '#efece9',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 3,
+    elevation: 1,
   },
   inspectedMetricLabel: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#6b7280',
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   inspectedMetricValue: {
-    fontSize: 11,
-    fontWeight: '900',
-    marginTop: 2,
+    fontSize: 13,
+    fontWeight: '800',
+    marginTop: 3,
   },
   inspectedNotes: {
     fontSize: 10,
-    color: '#475569',
+    color: '#4b5563',
     fontStyle: 'italic',
-    marginTop: 6,
+    marginTop: 8,
   },
   modalYearChip: {
     paddingHorizontal: 12,

@@ -26,6 +26,12 @@ import { FoodMenuModal } from '../components/modals/FoodMenuModal';
 import { fastDataCache } from '../services/dataCache';
 import { safeStorage } from '../utils/safeStorage';
 import { isValidUuid } from '../services/propertyDataService';
+import {
+  computeOccupancyMetrics,
+  computeCollectionMetrics,
+  computeExpenseAndProfitMetrics,
+  FixedMonthlyBill,
+} from '../services/financeSummaryService';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#ffffff', size = 20 }: { color?: string; size?: number }) => (
@@ -59,6 +65,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [fixedBills, setFixedBills] = useState<FixedMonthlyBill[]>([]);
 
   // Detailed room structure per property for live occupancy calculation
   const [propertyRoomsMap, setPropertyRoomsMap] = useState<Record<string, Room[]>>({});
@@ -855,6 +862,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
       setExpenses(allExpenses);
 
+      if (typeof window !== 'undefined' && window.localStorage) {
+        try {
+          const cachedBills = window.localStorage.getItem('staynest_fixed_bills');
+          if (cachedBills) {
+            const parsedBills = JSON.parse(cachedBills);
+            if (Array.isArray(parsedBills)) {
+              setFixedBills(parsedBills);
+            }
+          }
+        } catch {}
+      }
+
       // Fast parallel rooms map
       const roomsMap: Record<string, Room[]> = {};
       await Promise.all(
@@ -1101,62 +1120,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const selectedMonthOption = MONTH_OPTIONS.find((m) => m.value === selectedMonth) || MONTH_OPTIONS[0];
 
-  // Month-Wise Invoices & Expenses Filtering
-  const monthInvoices = invoices.filter(
-    (i) => i.billingMonth === selectedMonth || (i.dueDate && i.dueDate.startsWith(selectedMonth))
-  );
+  // Single Source of Truth: Collection & Expenses Metrics
+  const collectionMetrics = computeCollectionMetrics(activeTenants, selectedMonth, invoices);
+  const totalExpectedRent = collectionMetrics.expectedRent;
+  const totalRentCollected = collectionMetrics.collectedRent;
+  const pendingRent = collectionMetrics.pendingDue;
+  const collectionRate = collectionMetrics.collectionRate;
 
-  const monthExpenses = expenses.filter(
-    (e) => (e.expenseDate && e.expenseDate.startsWith(selectedMonth)) || (e.createdAt && e.createdAt.startsWith(selectedMonth))
-  );
-
-  // Expected monthly rent across all active residents
-  const totalExpectedRent = activeTenants.reduce((sum, t) => {
-    const rPaise = t.monthlyRentPaise || 850000;
-    return sum + rPaise / 100;
-  }, 0) || (activeTenants.length > 0 ? activeTenants.length * 8500 : 34000);
-
-  // Accurate month-wise collection & dues calculations
-  let totalRentCollected = 0;
-  let pendingRent = 0;
-
-  activeTenants.forEach((t) => {
-    const rent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
-    if (selectedMonth === '2026-11') {
-      if (t.rentStatus === 'PAID') {
-        totalRentCollected += rent;
-      } else {
-        const due = typeof t.outstandingPaise === 'number' ? Math.round(t.outstandingPaise / 100) : rent;
-        const paid = Math.max(0, rent - due);
-        totalRentCollected += paid;
-        pendingRent += due;
-      }
-    } else if (selectedMonth === '2026-10') {
-      totalRentCollected += Math.round(rent * 0.94);
-      pendingRent += Math.round(rent * 0.06);
-    } else {
-      totalRentCollected += Math.round(rent * 0.95);
-      pendingRent += Math.round(rent * 0.05);
-    }
+  const expenseProfitMetrics = computeExpenseAndProfitMetrics({
+    collectedRent: totalRentCollected,
+    fixedBills,
+    loggedExpenses: expenses,
+    selectedMonth,
   });
-
-  // Fallback to realistic values if tenants not yet loaded from backend
-  if (activeTenants.length === 0) {
-    totalRentCollected = 25500;
-    pendingRent = 8500;
-  }
-
-  // Month-Wise Operating Expenses
-  const rawExpense = monthExpenses.reduce((sum, e) => sum + (e.amountPaise || 0), 0) / 100;
-  const totalExpense = rawExpense > 0 ? rawExpense : (selectedMonth === '2026-11' ? 12400 : 14200);
-
-  const netOperatingProfit = totalRentCollected - totalExpense;
-
-  // Collection Rate accurately bounded between 0% and 100% (fixing 520% bug)
-  const effectiveExpected = totalExpectedRent > 0 ? totalExpectedRent : (totalRentCollected + pendingRent);
-  const collectionRate = effectiveExpected > 0
-    ? Math.min(100, Math.max(0, Math.round((totalRentCollected / effectiveExpected) * 100)))
-    : 75;
+  const totalExpense = expenseProfitMetrics.totalExpenses;
+  const netOperatingProfit = expenseProfitMetrics.netProfit;
 
   // CSV Export for Selected Month (Requirements 6 & 7)
   const handleDownloadMonthReport = () => {
@@ -1890,13 +1868,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     });
   });
 
-  const totalOccupiedBeds = activeTenants.length;
-  const totalBedsCount = currentPropTotalBeds > 0
-    ? Math.max(currentPropTotalBeds, totalOccupiedBeds)
-    : (selectedPropId === 'prop-pg-2' ? 12 : 18);
-  const availableBeds = Math.max(0, totalBedsCount - totalOccupiedBeds);
-  const totalRoomsCount = currentPropRooms.length || (selectedPropId === 'prop-pg-2' ? 4 : 6);
-  const occupancyRate = totalBedsCount > 0 ? Math.round((totalOccupiedBeds / totalBedsCount) * 100) : 0;
+  const occupancyMetrics = computeOccupancyMetrics(currentPropRooms, activeTenants);
+  const totalOccupiedBeds = occupancyMetrics.occupiedBeds;
+  const totalBedsCount = occupancyMetrics.totalBeds;
+  const availableBeds = occupancyMetrics.emptyBeds;
+  const totalRoomsCount = currentPropRooms.length;
+  const occupancyRate = occupancyMetrics.occupancyRate;
 
   // Filter strictly due tenants (Requirement 3: In the UI show only DUE tenants list in the main page)
   const dueTenants = activeTenants.filter(
@@ -2315,7 +2292,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
 
                 {(() => {
-                  const displayRate = (pendingRent === 0 && totalRentCollected > 0) ? 100 : (collectionRate > 0 ? collectionRate : 69);
+                  const displayRate = collectionRate;
                   const is100 = displayRate >= 100;
                   const is75 = displayRate >= 75;
                   const is50 = displayRate >= 50;
@@ -2344,7 +2321,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
 
               <Text style={styles.heroCardAmount} numberOfLines={1}>
-                ₹{totalRentCollected > 0 ? totalRentCollected.toLocaleString('en-IN') : '29,500'}
+                ₹{totalRentCollected.toLocaleString('en-IN')}
               </Text>
               <Text style={styles.heroCardSub}>Total Collection</Text>
             </View>
@@ -2360,12 +2337,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   <Text style={{ fontSize: 16 }}>⏳</Text>
                 </View>
                 <View style={styles.heroDueCountBadge}>
-                  <Text style={styles.heroDueCountText}>{dueTenantsCount > 0 ? dueTenantsCount : 2} Due ›</Text>
+                  <Text style={styles.heroDueCountText}>{collectionMetrics.rentDueCount} Due ›</Text>
                 </View>
               </View>
 
               <Text style={styles.heroCardAmount} numberOfLines={1}>
-                ₹{pendingRent > 0 ? pendingRent.toLocaleString('en-IN') : '13,000'}
+                ₹{pendingRent.toLocaleString('en-IN')}
               </Text>
               <Text style={styles.heroCardSub}>Need to Collect</Text>
             </TouchableOpacity>
@@ -2389,7 +2366,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
 
               <Text style={styles.heroCardAmount} numberOfLines={1}>
-                ₹{totalExpense > 0 ? totalExpense.toLocaleString('en-IN') : '12,400'}
+                ₹{totalExpense.toLocaleString('en-IN')}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={styles.heroCardSub}>Total Spent</Text>
@@ -2407,22 +2384,24 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 <View style={styles.heroProfitIconCircle}>
                   <Text style={{ fontSize: 16 }}>📈</Text>
                 </View>
-                <View style={styles.heroProfitTagBadge}>
-                  <Text style={styles.heroProfitTagText}>Surplus ›</Text>
+                <View style={[styles.heroProfitTagBadge, netOperatingProfit < 0 && { backgroundColor: 'rgba(239, 68, 68, 0.2)' }]}>
+                  <Text style={[styles.heroProfitTagText, netOperatingProfit < 0 && { color: '#f87171' }]}>
+                    {netOperatingProfit >= 0 ? 'Surplus ›' : 'Deficit ›'}
+                  </Text>
                 </View>
               </View>
 
               <Text
-                style={[styles.heroCardAmount, { color: '#10b981' }]}
+                style={[styles.heroCardAmount, { color: netOperatingProfit >= 0 ? '#10b981' : '#f87171' }]}
                 numberOfLines={1}
               >
-                +₹{netOperatingProfit > 0 ? netOperatingProfit.toLocaleString('en-IN') : '17,100'}
+                {netOperatingProfit >= 0 ? '+' : '-'}₹{Math.abs(netOperatingProfit).toLocaleString('en-IN')}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Text style={[styles.heroCardSub, { color: '#6ee7b7' }]}>
-                  ✓ Net Profit
+                <Text style={[styles.heroCardSub, { color: netOperatingProfit >= 0 ? '#6ee7b7' : '#fca5a5' }]}>
+                  {netOperatingProfit >= 0 ? '✓ Net Profit' : '⚠ Net Loss'}
                 </Text>
-                <Text style={{ fontSize: 11, color: '#6ee7b7', fontWeight: '600' }}>
+                <Text style={{ fontSize: 11, color: netOperatingProfit >= 0 ? '#6ee7b7' : '#fca5a5', fontWeight: '600' }}>
                   • Track ›
                 </Text>
               </View>
@@ -2443,7 +2422,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </View>
             <View style={styles.occupancyTextCol}>
               <Text style={styles.occupancyNumber}>
-                {availableBeds > 0 ? (availableBeds < 10 ? `0${availableBeds}` : availableBeds) : '13'}
+                {availableBeds < 10 ? `0${availableBeds}` : availableBeds}
               </Text>
               <Text style={styles.occupancyLabel}>Empty Beds</Text>
             </View>
@@ -2461,7 +2440,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </View>
             <View style={styles.occupancyTextCol}>
               <Text style={styles.occupancyNumber}>
-                {activeTenants.length > 0 ? (activeTenants.length < 10 ? `0${activeTenants.length}` : activeTenants.length) : '05'}
+                {totalOccupiedBeds < 10 ? `0${totalOccupiedBeds}` : totalOccupiedBeds}
               </Text>
               <Text style={styles.occupancyLabel}>Occupied Beds</Text>
             </View>

@@ -18,6 +18,7 @@ import { apiClient } from '../api/client';
 import { safeStorage } from '../utils/safeStorage';
 import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
+import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 
 interface TenantsScreenProps {
@@ -999,27 +1000,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     return true;
   });
 
-  // Month-Wise Calculation for Selected Month (Requirements 6 & 7)
+  // Single Source of Truth: Month-Wise Collection Calculation
   const activeTenantsList = tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED');
-  const monthExpectedRent = activeTenantsList.reduce((sum, t) => sum + (t.monthlyRentPaise ? t.monthlyRentPaise / 100 : 8500), 0);
-
-  let monthCollectedRent = 0;
-  if (selectedMonth === '2026-11') {
-    monthCollectedRent = activeTenantsList
-      .filter((t) => t.rentStatus === 'PAID')
-      .reduce((sum, t) => sum + (t.monthlyRentPaise ? t.monthlyRentPaise / 100 : 8500), 0);
-    if (monthCollectedRent === 0 && monthExpectedRent > 0) {
-      monthCollectedRent = Math.round(monthExpectedRent * 0.75);
-    }
-  } else if (selectedMonth === '2026-10') {
-    monthCollectedRent = Math.round(monthExpectedRent * 0.94);
-  } else if (selectedMonth === '2026-09') {
-    monthCollectedRent = Math.round(monthExpectedRent * 0.96);
-  } else {
-    monthCollectedRent = Math.round(monthExpectedRent * 0.88);
-  }
-  const monthPendingDue = Math.max(0, monthExpectedRent - monthCollectedRent);
-  const monthCollectionRate = monthExpectedRent > 0 ? Math.round((monthCollectedRent / monthExpectedRent) * 100) : 0;
+  const collectionSummary = computeCollectionMetrics(tenants, selectedMonth);
+  const monthExpectedRent = collectionSummary.expectedRent;
+  const monthCollectedRent = collectionSummary.collectedRent;
+  const monthPendingDue = collectionSummary.pendingDue;
+  const monthCollectionRate = collectionSummary.collectionRate;
 
   // Handle Download CSV for Selected Month (Requirements 6 & 7)
   const handleDownloadTenantsCsv = () => {
