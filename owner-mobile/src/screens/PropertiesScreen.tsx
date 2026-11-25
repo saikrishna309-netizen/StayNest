@@ -1722,10 +1722,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         ],
       };
       const nextFloors = [...prev, newFloor];
-      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
-        try {
-          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch { }
+      if (activeProperty?.id) {
+        safeStorage.setItem(`@staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch { }
+        }
       }
       return nextFloors;
     });
@@ -1749,10 +1752,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         return prev;
       }
       const nextFloors = prev.slice(0, prev.length - 1);
-      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
-        try {
-          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch { }
+      if (activeProperty?.id) {
+        safeStorage.setItem(`@staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch { }
+        }
       }
       return nextFloors;
     });
@@ -1769,19 +1775,23 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (f.rooms.some((r) => r.roomNumber === roomNumStr)) {
           return f;
         }
+        const isRentalProp = activeProperty?.propertyType === 'RENTAL_BUILDING';
+        const nowTs = Date.now();
         const newRoom: RoomConfig = {
-          id: `room-${roomNumStr}-${Date.now()}`,
+          id: `room-${roomNumStr}-${nowTs}`,
           roomNumber: roomNumStr,
           floorNumber: floorNum,
-          sharingType: 'DOUBLE',
-          rentRupees: 8500,
-          depositRupees: 8500,
+          sharingType: isRentalProp ? '1BHK' : 'DOUBLE',
+          rentRupees: isRentalProp ? 12000 : 8500,
+          depositRupees: isRentalProp ? 12000 : 8500,
           ac: true,
           attachedBathroom: true,
-          beds: [
-            { id: `bed-${roomNumStr}-1-${Date.now()}`, bedLabel: 'Bed 1', status: 'AVAILABLE' as const },
-            { id: `bed-${roomNumStr}-2-${Date.now()}`, bedLabel: 'Bed 2', status: 'AVAILABLE' as const },
-          ],
+          beds: isRentalProp
+            ? [{ id: `unit-${roomNumStr}-${nowTs}`, bedLabel: 'Unit', status: 'AVAILABLE' as const }]
+            : [
+                { id: `bed-${roomNumStr}-1-${nowTs}`, bedLabel: 'Bed 1', status: 'AVAILABLE' as const },
+                { id: `bed-${roomNumStr}-2-${nowTs}`, bedLabel: 'Bed 2', status: 'AVAILABLE' as const },
+              ],
         };
         return {
           ...f,
@@ -1789,10 +1799,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         };
       });
 
-      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
-        try {
-          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch { }
+      if (activeProperty?.id) {
+        safeStorage.setItem(`@staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch { }
+        }
       }
 
       return nextFloors;
@@ -1854,10 +1867,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         };
       });
 
-      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
-        try {
-          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch { }
+      if (activeProperty?.id) {
+        safeStorage.setItem(`@staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch { }
+        }
       }
 
       return nextFloors;
@@ -1928,10 +1944,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         };
       });
 
-      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
-        try {
-          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
-        } catch { }
+      if (activeProperty?.id) {
+        safeStorage.setItem(`@staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(nextFloors));
+          } catch { }
+        }
       }
 
       return nextFloors;
@@ -2605,11 +2624,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                               Flat {room.roomNumber}
                             </Text>
 
-                            {/* Tenant First Name / Unit Number + Config Pill */}
+                            {/* Tenant First Name (if occupied) + Config Pill */}
                             <View style={styles.gridUnitMetaRow}>
-                              <Text style={styles.gridUnitSubText} numberOfLines={1}>
-                                {isOccupiedUnit ? tenantFirstName : room.roomNumber}
-                              </Text>
+                              {isOccupiedUnit ? (
+                                <Text style={styles.gridUnitSubText} numberOfLines={1}>
+                                  {tenantFirstName}
+                                </Text>
+                              ) : null}
                               <View
                                 style={[
                                   styles.gridConfigPill,
@@ -2624,7 +2645,12 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
                             {/* Compact Rent + Photo Badge / Quick Add */}
                             <View style={styles.gridRentRow}>
-                              <Text style={styles.gridCompactRent} numberOfLines={1}>
+                              <Text
+                                style={styles.gridCompactRent}
+                                numberOfLines={1}
+                                adjustsFontSizeToFit
+                                minimumFontScale={0.8}
+                              >
                                 {formatCompactRent(room.rentRupees)}
                               </Text>
                               {isOccupiedUnit && roomPhotos.length > 0 ? (
@@ -2998,13 +3024,15 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              Edit Room {editingRoomDetails?.room.roomNumber}
+              Edit {isRentalMode ? 'Flat' : 'Room'} {editingRoomDetails?.room.roomNumber}
             </Text>
-            <Text style={styles.modalSubtitle}>Pricing, amenities & room number</Text>
+            <Text style={styles.modalSubtitle}>
+              {isRentalMode ? 'Flat type, pricing & unit number' : 'Sharing type, pricing, amenities & room number'}
+            </Text>
 
             {editingRoomDetails && (
-              <ScrollView style={{ maxHeight: 350 }}>
-                <Text style={styles.inputLabel}>Room Number / Name</Text>
+              <ScrollView style={{ maxHeight: 400 }}>
+                <Text style={styles.inputLabel}>{isRentalMode ? 'Flat Number / Name' : 'Room Number / Name'}</Text>
                 <TextInput
                   style={styles.textInput}
                   value={editingRoomDetails.room.roomNumber}
@@ -3017,7 +3045,56 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   placeholder="e.g. 101"
                 />
 
-                <Text style={styles.inputLabel}>Monthly Rent per Bed (₹)</Text>
+                <Text style={styles.inputLabel}>
+                  {isRentalMode ? 'Flat / Unit Type *' : 'Room Sharing Type *'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                  {(isRentalMode
+                    ? [
+                        { key: '1RK', label: '1RK' },
+                        { key: '1BHK', label: '1BHK' },
+                        { key: '2BHK', label: '2BHK' },
+                        { key: '3BHK', label: '3BHK' },
+                        { key: '4BHK', label: '4BHK' },
+                      ]
+                    : [
+                        { key: 'SINGLE', label: '1-Share' },
+                        { key: 'DOUBLE', label: '2-Share' },
+                        { key: 'TRIPLE', label: '3-Share' },
+                        { key: 'FOUR', label: '4-Share' },
+                      ]
+                  ).map((opt) => {
+                    const isSelected = (editingRoomDetails.room.sharingType || '').toUpperCase() === opt.key;
+                    return (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[
+                          styles.choicePill,
+                          isSelected && { backgroundColor: '#ea580c', borderColor: '#ea580c' },
+                        ]}
+                        onPress={() =>
+                          setEditingRoomDetails({
+                            ...editingRoomDetails,
+                            room: { ...editingRoomDetails.room, sharingType: opt.key },
+                          })
+                        }
+                      >
+                        <Text
+                          style={[
+                            styles.choicePillText,
+                            isSelected && { color: '#ffffff' },
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <Text style={styles.inputLabel}>
+                  {isRentalMode ? 'Monthly Rent (₹)' : 'Monthly Rent per Bed (₹)'}
+                </Text>
                 <TextInput
                   style={styles.textInput}
                   keyboardType="numeric"
@@ -3031,10 +3108,12 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                       },
                     })
                   }
-                  placeholder="8500"
+                  placeholder={isRentalMode ? '12000' : '8500'}
                 />
 
-                <Text style={styles.inputLabel}>Security Deposit per Bed (₹)</Text>
+                <Text style={styles.inputLabel}>
+                  {isRentalMode ? 'Security Deposit (₹)' : 'Security Deposit per Bed (₹)'}
+                </Text>
                 <TextInput
                   style={styles.textInput}
                   keyboardType="numeric"
@@ -3048,7 +3127,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                       },
                     })
                   }
-                  placeholder="8500"
+                  placeholder={isRentalMode ? '12000' : '8500'}
                 />
 
                 <View style={styles.switchRow}>
@@ -3079,7 +3158,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   />
                 </View>
 
-                {/* Delete Room Button */}
+                {/* Delete Room / Flat Button */}
                 <TouchableOpacity
                   style={styles.deleteRoomOutlineBtn}
                   onPress={() => {
@@ -3094,7 +3173,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   activeOpacity={0.8}
                 >
                   <Text style={styles.deleteRoomOutlineBtnText}>
-                    🗑️ Delete Room {editingRoomDetails.room.roomNumber}
+                    🗑️ Delete {isRentalMode ? 'Flat' : 'Room'} {editingRoomDetails.room.roomNumber}
                   </Text>
                 </TouchableOpacity>
               </ScrollView>
