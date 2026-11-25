@@ -52,13 +52,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [properties, setProperties] = useState<Property[]>([]);
   const [propStats, setPropStats] = useState({ floors: 3, rooms: 6, beds: 18 });
 
-  // Custom Editable Images
-  const defaultAvatar = 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80';
-  const defaultBanner = 'https://images.unsplash.com/photo-1582510003544-4d00b7f74220?auto=format&fit=crop&w=1000&q=80';
+  // Custom Editable Images (empty by default so new owners see clean uploaders)
   const defaultPgPhoto = 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=600&q=80';
 
-  const [avatarUrl, setAvatarUrl] = useState(defaultAvatar);
-  const [bannerUrl, setBannerUrl] = useState(defaultBanner);
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [bannerUrl, setBannerUrl] = useState('');
 
   // Edit Profile Modal
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -86,6 +84,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const [ifscCode, setIfscCode] = useState('');
   const [upiError, setUpiError] = useState('');
   const [savingPayout, setSavingPayout] = useState(false);
+  const [isEditingUpi, setIsEditingUpi] = useState(false);
 
   // Load custom profile, banner & live properties from safeStorage / API
   useEffect(() => {
@@ -206,16 +205,16 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       setEmail(editEmail.trim());
       setPhone(editPhone.trim());
       setLocation(editLocation.trim());
-      setAvatarUrl(editAvatarUrl.trim() || defaultAvatar);
-      setBannerUrl(editBannerUrl.trim() || defaultBanner);
+      setAvatarUrl(editAvatarUrl.trim());
+      setBannerUrl(editBannerUrl.trim());
 
       const profilePayload = {
         fullName: editName.trim(),
         email: editEmail.trim(),
         phone: editPhone.trim(),
         location: editLocation.trim(),
-        avatarUrl: editAvatarUrl.trim() || defaultAvatar,
-        bannerUrl: editBannerUrl.trim() || defaultBanner,
+        avatarUrl: editAvatarUrl.trim(),
+        bannerUrl: editBannerUrl.trim(),
       };
 
       await safeStorage.setItem('@staynest_owner_custom_profile', JSON.stringify(profilePayload));
@@ -376,20 +375,42 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* ─── 2. HERO PROFILE CARD (MATCHING FIRST PHOTO) ─── */}
         <View style={styles.profileHeroCard}>
-          {/* Background Banner */}
+          {/* Background Banner (Empty State vs Uploaded Banner) */}
           <View style={styles.bannerWrapper}>
-            <Image
-              source={{ uri: bannerUrl }}
-              style={styles.bannerImage}
-              resizeMode="cover"
-            />
-            <TouchableOpacity
-              style={styles.editBannerPill}
-              onPress={handleUploadBannerFromDevice}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.editBannerPillText}>🖼️ Change Banner</Text>
-            </TouchableOpacity>
+            {bannerUrl ? (
+              <>
+                <Image
+                  source={{ uri: bannerUrl }}
+                  style={styles.bannerImage}
+                  resizeMode="cover"
+                />
+                <TouchableOpacity
+                  style={styles.editBannerPill}
+                  onPress={handleUploadBannerFromDevice}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.editBannerPillText}>🖼️ Change Banner</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <TouchableOpacity
+                style={{
+                  width: '100%',
+                  height: 140,
+                  backgroundColor: '#f5efe6',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={handleUploadBannerFromDevice}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontSize: 22 }}>📷</Text>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#78716c' }}>
+                  + Add Cover Banner
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Profile Foreground Row */}
@@ -399,10 +420,52 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               onPress={handleUploadAvatarFromDevice}
               activeOpacity={0.85}
             >
-              <Image
-                source={{ uri: avatarUrl }}
-                style={styles.avatarImage}
-              />
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <View
+                  style={{
+                    width: 84,
+                    height: 84,
+                    borderRadius: 42,
+                    backgroundColor: '#e7ddd0',
+                    borderWidth: 3,
+                    borderColor: '#ffffff',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
+                    <Circle cx="12" cy="8.5" r="4" stroke="#78716c" strokeWidth="1.8" />
+                    <Path
+                      d="M4.5 19.5c0-3.6 3.4-6 7.5-6s7.5 2.4 7.5 6"
+                      stroke="#78716c"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                  </Svg>
+                  <View
+                    style={{
+                      position: 'absolute',
+                      top: -2,
+                      right: -2,
+                      width: 24,
+                      height: 24,
+                      borderRadius: 12,
+                      backgroundColor: '#ea580c',
+                      borderWidth: 2,
+                      borderColor: '#ffffff',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '900', lineHeight: 15 }}>+</Text>
+                  </View>
+                </View>
+              )}
             </TouchableOpacity>
 
             <View style={styles.profileDetailsCol}>
@@ -438,7 +501,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <View style={styles.contactStack}>
                 <Text style={styles.profileContactText}>📞 +91 {phone}</Text>
                 <View style={styles.emailRow}>
-                  <Text style={[styles.profileContactText, { flex: 1 }]} numberOfLines={1}>
+                  <Text style={[styles.profileContactText, { flex: 1 }]} numberOfLines={1} ellipsizeMode="tail">
                     ✉️ {email}
                   </Text>
                   <TouchableOpacity
@@ -572,89 +635,137 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           })}
         </View>
 
-        {/* ─── 3B. SIMPLIFIED UPI PAYMENT ID CARD ─── */}
+        {/* ─── 3B. SIMPLIFIED UPI PAYMENT ID CARD (DISPLAY MODE VS EDIT MODE) ─── */}
         <View style={styles.sectionCard}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
-              💳 UPI Payment ID
-            </Text>
-            {upiVerified && upiId.trim() ? (
-              <View style={styles.activeGreenBadge}>
-                <Text style={styles.activeGreenBadgeText}>✓ Saved</Text>
+          {upiId.trim().length > 0 && upiVerified && !isEditingUpi ? (
+            /* State A: Display Mode (Save button & input hidden) */
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748b', marginBottom: 3 }}>
+                  UPI Payment ID
+                </Text>
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0f172a' }} numberOfLines={1}>
+                  {upiId}
+                </Text>
               </View>
-            ) : null}
-          </View>
-          <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-            Auto-included with a quick PhonePe / GPay / Paytm pay link in tenant WhatsApp rent reminders.
-          </Text>
 
-          <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
-            OWNER UPI ID (e.g. ramesh@okaxis) *
-          </Text>
-          <TextInput
-            style={{
-              backgroundColor: upiError ? '#fef2f2' : '#faf8f6',
-              borderWidth: 1,
-              borderColor: upiError ? '#dc2626' : '#e2e8f0',
-              borderRadius: 10,
-              paddingHorizontal: 12,
-              paddingVertical: 10,
-              fontSize: 14,
-              color: '#0f172a',
-              marginBottom: upiError ? 4 : 12,
-            }}
-            value={upiId}
-            onChangeText={(val) => {
-              setUpiId(val);
-              setUpiVerified(false);
-              if (upiError) setUpiError('');
-            }}
-            placeholder="e.g. ramesh@okaxis"
-            placeholderTextColor="#94a3b8"
-            autoCapitalize="none"
-          />
-          {upiError ? (
-            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 12 }}>
-              ⚠️ {upiError}
-            </Text>
-          ) : null}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View
+                  style={{
+                    backgroundColor: '#dcfce7',
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    borderRadius: 99,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#15803d' }}>
+                    ✓ Verified
+                  </Text>
+                </View>
 
-          <TouchableOpacity
-            style={[styles.managePropertyBtn, savingPayout && { opacity: 0.6 }]}
-            disabled={savingPayout}
-            onPress={async () => {
-              const trimmedUpi = upiId.trim();
-              if (!trimmedUpi || !validateUpiId(trimmedUpi)) {
-                setUpiError('Enter a valid UPI ID (e.g. ramesh@okaxis or owner@ybl)');
-                return;
-              }
-              setUpiError('');
-              setSavingPayout(true);
-              try {
-                await saveOwnerPayoutDetails({
-                  upiId: trimmedUpi,
-                  upiVerified: true,
-                  accountHolderName: fullName,
-                  bankName: '',
-                  accountNumber: '',
-                  ifscCode: '',
-                });
-                apiClient('/users/me', {
-                  method: 'PATCH',
-                  body: JSON.stringify({ upiId: trimmedUpi }),
-                }).catch(() => {});
-                setUpiVerified(true);
-                Alert.alert('✓ UPI ID Saved', `${trimmedUpi} will now be included in WhatsApp rent reminders.`);
-              } finally {
-                setSavingPayout(false);
-              }
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.managePropertyBtnText}>
-              {savingPayout ? 'Saving...' : 'Save UPI ID'}
-            </Text>
-          </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#faf8f6',
+                    borderWidth: 1,
+                    borderColor: '#e2e8f0',
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                  onPress={() => setIsEditingUpi(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>✏️ Edit</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            /* State B: Edit / Empty Mode */
+            <>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
+                  💳 UPI Payment ID
+                </Text>
+                {upiVerified && upiId.trim() ? (
+                  <TouchableOpacity onPress={() => { setIsEditingUpi(false); setUpiError(''); }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748b' }}>Cancel</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+                Auto-included with a quick PhonePe / GPay / Paytm pay link in tenant WhatsApp rent reminders.
+              </Text>
+
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                OWNER UPI ID *
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: upiError ? '#fef2f2' : '#faf8f6',
+                  borderWidth: 1,
+                  borderColor: upiError ? '#dc2626' : '#e2e8f0',
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 14,
+                  color: '#0f172a',
+                  marginBottom: upiError ? 4 : 12,
+                }}
+                value={upiId}
+                onChangeText={(val) => {
+                  setUpiId(val);
+                  if (upiError) setUpiError('');
+                }}
+                placeholder="Enter UPI ID (e.g., name@okaxis)"
+                placeholderTextColor="#94a3b8"
+                autoCapitalize="none"
+              />
+              {upiError ? (
+                <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 12 }}>
+                  ⚠️ {upiError}
+                </Text>
+              ) : null}
+
+              <TouchableOpacity
+                style={[styles.managePropertyBtn, savingPayout && { opacity: 0.6 }]}
+                disabled={savingPayout}
+                onPress={async () => {
+                  const trimmedUpi = upiId.trim();
+                  if (!trimmedUpi || !validateUpiId(trimmedUpi)) {
+                    setUpiError('Enter a valid UPI ID (e.g., name@okaxis or owner@ybl)');
+                    return;
+                  }
+                  setUpiError('');
+                  setSavingPayout(true);
+                  try {
+                    await saveOwnerPayoutDetails({
+                      upiId: trimmedUpi,
+                      upiVerified: true,
+                      accountHolderName: fullName,
+                      bankName: '',
+                      accountNumber: '',
+                      ifscCode: '',
+                    });
+                    apiClient('/users/profile', {
+                      method: 'PATCH',
+                      body: JSON.stringify({ upiId: trimmedUpi }),
+                    }).catch(() => {});
+                    setUpiId(trimmedUpi);
+                    setUpiVerified(true);
+                    setIsEditingUpi(false);
+                    Alert.alert('✓ UPI ID Saved', `${trimmedUpi} will now be included in WhatsApp rent reminders.`);
+                  } finally {
+                    setSavingPayout(false);
+                  }
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.managePropertyBtnText}>
+                  {savingPayout ? 'Saving...' : 'Save UPI ID'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
 
         {/* ─── 4. SETTINGS & ACCOUNT ACTIONS CARD (MATCHING FIRST PHOTO) ─── */}
