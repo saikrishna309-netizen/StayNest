@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -137,6 +137,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const [rentRupees, setRentRupees] = useState('8500');
   const [depositRupees, setDepositRupees] = useState('8500');
   const [submitting, setSubmitting] = useState(false);
+  const formScrollRef = useRef<any>(null);
+  const fieldPositions = useRef<Record<string, number>>({});
+  const [formErrors, setFormErrors] = useState<{
+    fullName?: string;
+    phone?: string;
+    idProofNumber?: string;
+    bedSelection?: string;
+  }>({});
 
   // Tenant Payment Modal State
   const [selectedTenantForAction, setSelectedTenantForAction] = useState<Tenant | null>(null);
@@ -435,33 +443,62 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   };
 
   const handleOnboard = async () => {
-    if (!fullName.trim() || !phone.trim()) {
-      Alert.alert('Required', 'Please enter tenant name and phone number');
-      return;
+    const nextErrors: {
+      fullName?: string;
+      phone?: string;
+      idProofNumber?: string;
+      bedSelection?: string;
+    } = {};
+
+    if (!fullName.trim()) {
+      nextErrors.fullName = 'Resident full name is required';
+    }
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (!cleanPhone) {
+      nextErrors.phone = '10-digit phone number is required';
+    } else if (cleanPhone.length < 10) {
+      nextErrors.phone = 'Enter a valid 10-digit mobile number';
     }
 
     const cleanId = idProofNumber.replace(/\s+/g, '');
     if (idProofType === 'AADHAAR') {
       if (!cleanId) {
-        Alert.alert('Aadhaar Required', 'Please enter 12-digit Aadhaar number for tenant KYC verification.');
-        return;
-      }
-      const aadhaarCheck = validateVerhoeffAadhaar(cleanId);
-      if (!aadhaarCheck.isValid) {
-        Alert.alert('Invalid Aadhaar Card', `Aadhaar verification failed: ${aadhaarCheck.message}. Please enter a valid 12-digit UIDAI Aadhaar number.`);
-        return;
+        nextErrors.idProofNumber = '12-digit Aadhaar number is required for KYC';
+      } else {
+        const aadhaarCheck = validateVerhoeffAadhaar(cleanId);
+        if (!aadhaarCheck.isValid) {
+          nextErrors.idProofNumber = aadhaarCheck.message || 'Invalid 12-digit UIDAI Aadhaar number';
+        }
       }
     } else if (idProofType === 'PAN') {
       if (!cleanId) {
-        Alert.alert('PAN Required', 'Please enter 10-character PAN card number.');
-        return;
-      }
-      const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-      if (!panRegex.test(cleanId)) {
-        Alert.alert('Invalid PAN Card', 'Please enter a valid 10-character PAN format (e.g. ABCDE1234F).');
-        return;
+        nextErrors.idProofNumber = '10-character PAN number is required';
+      } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(cleanId)) {
+        nextErrors.idProofNumber = 'Enter valid PAN format (e.g. ABCDE1234F)';
       }
     }
+
+    if (availableBeds.length > 0 && !selectedBedId) {
+      nextErrors.bedSelection = isSelectedAddRentalMode
+        ? 'Please select an available flat / unit'
+        : 'Please select an available bed';
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setFormErrors(nextErrors);
+      const firstKey = (['fullName', 'phone', 'idProofNumber', 'bedSelection'] as const).find(
+        (k) => Boolean(nextErrors[k])
+      );
+      if (firstKey) {
+        formScrollRef.current?.scrollTo({
+          y: Math.max(0, (fieldPositions.current[firstKey] || 0) - 16),
+          animated: true,
+        });
+      }
+      return;
+    }
+
+    setFormErrors({});
 
     setSubmitting(true);
     try {
@@ -1189,11 +1226,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: 'center', marginRight: 30 }}>
             <Text style={styles.separatePageHeaderTitle}>Onboard Resident</Text>
-            <Text style={styles.separatePageHeaderSub}>Assign bed, fixed rent & rent cycle</Text>
+            <Text style={styles.separatePageHeaderSub}>
+              {isSelectedAddRentalMode ? 'Assign flat, fixed rent & rent cycle' : 'Assign bed, fixed rent & rent cycle'}
+            </Text>
           </View>
         </View>
 
         <ScrollView
+          ref={formScrollRef}
           style={styles.separatePageContent}
           contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
@@ -1227,28 +1267,64 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           )}
 
           {/* 2. Resident Name & Phone */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>👤 RESIDENT FULL NAME *</Text>
+          <View
+            style={{ marginBottom: 14 }}
+            onLayout={(e) => {
+              fieldPositions.current.fullName = e.nativeEvent.layout.y;
+            }}
+          >
+            <Text style={[styles.fieldLabel, formErrors.fullName && { color: '#dc2626' }]}>
+              👤 RESIDENT FULL NAME *
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                formErrors.fullName && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5 },
+              ]}
               value={fullName}
-              onChangeText={setFullName}
+              onChangeText={(val) => {
+                setFullName(val);
+                if (formErrors.fullName) setFormErrors((prev) => ({ ...prev, fullName: undefined }));
+              }}
               placeholder="e.g. Anand Kumar"
               placeholderTextColor="#94a3b8"
             />
+            {formErrors.fullName && (
+              <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+                ⚠️ {formErrors.fullName}
+              </Text>
+            )}
           </View>
 
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>📱 PHONE NUMBER (10 DIGITS) *</Text>
+          <View
+            style={{ marginBottom: 14 }}
+            onLayout={(e) => {
+              fieldPositions.current.phone = e.nativeEvent.layout.y;
+            }}
+          >
+            <Text style={[styles.fieldLabel, formErrors.phone && { color: '#dc2626' }]}>
+              📱 PHONE NUMBER (10 DIGITS) *
+            </Text>
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                formErrors.phone && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5 },
+              ]}
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(val) => {
+                setPhone(val);
+                if (formErrors.phone) setFormErrors((prev) => ({ ...prev, phone: undefined }));
+              }}
               keyboardType="phone-pad"
               placeholder="e.g. 9876543210"
               placeholderTextColor="#94a3b8"
               maxLength={10}
             />
+            {formErrors.phone && (
+              <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+                ⚠️ {formErrors.phone}
+              </Text>
+            )}
           </View>
 
           {/* 3. Government ID Proof Type (Dropdown for Aadhaar & PAN) */}
@@ -1310,9 +1386,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           </View>
 
           {/* ID Number input with validity feedback */}
-          <View style={{ marginBottom: 14 }}>
+          <View
+            style={{ marginBottom: 14 }}
+            onLayout={(e) => {
+              fieldPositions.current.idProofNumber = e.nativeEvent.layout.y;
+            }}
+          >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={styles.fieldLabel}>
+              <Text style={[styles.fieldLabel, formErrors.idProofNumber && { color: '#dc2626' }]}>
                 {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS) *' : 'PAN CARD NUMBER (10 CHARS) *'}
               </Text>
               {(() => {
@@ -1337,9 +1418,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             </View>
 
             <TextInput
-              style={styles.input}
+              style={[
+                styles.input,
+                formErrors.idProofNumber && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5 },
+              ]}
               value={idProofNumber}
               onChangeText={(val) => {
+                if (formErrors.idProofNumber) setFormErrors((prev) => ({ ...prev, idProofNumber: undefined }));
                 if (idProofType === 'AADHAAR') {
                   const digits = val.replace(/\D/g, '').slice(0, 12);
                   const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
@@ -1355,14 +1440,24 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               maxLength={idProofType === 'AADHAAR' ? 14 : 10}
               autoCapitalize={idProofType === 'PAN' ? 'characters' : 'none'}
             />
+            {formErrors.idProofNumber && (
+              <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+                ⚠️ {formErrors.idProofNumber}
+              </Text>
+            )}
           </View>
 
           {/* 4. Select Available Bed / Flat Unit */}
-          <Text style={[styles.fieldLabel, { marginTop: 4 }]}>
-            {isSelectedAddRentalMode
-              ? `🏠 SELECT AVAILABLE FLAT / UNIT (${availableBeds.length} Vacant) *`
-              : `🛏️ SELECT AVAILABLE BED (${availableBeds.length} Free) *`}
-          </Text>
+          <View
+            onLayout={(e) => {
+              fieldPositions.current.bedSelection = e.nativeEvent.layout.y;
+            }}
+          >
+            <Text style={[styles.fieldLabel, { marginTop: 4 }, formErrors.bedSelection && { color: '#dc2626' }]}>
+              {isSelectedAddRentalMode
+                ? `🏠 SELECT AVAILABLE FLAT / UNIT (${availableBeds.length} Vacant) *`
+                : `🛏️ SELECT AVAILABLE BED (${availableBeds.length} Free) *`}
+            </Text>
           {availableBeds.length === 0 ? (
             <Text style={styles.noBedWarn}>
               {isSelectedAddRentalMode
@@ -1389,6 +1484,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               })}
             </ScrollView>
           )}
+          {formErrors.bedSelection && (
+            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 8 }}>
+              ⚠️ {formErrors.bedSelection}
+            </Text>
+          )}
+          </View>
 
           {/* 5. FIXED DEPOSIT & RENT (READ-ONLY LOCKED BOX - REQUIREMENT 3) */}
           <View style={styles.lockedRentCard}>
@@ -1557,11 +1658,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           </View>
 
           {/* Action Buttons */}
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
             <TouchableOpacity
               style={styles.cancelFormBtn}
               onPress={() => {
                 setShowForm(false);
+                setFormErrors({});
                 setFullName('');
                 setPhone('');
                 setEmail('');
@@ -1569,7 +1671,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               }}
               activeOpacity={0.8}
             >
-              <Text style={styles.cancelFormBtnText}>← Cancel</Text>
+              <Text style={styles.cancelFormBtnText} numberOfLines={1}>← Cancel</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]}
@@ -1577,8 +1679,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               disabled={submitting}
               activeOpacity={0.85}
             >
-              <Text style={styles.submitBtnText}>
-                {submitting ? 'Onboarding...' : '✓ Complete Onboard & Assign Bed'}
+              <Text style={styles.submitBtnText} numberOfLines={1}>
+                {submitting
+                  ? 'Onboarding...'
+                  : isSelectedAddRentalMode
+                    ? '✓ Onboard & Assign Flat'
+                    : '✓ Onboard & Assign Bed'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -3025,11 +3131,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   submitBtn: {
-    backgroundColor: '#4f46e5',
-    padding: 12,
-    borderRadius: 10,
+    backgroundColor: '#ea580c',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
   },
   submitBtnText: {
     color: '#ffffff',
