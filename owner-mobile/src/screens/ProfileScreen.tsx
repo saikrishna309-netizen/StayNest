@@ -572,24 +572,24 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           })}
         </View>
 
-        {/* ─── 3B. BANK & UPI PAYOUT DETAILS CARD ─── */}
+        {/* ─── 3B. SIMPLIFIED UPI PAYMENT ID CARD ─── */}
         <View style={styles.sectionCard}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
-              💳 Bank & UPI Payout Details
+              💳 UPI Payment ID
             </Text>
             {upiVerified && upiId.trim() ? (
               <View style={styles.activeGreenBadge}>
-                <Text style={styles.activeGreenBadgeText}>✓ UPI Verified</Text>
+                <Text style={styles.activeGreenBadgeText}>✓ Saved</Text>
               </View>
             ) : null}
           </View>
           <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-            Used to generate instant PhonePe / GPay / UPI payment links in tenant rent reminders.
+            Auto-included with a quick PhonePe / GPay / Paytm pay link in tenant WhatsApp rent reminders.
           </Text>
 
           <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
-            OWNER UPI ID (e.g. name@ybl / name@okaxis) *
+            OWNER UPI ID (e.g. ramesh@okaxis) *
           </Text>
           <TextInput
             style={{
@@ -601,7 +601,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               paddingVertical: 10,
               fontSize: 14,
               color: '#0f172a',
-              marginBottom: upiError ? 4 : 10,
+              marginBottom: upiError ? 4 : 12,
             }}
             value={upiId}
             onChangeText={(val) => {
@@ -609,107 +609,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               setUpiVerified(false);
               if (upiError) setUpiError('');
             }}
-            placeholder="e.g. saikrishna@ybl"
+            placeholder="e.g. ramesh@okaxis"
             placeholderTextColor="#94a3b8"
             autoCapitalize="none"
           />
           {upiError ? (
-            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 10 }}>
+            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 12 }}>
               ⚠️ {upiError}
             </Text>
           ) : null}
-
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
-                ACCOUNT HOLDER
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: '#faf8f6',
-                  borderWidth: 1,
-                  borderColor: '#e2e8f0',
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  paddingVertical: 9,
-                  fontSize: 13,
-                  color: '#0f172a',
-                }}
-                value={accountHolderName}
-                onChangeText={setAccountHolderName}
-                placeholder="Full Name"
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
-                BANK NAME
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: '#faf8f6',
-                  borderWidth: 1,
-                  borderColor: '#e2e8f0',
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  paddingVertical: 9,
-                  fontSize: 13,
-                  color: '#0f172a',
-                }}
-                value={bankName}
-                onChangeText={setBankName}
-                placeholder="e.g. HDFC Bank"
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
-                ACCOUNT NUMBER
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: '#faf8f6',
-                  borderWidth: 1,
-                  borderColor: '#e2e8f0',
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  paddingVertical: 9,
-                  fontSize: 13,
-                  color: '#0f172a',
-                }}
-                value={accountNumber}
-                onChangeText={(v) => setAccountNumber(v.replace(/\D/g, ''))}
-                keyboardType="numeric"
-                placeholder="Account No."
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
-                IFSC CODE
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: '#faf8f6',
-                  borderWidth: 1,
-                  borderColor: '#e2e8f0',
-                  borderRadius: 10,
-                  paddingHorizontal: 10,
-                  paddingVertical: 9,
-                  fontSize: 13,
-                  color: '#0f172a',
-                }}
-                value={ifscCode}
-                onChangeText={(v) => setIfscCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 11))}
-                autoCapitalize="characters"
-                placeholder="e.g. HDFC0001234"
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-          </View>
 
           <TouchableOpacity
             style={[styles.managePropertyBtn, savingPayout && { opacity: 0.6 }]}
@@ -717,7 +625,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             onPress={async () => {
               const trimmedUpi = upiId.trim();
               if (!trimmedUpi || !validateUpiId(trimmedUpi)) {
-                setUpiError('Enter a valid UPI ID (e.g. owner@ybl or owner@okaxis)');
+                setUpiError('Enter a valid UPI ID (e.g. ramesh@okaxis or owner@ybl)');
                 return;
               }
               setUpiError('');
@@ -726,13 +634,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 await saveOwnerPayoutDetails({
                   upiId: trimmedUpi,
                   upiVerified: true,
-                  accountHolderName: accountHolderName.trim() || fullName,
-                  bankName: bankName.trim(),
-                  accountNumber: accountNumber.trim(),
-                  ifscCode: ifscCode.trim(),
+                  accountHolderName: fullName,
+                  bankName: '',
+                  accountNumber: '',
+                  ifscCode: '',
                 });
+                apiClient('/users/me', {
+                  method: 'PATCH',
+                  body: JSON.stringify({ upiId: trimmedUpi }),
+                }).catch(() => {});
                 setUpiVerified(true);
-                Alert.alert('✓ Payout Details Saved', `UPI ID ${trimmedUpi} verified and linked to rent reminders.`);
+                Alert.alert('✓ UPI ID Saved', `${trimmedUpi} will now be included in WhatsApp rent reminders.`);
               } finally {
                 setSavingPayout(false);
               }
@@ -740,7 +652,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             activeOpacity={0.85}
           >
             <Text style={styles.managePropertyBtnText}>
-              {savingPayout ? 'Saving...' : 'Save & Verify Payout Details'}
+              {savingPayout ? 'Saving...' : 'Save UPI ID'}
             </Text>
           </TouchableOpacity>
         </View>

@@ -16,6 +16,15 @@ export const validateUpiId = (upiId: string): boolean => {
   return UPI_REGEX.test(upiId.trim());
 };
 
+/**
+ * Strips spaces/dashes, takes last 10 digits, and prepends '91' for wa.me links.
+ */
+export const normalizeIndianPhone = (phone: string): string => {
+  const digits = (phone || '').replace(/\D/g, '');
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  return last10.length === 10 ? `91${last10}` : digits;
+};
+
 export const getOwnerPayoutDetails = async (): Promise<OwnerPayoutDetails> => {
   const fallback: OwnerPayoutDetails = {
     upiId: '',
@@ -68,8 +77,8 @@ export const buildUpiPaymentLink = ({
 }): string => {
   const cleanUpi = upiId.trim();
   const amt = Math.max(1, Math.round(amountRupees));
-  const tn = note || `Rent Due - ${monthYear}`;
-  return `upi://pay?pa=${encodeURIComponent(cleanUpi)}&pn=${encodeURIComponent(ownerName || 'StayNest Owner')}&am=${amt}&cu=INR&tn=${encodeURIComponent(tn)}`;
+  const tn = note || `Rent ${monthYear}`;
+  return `upi://pay?pa=${cleanUpi}&pn=${encodeURIComponent(ownerName || 'StayNest Owner')}&am=${amt}&cu=INR&tn=${encodeURIComponent(tn)}`;
 };
 
 export const buildRentReminderMessage = ({
@@ -78,6 +87,7 @@ export const buildRentReminderMessage = ({
   roomLabel,
   monthYear,
   roomRent,
+  units = 0,
   electricity = 0,
   maintenance = 0,
   totalDue,
@@ -89,34 +99,30 @@ export const buildRentReminderMessage = ({
   roomLabel: string;
   monthYear: string;
   roomRent: number;
+  units?: number;
   electricity?: number;
   maintenance?: number;
   totalDue: number;
   ownerUpiId?: string;
   ownerName: string;
 }): string => {
-  const breakdownLines = [
-    `• Room / Flat Rent: ₹${roomRent.toLocaleString('en-IN')}`,
-    ...(electricity > 0 ? [`• Electricity: ₹${electricity.toLocaleString('en-IN')}`] : []),
-    ...(maintenance > 0 ? [`• Maintenance: ₹${maintenance.toLocaleString('en-IN')}`] : []),
-    `*Total Pending Due: ₹${totalDue.toLocaleString('en-IN')}*`,
-  ].join('\n');
-
-  const upiBlock =
-    ownerUpiId && validateUpiId(ownerUpiId)
-      ? `\n\n💳 *Pay Instantly via PhonePe / GPay / UPI:*\n${buildUpiPaymentLink({
-          upiId: ownerUpiId,
-          ownerName,
-          amountRupees: totalDue,
-          monthYear,
-        })}\n(UPI ID: \`${ownerUpiId.trim()}\`)`
-      : '';
+  const hasValidUpi = Boolean(ownerUpiId && validateUpiId(ownerUpiId));
+  const upiBlock = hasValidUpi
+    ? `\n\nPay directly via UPI ID: *${ownerUpiId!.trim()}*\nQuick UPI Pay Link (PhonePe / GPay / Paytm):\n${buildUpiPaymentLink({
+        upiId: ownerUpiId!,
+        ownerName,
+        amountRupees: totalDue,
+        monthYear,
+      })}`
+    : '';
 
   return (
-    `Hello ${tenantName},\n` +
-    `Friendly reminder from *${propertyName}* (${roomLabel}) for *${monthYear}*:\n\n` +
-    `${breakdownLines}` +
-    `${upiBlock}\n\n` +
-    `Thank you!\n— *${ownerName}*`
+    `Hi ${tenantName},\n` +
+    `Here is your rent & electricity bill for *${monthYear}* (${propertyName} - ${roomLabel}):\n\n` +
+    `• Room Rent: ₹${roomRent.toLocaleString('en-IN')}\n` +
+    `• Current Bill (${units} units): ₹${electricity.toLocaleString('en-IN')}\n` +
+    `• Maintenance: ₹${maintenance.toLocaleString('en-IN')}\n` +
+    `*Total Due: ₹${totalDue.toLocaleString('en-IN')}*` +
+    upiBlock
   );
 };

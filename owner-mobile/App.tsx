@@ -212,6 +212,7 @@ const MainNavigator: React.FC = () => {
             <TenantsScreen
               selectedPropertyId={selectedProperty?.id}
               onActivePropertyChange={handleActivePropertyChange}
+              onNavigateToProfile={() => setCurrentTab('profile')}
               onBack={() => setCurrentTab('dashboard')}
             />
           </View>

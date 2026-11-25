@@ -22,7 +22,18 @@ import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 import { logActivity } from '../services/activityLogService';
 import { emitDataChanged, onDataChanged } from '../utils/appEvents';
-import { buildRentReminderMessage, getOwnerPayoutDetails } from '../services/upiPaymentService';
+import {
+  buildRentReminderMessage,
+  getOwnerPayoutDetails,
+  normalizeIndianPhone,
+} from '../services/upiPaymentService';
+import {
+  getAllMonthlyBills,
+  getMonthlyBill,
+  getPreviousMonthCurrReading,
+  saveMonthlyBill,
+  MonthlyBillRecord,
+} from '../services/monthlyBillService';
 import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
 import Svg, { Path } from 'react-native-svg';
 
@@ -51,12 +62,14 @@ interface TenantsScreenProps {
   onBack: () => void;
   selectedPropertyId?: string | null;
   onActivePropertyChange?: (property: Property) => void;
+  onNavigateToProfile?: () => void;
 }
 
 export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   onBack,
   selectedPropertyId,
   onActivePropertyChange,
+  onNavigateToProfile,
 }) => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -145,6 +158,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const [payMode, setPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [rentRupees, setRentRupees] = useState('8500');
   const [depositRupees, setDepositRupees] = useState('8500');
+  const [monthlyBills, setMonthlyBills] = useState<MonthlyBillRecord[]>([]);
+  const [startingMeterReading, setStartingMeterReading] = useState('0');
+  const [billTargetTenant, setBillTargetTenant] = useState<Tenant | null>(null);
+  const [billEntryMode, setBillEntryMode] = useState<'METER' | 'DIRECT'>('METER');
+  const [billPrevReading, setBillPrevReading] = useState('0');
+  const [billCurrReading, setBillCurrReading] = useState('');
+  const [billRatePerUnit, setBillRatePerUnit] = useState('8');
+  const [billDirectAmount, setBillDirectAmount] = useState('');
+  const [billBaseRent, setBillBaseRent] = useState(8500);
+  const [billMaintenance, setBillMaintenance] = useState(0);
+  const [billPaidAmount, setBillPaidAmount] = useState(0);
+  const [savingBill, setSavingBill] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const formScrollRef = useRef<any>(null);
   const fieldPositions = useRef<Record<string, number>>({});
@@ -240,10 +265,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const loadData = async () => {
     setLoading(true);
     try {
-      const [tRes, pRes] = await Promise.all([
+      const [tRes, pRes, billsList] = await Promise.all([
         apiClient<{ content: Tenant[] }>('/owner/tenants').catch(() => ({ content: [] })),
         apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
+        getAllMonthlyBills(),
       ]);
+      setMonthlyBills(billsList);
       let loadedTenants = tRes.content || [];
       let loadedProps = pRes.content || [];
       try {
@@ -640,7 +667,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         checkIn: dateOfJoining || new Date().toISOString().split('T')[0],
         rentCycle: rentCycle || '1st of every month',
         createdAt: new Date().toISOString(),
-      };
+        ...(startingMeterReading ? { startingMeterReading: Number(startingMeterReading) || 0 } : {}),
+      } as Tenant;
 
       // Persist newly onboarded resident to local safeStorage
       try {
@@ -764,61 +792,165 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     }
   };
 
-  // Direct 1-Tap WhatsApp Reminder via UltraMsg API (Targets only tenants with pending_due > 0)
+  const openBillModalForTenant = (tenant: Tenant) => {
+    const existing = getMonthlyBill(monthlyBills, tenant.id, selectedMonth);
+    const baseRent = existing?.baseRent ?? (tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500);
+    const maint = existing?.maintenanceAmount ?? 0;
+    const prevR = existing?.prevReading ?? getPreviousMonthCurrReading(
+      monthlyBills,
+      tenant.id,
+      selectedMonth,
+      (tenant as any).startingMeterReading || 0
+    );
+    const paidAmt = existing?.paidAmount ?? (tenant.rentStatus === 'PAID' ? baseRent : Math.max(0, baseRent - (typeof tenant.outstandingPaise === 'number' ? Math.round(tenant.outstandingPaise / 100) : baseRent)));
+
+    setBillTargetTenant(tenant);
+    setBillEntryMode(existing?.isDirectAmount ? 'DIRECT' : 'METER');
+    setBillPrevReading(String(prevR));
+    setBillCurrReading(existing?.currReading ? String(existing.currReading) : '');
+    setBillRatePerUnit(String(existing?.ratePerUnit ?? 8));
+    setBillDirectAmount(existing?.electricityAmount ? String(existing.electricityAmount) : '');
+    setBillBaseRent(baseRent);
+    setBillMaintenance(maint);
+    setBillPaidAmount(paidAmt);
+  };
+
+  const handleSaveMonthlyBill = async () => {
+    if (!billTargetTenant) return;
+    setSavingBill(true);
+    try {
+      const prevR = Number(billPrevReading || 0);
+      const currR = Number(billCurrReading || prevR);
+      const rate = Number(billRatePerUnit || 8);
+      const units = billEntryMode === 'DIRECT' ? 0 : Math.max(0, currR - prevR);
+      const elecAmt = billEntryMode === 'DIRECT'
+        ? Math.max(0, Number(billDirectAmount || 0))
+        : Math.round(units * rate);
+      const totalPayable = billBaseRent + elecAmt + billMaintenance;
+      const pending = Math.max(0, totalPayable - billPaidAmount);
+      const status: 'PAID' | 'PARTIALLY_PAID' | 'DUE' =
+        pending === 0 ? 'PAID' : billPaidAmount > 0 ? 'PARTIALLY_PAID' : 'DUE';
+
+      const newBill: MonthlyBillRecord = {
+        id: `bill-${billTargetTenant.id}-${selectedMonth}`,
+        tenancyId: billTargetTenant.id,
+        propertyId: billTargetTenant.propertyId,
+        billingMonth: selectedMonth,
+        prevReading: prevR,
+        currReading: billEntryMode === 'DIRECT' ? prevR : currR,
+        units,
+        ratePerUnit: rate,
+        electricityAmount: elecAmt,
+        baseRent: billBaseRent,
+        maintenanceAmount: billMaintenance,
+        totalPayable,
+        paidAmount: billPaidAmount,
+        status,
+        isDirectAmount: billEntryMode === 'DIRECT',
+        updatedAt: new Date().toISOString(),
+      };
+
+      const updatedBills = await saveMonthlyBill(newBill);
+      setMonthlyBills(updatedBills);
+
+      // Update tenant outstandingPaise & status in local state + storage
+      setTenants((prev) =>
+        prev.map((t) =>
+          t.id === billTargetTenant.id
+            ? { ...t, outstandingPaise: pending * 100, rentStatus: status }
+            : t
+        )
+      );
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
+        const target = billTargetTenant;
+        const updatedCustom = [
+          { ...target, outstandingPaise: pending * 100, rentStatus: status },
+          ...customList.filter((ct) => ct.id !== target.id),
+        ];
+        await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(updatedCustom));
+      } catch {}
+
+      setBillTargetTenant(null);
+      Alert.alert(
+        '✓ Monthly Bill Saved',
+        `Electricity: ₹${elecAmt.toLocaleString('en-IN')} • Total Payable: ₹${totalPayable.toLocaleString('en-IN')}`
+      );
+    } finally {
+      setSavingBill(false);
+    }
+  };
+
+  // Universal WhatsApp Reminder (All PG & Rental Building properties, targets pending_due > 0)
   const handleDirectWhatsAppReminder = async (tenant: Tenant) => {
-    const totalRent = tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500;
-    const dueRent = typeof tenant.outstandingPaise === 'number'
-      ? Math.round(tenant.outstandingPaise / 100)
-      : (tenant.rentStatus === 'PAID' ? 0 : totalRent);
+    const monthBill = getMonthlyBill(monthlyBills, tenant.id, selectedMonth);
+    const baseRent = monthBill?.baseRent ?? (tenant.monthlyRentPaise ? Math.round(tenant.monthlyRentPaise / 100) : 8500);
+    const electricityAmt = monthBill?.electricityAmount ?? 0;
+    const maintenanceAmt = monthBill?.maintenanceAmount ?? 0;
+    const totalPayable = monthBill ? monthBill.totalPayable : baseRent;
+    const paidAmt = monthBill
+      ? monthBill.paidAmount
+      : Math.max(
+          0,
+          baseRent -
+            (typeof tenant.outstandingPaise === 'number'
+              ? Math.round(tenant.outstandingPaise / 100)
+              : tenant.rentStatus === 'PAID'
+                ? 0
+                : baseRent)
+        );
+    const dueRent = Math.max(0, totalPayable - paidAmt);
 
     if (dueRent <= 0) {
-      Alert.alert('No Pending Due', `${tenant.fullName} has ₹0 pending due. Payment reminders are only sent when due > ₹0.`);
+      Alert.alert('✓ Fully Paid', `${tenant.fullName} has ₹0 pending due for ${selectedMonthOption?.label || selectedMonth}.`);
       return;
     }
 
     const payout = await getOwnerPayoutDetails();
-    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const clean91Phone = normalizeIndianPhone(tenant.phone);
     const propObj = properties.find((p) => p.id === tenant.propertyId);
     const isRentalProp = propObj?.propertyType === 'RENTAL_BUILDING' || tenant.bedLabel === 'Unit';
     const roomLabel = isRentalProp
       ? `Flat ${tenant.roomNumber || '101'}`
       : `Room ${tenant.roomNumber || '101'} (${tenant.bedLabel || 'Bed 1'})`;
 
-    const message = buildRentReminderMessage({
-      tenantName: tenant.fullName,
-      propertyName: tenant.propertyName || propObj?.name || 'StayNest',
-      roomLabel,
-      monthYear: selectedMonthOption?.label || 'Nov 2026',
-      roomRent: totalRent,
-      totalDue: dueRent,
-      ownerUpiId: payout.upiId,
-      ownerName: payout.accountHolderName || tenant.propertyName || 'StayNest Owner',
-    });
-
-    try {
-      const params = new URLSearchParams();
-      params.append('token', '4kcul3wmcwdoh5d0');
-      params.append('to', `+91${cleanPhone}`);
-      params.append('body', message);
-
-      await fetch('https://api.ultramsg.com/instance197383/messages/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params.toString(),
+    const dispatchWhatsApp = (upiIdToUse?: string) => {
+      const message = buildRentReminderMessage({
+        tenantName: tenant.fullName,
+        propertyName: tenant.propertyName || propObj?.name || 'StayNest',
+        roomLabel,
+        monthYear: selectedMonthOption?.label || 'November 2026',
+        roomRent: baseRent,
+        units: monthBill?.units || 0,
+        electricity: electricityAmt,
+        maintenance: maintenanceAmt,
+        totalDue: dueRent,
+        ownerUpiId: upiIdToUse,
+        ownerName: payout.accountHolderName || tenant.propertyName || 'StayNest Owner',
       });
 
-      Alert.alert(
-        'WhatsApp Reminder Delivered! 💬',
-        `Payment reminder (₹${dueRent.toLocaleString('en-IN')}${payout.upiId ? ' + UPI Link' : ''}) sent to ${tenant.fullName} (+91 ${cleanPhone})!`
-      );
-    } catch {
-      const waUrl = `whatsapp://send?phone=+91${cleanPhone}&text=${encodeURIComponent(message)}`;
+      const waUrl = `https://wa.me/${clean91Phone}?text=${encodeURIComponent(message)}`;
       Linking.openURL(waUrl).catch(() =>
-        Alert.alert('Notice', `WhatsApp reminder prepared for ${tenant.fullName} (+91 ${cleanPhone}).`)
+        Alert.alert('WhatsApp Unavailable', `Could not open WhatsApp for +${clean91Phone}.`)
       );
+    };
+
+    if (!payout.upiId) {
+      Alert.alert(
+        'Add Your UPI ID',
+        'Add your UPI ID in Profile to include a direct payment link in WhatsApp reminders.',
+        [
+          ...(onNavigateToProfile
+            ? [{ text: 'Go to Profile', onPress: () => onNavigateToProfile() }]
+            : []),
+          { text: 'Send Anyway', onPress: () => dispatchWhatsApp('') },
+        ]
+      );
+      return;
     }
+
+    dispatchWhatsApp(payout.upiId);
   };
 
   // Send Rent Reminder Modal / Prompt
@@ -1631,6 +1763,19 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             </View>
           </View>
 
+          {/* Starting Meter Reading (Optional) */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={styles.fieldLabel}>⚡ STARTING METER READING (kWh - OPTIONAL)</Text>
+            <TextInput
+              style={styles.input}
+              value={startingMeterReading}
+              onChangeText={(v) => setStartingMeterReading(v.replace(/\D/g, ''))}
+              keyboardType="numeric"
+              placeholder="0"
+              placeholderTextColor="#94a3b8"
+            />
+          </View>
+
           {/* Payment Mode */}
           <View style={{ marginBottom: 14 }}>
             <Text style={styles.fieldLabel}>💳 INITIAL PAYMENT MODE</Text>
@@ -1984,11 +2129,22 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         ) : (
           filteredTenants.map((t) => {
             const isAct = t.active !== false && t.stayStatus !== 'TERMINATED';
-            const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
-            const dueRent = typeof t.outstandingPaise === 'number'
-              ? Math.round(t.outstandingPaise / 100)
-              : (t.rentStatus === 'PAID' ? 0 : totalRent);
-            const paidRent = Math.max(0, totalRent - dueRent);
+            const monthBill = getMonthlyBill(monthlyBills, t.id, selectedMonth);
+            const baseRent = monthBill?.baseRent ?? (t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500);
+            const electricityAmt = monthBill?.electricityAmount ?? 0;
+            const totalRent = monthBill ? monthBill.totalPayable : baseRent;
+            const paidRent = monthBill
+              ? monthBill.paidAmount
+              : Math.max(
+                  0,
+                  baseRent -
+                    (typeof t.outstandingPaise === 'number'
+                      ? Math.round(t.outstandingPaise / 100)
+                      : t.rentStatus === 'PAID'
+                        ? 0
+                        : baseRent)
+                );
+            const dueRent = Math.max(0, totalRent - paidRent);
             const isPaidFull = dueRent === 0;
 
             const initials = t.fullName
@@ -2108,6 +2264,32 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                       <Text style={styles.fullyPaidBadgeText}>✓ Fully Paid</Text>
                     </View>
                   )}
+
+                  {isAct && (
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 8,
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
+                        backgroundColor: monthBill ? '#fff7ed' : '#f1f5f9',
+                        borderWidth: 1,
+                        borderColor: monthBill ? '#fdba74' : '#e2e8f0',
+                        alignSelf: 'flex-start',
+                      }}
+                      onPress={(e: any) => {
+                        e?.stopPropagation?.();
+                        openBillModalForTenant(t);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: monthBill ? '#ea580c' : '#334155' }}>
+                        {monthBill
+                          ? `⚡ Current Bill (${monthBill.units}u): ₹${electricityAmt.toLocaleString('en-IN')} • Edit`
+                          : '+ Add Current Bill'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Zone 4: Refined Action Row (No Overlap on Small Phones) */}
@@ -2139,18 +2321,31 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                         <Text style={styles.callBtnText}>Call</Text>
                       </TouchableOpacity>
 
-                      {dueRent > 0 && (
+                      {dueRent > 0 ? (
                         <TouchableOpacity
-                          style={styles.whatsAppBtn}
+                          style={[styles.whatsAppBtn, { backgroundColor: '#16a34a' }]}
                           onPress={(e: any) => {
                             e?.stopPropagation?.();
                             handleDirectWhatsAppReminder(t);
                           }}
                           activeOpacity={0.8}
                         >
-                          <WhatsAppLogoIcon size={12} color="#25D366" />
-                          <Text style={styles.whatsAppBtnText}>Remind</Text>
+                          <WhatsAppLogoIcon size={12} color="#ffffff" />
+                          <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
                         </TouchableOpacity>
+                      ) : (
+                        <View
+                          style={{
+                            backgroundColor: '#ecfdf5',
+                            borderWidth: 1,
+                            borderColor: '#a7f3d0',
+                            paddingHorizontal: 8,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                          }}
+                        >
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#059669' }}>✓ Paid</Text>
+                        </View>
                       )}
 
                       <TouchableOpacity
@@ -2665,6 +2860,146 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             >
               <Text style={styles.modalDoneBtnText}>Done</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Monthly Electricity / Current Bill Entry Modal */}
+      <Modal
+        visible={!!billTargetTenant}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBillTargetTenant(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <View>
+                <Text style={styles.modalTitle}>⚡ Current Bill ({selectedMonthOption?.label || selectedMonth})</Text>
+                <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                  {billTargetTenant?.fullName} • {billTargetTenant?.roomNumber || '101'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setBillTargetTenant(null)}>
+                <Text style={{ fontSize: 18, color: '#64748b', fontWeight: '800' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                style={[styles.modePillLarge, billEntryMode === 'METER' && styles.modePillLargeActive]}
+                onPress={() => setBillEntryMode('METER')}
+              >
+                <Text style={[styles.modePillLargeText, billEntryMode === 'METER' && styles.modePillLargeTextActive]}>
+                  Meter Reading
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modePillLarge, billEntryMode === 'DIRECT' && styles.modePillLargeActive]}
+                onPress={() => setBillEntryMode('DIRECT')}
+              >
+                <Text style={[styles.modePillLargeText, billEntryMode === 'DIRECT' && styles.modePillLargeTextActive]}>
+                  Direct Amount (₹)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {billEntryMode === 'METER' ? (
+              <>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>PREV READING</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={billPrevReading}
+                      onChangeText={(v) => setBillPrevReading(v.replace(/\D/g, ''))}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.fieldLabel}>CURR READING *</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={billCurrReading}
+                      onChangeText={(v) => setBillCurrReading(v.replace(/\D/g, ''))}
+                      keyboardType="numeric"
+                      placeholder="e.g. 1355"
+                    />
+                  </View>
+                  <View style={{ flex: 0.8 }}>
+                    <Text style={styles.fieldLabel}>RATE (₹/u)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={billRatePerUnit}
+                      onChangeText={(v) => setBillRatePerUnit(v.replace(/[^0-9.]/g, ''))}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={{ marginBottom: 10 }}>
+                <Text style={styles.fieldLabel}>ELECTRICITY BILL AMOUNT (₹) *</Text>
+                <TextInput
+                  style={styles.input}
+                  value={billDirectAmount}
+                  onChangeText={(v) => setBillDirectAmount(v.replace(/\D/g, ''))}
+                  keyboardType="numeric"
+                  placeholder="e.g. 1160"
+                />
+              </View>
+            )}
+
+            {(() => {
+              const prevR = Number(billPrevReading || 0);
+              const currR = Number(billCurrReading || prevR);
+              const rate = Number(billRatePerUnit || 8);
+              const units = billEntryMode === 'DIRECT' ? 0 : Math.max(0, currR - prevR);
+              const elecAmt = billEntryMode === 'DIRECT'
+                ? Math.max(0, Number(billDirectAmount || 0))
+                : Math.round(units * rate);
+              const totalPayable = billBaseRent + elecAmt + billMaintenance;
+              return (
+                <View style={styles.lockedRentCard}>
+                  <View style={styles.lockedRentRow}>
+                    <Text style={styles.lockedRentTitle}>Base Rent (Locked):</Text>
+                    <Text style={styles.lockedRentVal}>₹{billBaseRent.toLocaleString('en-IN')}</Text>
+                  </View>
+                  <View style={[styles.lockedRentRow, { marginTop: 4 }]}>
+                    <Text style={styles.lockedRentTitle}>
+                      Electricity {billEntryMode === 'METER' ? `(${units} units)` : '(Direct)'}:
+                    </Text>
+                    <Text style={styles.lockedRentVal}>₹{elecAmt.toLocaleString('en-IN')}</Text>
+                  </View>
+                  <View style={[styles.lockedRentRow, { marginTop: 4 }]}>
+                    <Text style={styles.lockedRentTitle}>Maintenance:</Text>
+                    <Text style={styles.lockedRentVal}>₹{billMaintenance.toLocaleString('en-IN')}</Text>
+                  </View>
+                  <View style={[styles.lockedRentRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#fed7aa' }]}>
+                    <Text style={[styles.lockedRentTitle, { fontWeight: '800', color: '#ea580c' }]}>Total Payable:</Text>
+                    <Text style={[styles.lockedRentVal, { color: '#ea580c', fontSize: 16 }]}>
+                      ₹{totalPayable.toLocaleString('en-IN')}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                style={[styles.cancelFormBtn, { flex: 1 }]}
+                onPress={() => setBillTargetTenant(null)}
+              >
+                <Text style={styles.cancelFormBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.submitBtn, { flex: 1.5 }, savingBill && { opacity: 0.6 }]}
+                onPress={handleSaveMonthlyBill}
+                disabled={savingBill}
+              >
+                <Text style={styles.submitBtnText}>{savingBill ? 'Saving...' : 'Save Monthly Bill'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
