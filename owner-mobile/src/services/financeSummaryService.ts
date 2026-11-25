@@ -285,6 +285,63 @@ export const DEFAULT_PORTFOLIO_TENANTS: Tenant[] = [
   { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
 ];
 
+export interface MonthlyInvoiceBreakdown {
+  baseRent: number;
+  electricityCharge: number;
+  maintenanceCharge: number;
+  discount: number;
+  totalInvoice: number;
+}
+
+/**
+ * Single Source of Truth monthly invoice calculator:
+ * Total = Base Rent (Bed or Room) + Electricity Bill + Maintenance Fee - Discounts
+ */
+export const computeMonthlyInvoiceTotal = ({
+  baseRent,
+  electricityMode = 'INCLUDED',
+  electricityFixed = 0,
+  prevReading = 0,
+  currReading = 0,
+  ratePerUnit = 0,
+  maintenanceMode = 'INCLUDED',
+  maintenanceFee = 0,
+  discount = 0,
+}: {
+  baseRent: number;
+  electricityMode?: 'METERED' | 'FIXED' | 'INCLUDED';
+  electricityFixed?: number;
+  prevReading?: number;
+  currReading?: number;
+  ratePerUnit?: number;
+  maintenanceMode?: 'INCLUDED' | 'EXTRA';
+  maintenanceFee?: number;
+  discount?: number;
+}): MonthlyInvoiceBreakdown => {
+  const safeBase = Math.max(0, Math.round(baseRent || 0));
+  let electricityCharge = 0;
+  if (electricityMode === 'METERED') {
+    const units = Math.max(0, (currReading || 0) - (prevReading || 0));
+    electricityCharge = Math.round(units * Math.max(0, ratePerUnit || 0));
+  } else if (electricityMode === 'FIXED') {
+    electricityCharge = Math.max(0, Math.round(electricityFixed || 0));
+  }
+
+  const maintenanceCharge =
+    maintenanceMode === 'EXTRA' ? Math.max(0, Math.round(maintenanceFee || 0)) : 0;
+
+  const safeDiscount = Math.max(0, Math.round(discount || 0));
+  const totalInvoice = Math.max(0, safeBase + electricityCharge + maintenanceCharge - safeDiscount);
+
+  return {
+    baseRent: safeBase,
+    electricityCharge,
+    maintenanceCharge,
+    discount: safeDiscount,
+    totalInvoice,
+  };
+};
+
 /**
  * Merges API tenants, default portfolio tenants, locally onboarded custom tenants,
  * and cached payment statuses into one consistent tenant list.

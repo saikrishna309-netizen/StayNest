@@ -30,6 +30,7 @@ import {
   computeOccupancyMetrics,
   computeCollectionMetrics,
   computeExpenseAndProfitMetrics,
+  computeMonthlyInvoiceTotal,
   FixedMonthlyBill,
 } from '../services/financeSummaryService';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
@@ -334,24 +335,48 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     }
   };
 
-  // Multi-PG Management State & Full Property Onboarding Details
+  // Multi-PG & Rental Building Dual-Mode Onboarding State
   const [showPgDropdown, setShowPgDropdown] = useState(false);
   const [showAddPgModal, setShowAddPgModal] = useState(false);
+  const [propertyMode, setPropertyMode] = useState<'PG' | 'RENTAL'>('PG');
   const [newPgName, setNewPgName] = useState('');
+  const [newPgPhone, setNewPgPhone] = useState(user?.phone || '');
   const [newPgGender, setNewPgGender] = useState<'BOYS' | 'GIRLS' | 'CO_ED'>('BOYS');
   const [newPgType, setNewPgType] = useState<'PG' | 'HOSTEL' | 'CO_LIVING'>('PG');
+  const [newPgRentalPolicy, setNewPgRentalPolicy] = useState<'FAMILY' | 'BACHELORS' | 'ANY'>('ANY');
+  const [newPgUnitConfig, setNewPgUnitConfig] = useState<'1RK' | '1BHK' | '2BHK' | '3BHK'>('1BHK');
+  const [newPgFurnishing, setNewPgFurnishing] = useState<'UNFURNISHED' | 'SEMI_FURNISHED' | 'FULLY_FURNISHED'>('SEMI_FURNISHED');
+
+  // Location & Geolocation State
+  const [newPgLocationSearch, setNewPgLocationSearch] = useState('');
   const [newPgAddress, setNewPgAddress] = useState('');
-  const [newPgLocality, setNewPgLocality] = useState('Benz Circle');
-  const [newPgCity, setNewPgCity] = useState('Vijayawada');
+  const [newPgLocality, setNewPgLocality] = useState('');
+  const [newPgCity, setNewPgCity] = useState('');
   const [newPgState, setNewPgState] = useState('Andhra Pradesh');
   const [newPgPincode, setNewPgPincode] = useState('520010');
+  const [newPgLat, setNewPgLat] = useState<number | null>(16.5062);
+  const [newPgLng, setNewPgLng] = useState<number | null>(80.6480);
+  const [locatingMap, setLocatingMap] = useState(false);
+
+  // Building Structure State
   const [newPgFloors, setNewPgFloors] = useState('3');
   const [newPgRoomsPerFloor, setNewPgRoomsPerFloor] = useState('2');
   const [newPgSharingType, setNewPgSharingType] = useState<'SINGLE' | 'DOUBLE' | 'TRIPLE' | 'FOUR'>('DOUBLE');
+
+  // Rent, Deposit, Food & Utilities State
   const [newPgRent, setNewPgRent] = useState('8500');
   const [newPgDeposit, setNewPgDeposit] = useState('2500');
   const [newPgNoticeDays, setNewPgNoticeDays] = useState('30');
+  const [newPgFoodPolicy, setNewPgFoodPolicy] = useState<'3_MEALS' | '2_MEALS' | 'NO_FOOD'>('3_MEALS');
   const [newPgFoodIncluded, setNewPgFoodIncluded] = useState(true);
+  const [newPgElectricityMode, setNewPgElectricityMode] = useState<'METERED' | 'FIXED' | 'INCLUDED'>('METERED');
+  const [newPgElecRate, setNewPgElecRate] = useState('10');
+  const [newPgElecPrev, setNewPgElecPrev] = useState('120');
+  const [newPgElecCurr, setNewPgElecCurr] = useState('150');
+  const [newPgElecFixed, setNewPgElecFixed] = useState('1000');
+  const [newPgMaintenanceMode, setNewPgMaintenanceMode] = useState<'INCLUDED' | 'EXTRA'>('INCLUDED');
+  const [newPgMaintFee, setNewPgMaintFee] = useState('500');
+
   const [newPgAmenities, setNewPgAmenities] = useState<string[]>([
     'HIGH_SPEED_WIFI',
     'HOMESTYLE_FOOD',
@@ -449,15 +474,101 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return '🌙 Shubh Ratri';
   };
 
-  // Complete Multi-PG Creator with validation for all building details
+  // Locate on Map & Reverse Geocode coordinates -> Address, City, State, Pincode
+  const handleLocateOnMap = async () => {
+    setLocatingMap(true);
+    try {
+      const coords = await new Promise<{ lat: number; lng: number }>((resolve) => {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+            () => resolve({ lat: 16.5062, lng: 80.6480 }),
+            { timeout: 6000 }
+          );
+        } else {
+          resolve({ lat: 16.5062, lng: 80.6480 });
+        }
+      });
+
+      setNewPgLat(coords.lat);
+      setNewPgLng(coords.lng);
+
+      try {
+        const resp = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${coords.lat}&lon=${coords.lng}&addressdetails=1`
+        );
+        if (resp.ok) {
+          const data = await resp.json();
+          const addr = data?.address || {};
+          const street = [addr.house_number, addr.road, addr.suburb || addr.neighbourhood]
+            .filter(Boolean)
+            .join(', ');
+          if (street) setNewPgAddress(street);
+          else if (data?.display_name) setNewPgAddress(data.display_name.split(',').slice(0, 2).join(', '));
+          if (addr.city || addr.town || addr.village) {
+            setNewPgCity(addr.city || addr.town || addr.village);
+          }
+          if (addr.state) setNewPgState(addr.state);
+          if (addr.postcode) {
+            const pc = String(addr.postcode).replace(/\D/g, '').slice(0, 6);
+            if (pc.length === 6) setNewPgPincode(pc);
+          }
+          return;
+        }
+      } catch {}
+
+      // Fallback auto-fill if offline
+      if (!newPgAddress.trim()) setNewPgAddress('Opp. PVP Square, MG Road');
+      if (!newPgCity.trim()) setNewPgCity('Vijayawada');
+      if (!newPgState.trim()) setNewPgState('Andhra Pradesh');
+      if (!newPgPincode.trim()) setNewPgPincode('520010');
+    } finally {
+      setLocatingMap(false);
+    }
+  };
+
+  // Search Place & Auto-Fill coordinates + address fields
+  const handleSearchLocation = async (query: string) => {
+    setNewPgLocationSearch(query);
+    if (query.trim().length < 3) return;
+    try {
+      const resp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&addressdetails=1&limit=1`
+      );
+      if (resp.ok) {
+        const results = await resp.json();
+        if (Array.isArray(results) && results[0]) {
+          const item = results[0];
+          setNewPgLat(parseFloat(item.lat));
+          setNewPgLng(parseFloat(item.lon));
+          const addr = item.address || {};
+          const street = [addr.road, addr.suburb || addr.neighbourhood].filter(Boolean).join(', ');
+          setNewPgAddress(street || item.display_name.split(',').slice(0, 2).join(', '));
+          if (addr.city || addr.town || addr.village) setNewPgCity(addr.city || addr.town || addr.village);
+          if (addr.state) setNewPgState(addr.state);
+          if (addr.postcode) {
+            const pc = String(addr.postcode).replace(/\D/g, '').slice(0, 6);
+            if (pc.length === 6) setNewPgPincode(pc);
+          }
+        }
+      }
+    } catch {}
+  };
+
+  // Complete Dual-Mode Property Creator (PG / Hostel Bed-wise OR Rental Building / Flats Room-wise)
   const handleCreateNewPg = async () => {
-    // 1. Validate all required fields
+    // 1. Validate required fields
     if (!newPgName.trim() || newPgName.trim().length < 3) {
-      Alert.alert('Required: PG Name', 'Please enter a valid PG / Building name (at least 3 characters).');
+      Alert.alert('Required: Property Name', 'Please enter a valid Building / PG name (at least 3 characters).');
+      return;
+    }
+    const cleanPhone = newPgPhone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) {
+      Alert.alert('Required: Phone Number', 'Please enter a valid 10-digit contact phone number.');
       return;
     }
     if (!newPgAddress.trim() || newPgAddress.trim().length < 3) {
-      Alert.alert('Required: Address', 'Please enter the street address or building location.');
+      Alert.alert('Required: Address', 'Please enter the street address or use "Locate on Map".');
       return;
     }
     if (!newPgCity.trim()) {
@@ -469,20 +580,34 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       Alert.alert('Required: Pincode', 'Please enter a valid 6-digit postal pincode.');
       return;
     }
+    const floorsCount = parseInt(newPgFloors.replace(/\D/g, '') || '0', 10);
+    const roomsCount = parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '0', 10);
+    if (floorsCount <= 0 || roomsCount <= 0) {
+      Alert.alert('Required: Structure', 'Total Floors and Rooms per Floor must both be greater than 0.');
+      return;
+    }
     const rentNum = parseInt(newPgRent.replace(/\D/g, '') || '0', 10);
     if (rentNum <= 0) {
       Alert.alert('Required: Monthly Rent', 'Please enter a valid monthly rent amount (greater than ₹0).');
       return;
     }
     const depositNum = parseInt(newPgDeposit.replace(/\D/g, '') || '0', 10);
-    const floorsCount = Math.max(1, Math.min(10, parseInt(newPgFloors.replace(/\D/g, '') || '1', 10)));
-    const roomsCount = Math.max(1, Math.min(10, parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '1', 10)));
 
     setCreatingPgLoading(true);
 
     try {
-      const createdPropId = `prop-pg-${Date.now()}`;
-      const bedsPerRoom = newPgSharingType === 'SINGLE' ? 1 : newPgSharingType === 'DOUBLE' ? 2 : newPgSharingType === 'TRIPLE' ? 3 : 4;
+      const isRentalMode = propertyMode === 'RENTAL';
+      const createdPropId = `prop-${isRentalMode ? 'bldg' : 'pg'}-${Date.now()}`;
+      const bedsPerRoom = isRentalMode
+        ? 1
+        : newPgSharingType === 'SINGLE'
+          ? 1
+          : newPgSharingType === 'DOUBLE'
+            ? 2
+            : newPgSharingType === 'TRIPLE'
+              ? 3
+              : 4;
+      const roomSharingOrUnit = isRentalMode ? newPgUnitConfig : newPgSharingType;
       const generatedFloors: any[] = [];
       const generatedRoomsList: Room[] = [];
 
@@ -494,28 +619,31 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           const bedsList: Bed[] = [];
           const floorBeds: any[] = [];
 
-          for (let b = 1; b <= bedsPerRoom; b++) {
-            const bedId = `b-${createdPropId}-${roomNum}-${b}`;
-            const bedObj: Bed = {
-              id: bedId,
-              roomId: roomId,
-              propertyId: createdPropId,
-              bedLabel: `Bed ${b}`,
-              status: 'AVAILABLE',
-            };
-            bedsList.push(bedObj);
-            floorBeds.push({
-              id: bedId,
-              bedLabel: `Bed ${b}`,
-              status: 'AVAILABLE',
-            });
+          // Only create individual bed slots if property_type === 'PG'
+          if (!isRentalMode) {
+            for (let b = 1; b <= bedsPerRoom; b++) {
+              const bedId = `b-${createdPropId}-${roomNum}-${b}`;
+              const bedObj: Bed = {
+                id: bedId,
+                roomId: roomId,
+                propertyId: createdPropId,
+                bedLabel: `Bed ${b}`,
+                status: 'AVAILABLE',
+              };
+              bedsList.push(bedObj);
+              floorBeds.push({
+                id: bedId,
+                bedLabel: `Bed ${b}`,
+                status: 'AVAILABLE',
+              });
+            }
           }
 
           floorRooms.push({
             id: roomId,
             roomNumber: roomNum,
             floorNumber: f,
-            sharingType: newPgSharingType,
+            sharingType: roomSharingOrUnit,
             rentRupees: rentNum,
             depositRupees: depositNum,
             ac: newPgAmenities.includes('AC_ROOMS'),
@@ -527,7 +655,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             id: roomId,
             propertyId: createdPropId,
             roomNumber: roomNum,
-            sharingType: newPgSharingType as any,
+            sharingType: roomSharingOrUnit as any,
             capacity: bedsPerRoom,
             floorNumber: f,
             rentMonthlyPaise: rentNum * 100,
@@ -543,21 +671,41 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         });
       }
 
+      const finalFoodIncluded = !isRentalMode && newPgFoodPolicy !== 'NO_FOOD';
       const created: Property = {
         id: createdPropId,
         name: newPgName.trim(),
         addressLine: `${newPgAddress.trim()}${newPgLocality.trim() ? ', ' + newPgLocality.trim() : ''}`,
         cityName: newPgCity.trim(),
         pincode: cleanPincode,
-        genderPolicy: newPgGender,
-        propertyType: newPgType,
+        latitude: newPgLat,
+        longitude: newPgLng,
+        genderPolicy: isRentalMode ? newPgRentalPolicy : newPgGender,
+        propertyType: isRentalMode ? 'RENTAL_BUILDING' : newPgType,
         startingPricePaise: rentNum * 100,
-        foodIncluded: newPgFoodIncluded,
+        foodIncluded: finalFoodIncluded,
+        noticePeriodDays: parseInt(newPgNoticeDays.replace(/\D/g, '') || '30', 10),
         approvalStatus: 'APPROVED',
         published: true,
         primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
         amenities: newPgAmenities,
       };
+
+      // Persist utility billing config for monthly invoice generation
+      const utilityConfig = {
+        propertyMode,
+        contactPhone: cleanPhone,
+        stateName: newPgState.trim(),
+        electricityMode: newPgElectricityMode,
+        electricityRatePerUnit: Number(newPgElecRate) || 0,
+        electricityFixedCharge: Number(newPgElecFixed) || 0,
+        maintenanceMode: newPgMaintenanceMode,
+        maintenanceFee: Number(newPgMaintFee) || 0,
+        foodPolicy: newPgFoodPolicy,
+        unitConfig: newPgUnitConfig,
+        furnishing: newPgFurnishing,
+      };
+      await safeStorage.setItem(`@staynest_utility_config_${createdPropId}`, JSON.stringify(utilityConfig));
 
       // 2. Persist floors into safeStorage
       await safeStorage.setItem(`@staynest_floors_${createdPropId}`, JSON.stringify(generatedFloors));
@@ -576,6 +724,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           window.localStorage.setItem('staynest_custom_properties', JSON.stringify(updatedProps));
           window.localStorage.setItem(`staynest_floors_${createdPropId}`, JSON.stringify(generatedFloors));
           window.localStorage.setItem('staynest_active_property_id', created.id);
+          window.localStorage.setItem(`staynest_utility_config_${createdPropId}`, JSON.stringify(utilityConfig));
         } catch {}
       }
 
@@ -587,10 +736,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             name: created.name,
             propertyType: created.propertyType,
             genderPolicy: created.genderPolicy,
+            contactPhone: cleanPhone,
             cityId: '00000000-0000-0000-0000-000000000001',
             addressLine: created.addressLine,
             cityName: created.cityName,
+            stateName: newPgState.trim(),
             pincode: cleanPincode,
+            latitude: newPgLat,
+            longitude: newPgLng,
             startingPricePaise: created.startingPricePaise,
             foodIncluded: created.foodIncluded,
             amenities: created.amenities,
@@ -609,22 +762,24 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }));
 
       onActivePropertyChange?.(created);
-      onSelectPropertyForRooms?.(created);
 
       setShowAddPgModal(false);
       setShowPgDropdown(false);
       setNewPgName('');
       setNewPgAddress('');
 
-      const totalBedsCreated = floorsCount * roomsCount * bedsPerRoom;
-      const successMsg = `✓ ${created.name} successfully created with ${floorsCount} floors, ${floorsCount * roomsCount} rooms & ${totalBedsCreated} beds! Switched to active building.`;
+      const totalUnits = floorsCount * roomsCount;
+      const totalBedsCreated = totalUnits * bedsPerRoom;
+      const successMsg = isRentalMode
+        ? `✓ ${created.name} created with ${floorsCount} floors and ${totalUnits} rentable units/flats (Room-wise billing)!`
+        : `✓ ${created.name} created with ${floorsCount} floors, ${totalUnits} rooms & ${totalBedsCreated} beds!`;
       if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert(successMsg);
       } else {
-        Alert.alert('🎉 New PG Created!', successMsg);
+        Alert.alert('🎉 Property Created!', successMsg);
       }
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to create new PG property.');
+      Alert.alert('Error', err.message || 'Failed to create property.');
     } finally {
       setCreatingPgLoading(false);
     }
@@ -4425,7 +4580,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </Modal>
 
-      {/* ─── MODAL 12: ADD NEW PG / BUILDING MODAL (COMPLETE PROPERTY ONBOARDING) ─── */}
+      {/* ─── MODAL 12: DUAL-MODE ADD NEW PROPERTY (PG BED-WISE & RENTAL FLATS ROOM-WISE) ─── */}
       <Modal
         visible={showAddPgModal}
         transparent
@@ -4433,314 +4588,549 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onRequestClose={() => setShowAddPgModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '92%' }]}>
-            <View style={styles.modalHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.modalTitle}>🏢 Add New PG / Building</Text>
-                <Text style={styles.modalSub}>Complete building details, rooms, pricing & amenities</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowAddPgModal(false)} style={styles.modalCloseIcon}>
-                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+          <View style={styles.addPropModalShell}>
+            {/* Top Dual-Mode Segmented Control */}
+            <View style={styles.dualModePillRow}>
+              <TouchableOpacity
+                style={[styles.dualModePill, propertyMode === 'PG' && styles.dualModePillActive]}
+                onPress={() => setPropertyMode('PG')}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.dualModePillText, propertyMode === 'PG' && styles.dualModePillTextActive]}>
+                  PG / Hostel (Bed-wise)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.dualModePill, propertyMode === 'RENTAL' && styles.dualModePillActive]}
+                onPress={() => setPropertyMode('RENTAL')}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.dualModePillText, propertyMode === 'RENTAL' && styles.dualModePillTextActive]}>
+                  Rental Building / Flats (Room-wise)
+                </Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
-              {/* SECTION 1: BASIC IDENTITY */}
-              <View style={styles.pgFormSectionHeader}>
-                <Text style={styles.pgFormSectionTitle}>1. 🏢 Building Identity & Category</Text>
+            {/* Modal Header */}
+            <View style={styles.addPropHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.addPropTitle}>Add New Property</Text>
+                <Text style={styles.addPropSub}>Complete building details, rooms, pricing & amenities</Text>
               </View>
+              <TouchableOpacity onPress={() => setShowAddPgModal(false)} style={styles.modalCloseIcon}>
+                <Text style={{ fontSize: 17, color: '#374151', fontWeight: '700' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
 
-              <Text style={styles.inputLabelDark}>PG / Building Name *</Text>
-              <TextInput
-                style={styles.customTextInput}
-                placeholder="e.g. Sai Balaji Luxury PG (Building 03)"
-                placeholderTextColor="#94a3b8"
-                value={newPgName}
-                onChangeText={setNewPgName}
-              />
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 540 }}>
+              {/* PART 0: INITIAL DETAILS (BUILDING NAME & PHONE NUMBER FIRST) */}
+              <View style={styles.addPropCard}>
+                <Text style={styles.addPropCardTitle}>Initial Details</Text>
 
-              <Text style={styles.inputLabelDark}>Category / Gender Policy *</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-                {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
-                  <TouchableOpacity
-                    key={g}
-                    style={[
-                      styles.genderSelectBtn,
-                      newPgGender === g && styles.genderSelectBtnActive,
-                    ]}
-                    onPress={() => setNewPgGender(g)}
-                  >
-                    <Text
-                      style={[
-                        styles.genderSelectBtnText,
-                        newPgGender === g && styles.genderSelectBtnTextActive,
-                      ]}
-                    >
-                      {g === 'BOYS' ? '👨 Boys PG' : g === 'GIRLS' ? '👩 Girls PG' : '👫 Coliving'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                <Text style={styles.addPropLabel}>
+                  {propertyMode === 'PG' ? 'PG / Building Name *' : 'Building / Apartment Name *'}
+                </Text>
+                <TextInput
+                  style={styles.addPropInput}
+                  placeholder={propertyMode === 'PG' ? 'e.g. StayNest Elite Men\'s PG' : 'e.g. Sri Lakshmi Residency'}
+                  placeholderTextColor="#9ca3af"
+                  value={newPgName}
+                  onChangeText={setNewPgName}
+                />
 
-              <Text style={styles.inputLabelDark}>Property Type</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-                {(['PG', 'HOSTEL', 'CO_LIVING'] as const).map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    style={[
-                      styles.genderSelectBtn,
-                      newPgType === t && styles.genderSelectBtnActive,
-                    ]}
-                    onPress={() => setNewPgType(t)}
-                  >
-                    <Text
-                      style={[
-                        styles.genderSelectBtnText,
-                        newPgType === t && styles.genderSelectBtnTextActive,
-                      ]}
-                    >
-                      {t === 'PG' ? 'Paying Guest (PG)' : t === 'HOSTEL' ? 'Hostel' : 'Co-Living'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+                <Text style={styles.addPropLabel}>Contact Phone Number *</Text>
+                <TextInput
+                  style={styles.addPropInput}
+                  placeholder="e.g. 9876543210"
+                  placeholderTextColor="#9ca3af"
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                  value={newPgPhone}
+                  onChangeText={setNewPgPhone}
+                />
 
-              {/* SECTION 2: LOCATION & ADDRESS */}
-              <View style={styles.pgFormSectionHeader}>
-                <Text style={styles.pgFormSectionTitle}>2. 📍 Location & Address</Text>
-              </View>
-
-              <Text style={styles.inputLabelDark}>Street Address / Door No *</Text>
-              <TextInput
-                style={styles.customTextInput}
-                placeholder="e.g. Plot 42, Opposite PVP Square"
-                placeholderTextColor="#94a3b8"
-                value={newPgAddress}
-                onChangeText={setNewPgAddress}
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Area / Landmark</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="e.g. Benz Circle"
-                    placeholderTextColor="#94a3b8"
-                    value={newPgLocality}
-                    onChangeText={setNewPgLocality}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>City *</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="Vijayawada"
-                    placeholderTextColor="#94a3b8"
-                    value={newPgCity}
-                    onChangeText={setNewPgCity}
-                  />
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>State</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="Andhra Pradesh"
-                    placeholderTextColor="#94a3b8"
-                    value={newPgState}
-                    onChangeText={setNewPgState}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Pincode * (6 Digits)</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="520010"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    maxLength={6}
-                    value={newPgPincode}
-                    onChangeText={setNewPgPincode}
-                  />
-                </View>
-              </View>
-
-              {/* SECTION 3: BUILDING STRUCTURE & BED ALLOCATION */}
-              <View style={styles.pgFormSectionHeader}>
-                <Text style={styles.pgFormSectionTitle}>3. 🏗️ Building Structure & Rooms</Text>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Total Floors *</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="3"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={newPgFloors}
-                    onChangeText={setNewPgFloors}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Rooms per Floor *</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="2"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={newPgRoomsPerFloor}
-                    onChangeText={setNewPgRoomsPerFloor}
-                  />
-                </View>
-              </View>
-
-              <Text style={styles.inputLabelDark}>Default Room Sharing Type *</Text>
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
-                {[
-                  { key: 'SINGLE', label: '1-Share' },
-                  { key: 'DOUBLE', label: '2-Share' },
-                  { key: 'TRIPLE', label: '3-Share' },
-                  { key: 'FOUR', label: '4-Share' },
-                ].map((s) => (
-                  <TouchableOpacity
-                    key={s.key}
-                    style={[
-                      styles.genderSelectBtn,
-                      newPgSharingType === s.key && styles.genderSelectBtnActive,
-                    ]}
-                    onPress={() => setNewPgSharingType(s.key as any)}
-                  >
-                    <Text
-                      style={[
-                        styles.genderSelectBtnText,
-                        newPgSharingType === s.key && styles.genderSelectBtnTextActive,
-                      ]}
-                    >
-                      {s.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Live Structure Calculator Banner */}
-              {(() => {
-                const fc = Math.max(1, parseInt(newPgFloors.replace(/\D/g, '') || '1', 10));
-                const rc = Math.max(1, parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '1', 10));
-                const bc = newPgSharingType === 'SINGLE' ? 1 : newPgSharingType === 'DOUBLE' ? 2 : newPgSharingType === 'TRIPLE' ? 3 : 4;
-                const totRooms = fc * rc;
-                const totBeds = totRooms * bc;
-                return (
-                  <View style={styles.pgStructureBanner}>
-                    <Text style={styles.pgStructureBannerTitle}>
-                      📐 Auto-Generated Setup:
-                    </Text>
-                    <Text style={styles.pgStructureBannerSub}>
-                      {fc} Floors × {rc} Rooms = {totRooms} Rooms • {totBeds} Total Beds Capacity
-                    </Text>
+                <Text style={styles.addPropLabel}>
+                  {propertyMode === 'PG' ? 'Category / Gender Policy *' : 'Tenant Preference'}
+                </Text>
+                {propertyMode === 'PG' ? (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
+                      <TouchableOpacity
+                        key={g}
+                        style={[styles.addPropChipBtn, newPgGender === g && styles.addPropChipBtnActive]}
+                        onPress={() => setNewPgGender(g)}
+                      >
+                        <Text style={[styles.addPropChipText, newPgGender === g && styles.addPropChipTextActive]}>
+                          {g === 'BOYS' ? '👨 Boys PG' : g === 'GIRLS' ? '👩 Girls PG' : '👫 Coliving'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
-                );
-              })()}
-
-              {/* SECTION 4: PRICING & FOOD */}
-              <View style={styles.pgFormSectionHeader}>
-                <Text style={styles.pgFormSectionTitle}>4. 💰 Rent, Deposit & Food</Text>
+                ) : (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {(['FAMILY', 'BACHELORS', 'ANY'] as const).map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[styles.addPropChipBtn, newPgRentalPolicy === p && styles.addPropChipBtnActive]}
+                        onPress={() => setNewPgRentalPolicy(p)}
+                      >
+                        <Text style={[styles.addPropChipText, newPgRentalPolicy === p && styles.addPropChipTextActive]}>
+                          {p === 'FAMILY' ? '👨‍👩‍👧 Family' : p === 'BACHELORS' ? '🧑 Bachelors' : '🏠 Any'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Monthly Rent / Bed (₹) *</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="8500"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={newPgRent}
-                    onChangeText={setNewPgRent}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Security Deposit (₹) *</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="2500"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={newPgDeposit}
-                    onChangeText={setNewPgDeposit}
-                  />
-                </View>
-              </View>
+              {/* PART 1: PROPERTY LOCATION & AUTO-FILL */}
+              <View style={styles.addPropCard}>
+                <Text style={styles.addPropCardTitle}>1. Property Location & Auto-Fill</Text>
 
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Notice Period (Days)</Text>
-                  <TextInput
-                    style={styles.customTextInput}
-                    placeholder="30"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="numeric"
-                    value={newPgNoticeDays}
-                    onChangeText={setNewPgNoticeDays}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabelDark}>Food / Meals Policy</Text>
+                {/* Interactive Map Preview Banner */}
+                <View style={styles.mapPreviewBox}>
+                  <View style={styles.mapGridLines} />
                   <TouchableOpacity
-                    style={[
-                      styles.foodPolicyBtn,
-                      newPgFoodIncluded && styles.foodPolicyBtnActive,
-                    ]}
-                    onPress={() => setNewPgFoodIncluded(!newPgFoodIncluded)}
+                    style={styles.locateMapBtn}
+                    onPress={handleLocateOnMap}
+                    disabled={locatingMap}
+                    activeOpacity={0.85}
                   >
-                    <Text style={[styles.foodPolicyBtnText, newPgFoodIncluded && styles.foodPolicyBtnTextActive]}>
-                      {newPgFoodIncluded ? '🍲 3 Meals Included' : '❌ No Food Provided'}
-                    </Text>
+                    {locatingMap ? (
+                      <ActivityIndicator size="small" color="#ea580c" />
+                    ) : (
+                      <Text style={styles.locateMapBtnText}>Locate on Map</Text>
+                    )}
                   </TouchableOpacity>
+                  <Text style={{ fontSize: 24, marginTop: 6 }}>📍</Text>
+                  {newPgLat && newPgLng && (
+                    <Text style={styles.mapCoordsText}>
+                      {newPgLat.toFixed(4)}, {newPgLng.toFixed(4)}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Address Search Autocomplete */}
+                <TextInput
+                  style={[styles.addPropInput, { marginTop: 10 }]}
+                  placeholder="🔍 Search place, street or landmark to auto-fill..."
+                  placeholderTextColor="#9ca3af"
+                  value={newPgLocationSearch}
+                  onChangeText={handleSearchLocation}
+                />
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>Full Address *</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="Full Address"
+                      placeholderTextColor="#9ca3af"
+                      value={newPgAddress}
+                      onChangeText={setNewPgAddress}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>City *</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="City"
+                      placeholderTextColor="#9ca3af"
+                      value={newPgCity}
+                      onChangeText={setNewPgCity}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>State</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="(Andhra Pradesh)"
+                      placeholderTextColor="#9ca3af"
+                      value={newPgState}
+                      onChangeText={setNewPgState}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>Pincode *</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="520010"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      maxLength={6}
+                      value={newPgPincode}
+                      onChangeText={setNewPgPincode}
+                    />
+                  </View>
                 </View>
               </View>
 
-              {/* SECTION 5: AMENITIES & FACILITIES */}
-              <View style={styles.pgFormSectionHeader}>
-                <Text style={styles.pgFormSectionTitle}>5. ✨ Building Amenities & Facilities</Text>
+              {/* PART 2: BUILDING STRUCTURE & ROOMS */}
+              <View style={styles.addPropCard}>
+                <Text style={styles.addPropCardTitle}>2. Building Structure & Rooms</Text>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>Total Floors *</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="3"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={newPgFloors}
+                      onChangeText={setNewPgFloors}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>Rooms per Floor *</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="2"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={newPgRoomsPerFloor}
+                      onChangeText={setNewPgRoomsPerFloor}
+                    />
+                  </View>
+                </View>
+
+                {propertyMode === 'PG' ? (
+                  <>
+                    <Text style={styles.addPropLabel}>Default Room Sharing Type *</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                      {[
+                        { key: 'SINGLE', label: '1-Share' },
+                        { key: 'DOUBLE', label: '2-Share' },
+                        { key: 'TRIPLE', label: '3-Share' },
+                        { key: 'FOUR', label: '4-Share' },
+                      ].map((s) => (
+                        <TouchableOpacity
+                          key={s.key}
+                          style={[styles.addPropChipBtn, newPgSharingType === s.key && styles.addPropChipBtnActive]}
+                          onPress={() => setNewPgSharingType(s.key as any)}
+                        >
+                          <Text style={[styles.addPropChipText, newPgSharingType === s.key && styles.addPropChipTextActive]}>
+                            {s.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.addPropLabel}>Default Unit Configuration *</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                      {(['1RK', '1BHK', '2BHK', '3BHK'] as const).map((u) => (
+                        <TouchableOpacity
+                          key={u}
+                          style={[styles.addPropChipBtn, newPgUnitConfig === u && styles.addPropChipBtnActive]}
+                          onPress={() => setNewPgUnitConfig(u)}
+                        >
+                          <Text style={[styles.addPropChipText, newPgUnitConfig === u && styles.addPropChipTextActive]}>
+                            {u}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </>
+                )}
+
+                {/* Auto-Generated Setup Box */}
+                {(() => {
+                  const fc = Math.max(0, parseInt(newPgFloors.replace(/\D/g, '') || '0', 10));
+                  const rc = Math.max(0, parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '0', 10));
+                  const bc = newPgSharingType === 'SINGLE' ? 1 : newPgSharingType === 'DOUBLE' ? 2 : newPgSharingType === 'TRIPLE' ? 3 : 4;
+                  const totRooms = fc * rc;
+                  const totBeds = totRooms * bc;
+                  return (
+                    <View style={styles.autoSetupBox}>
+                      <Text style={styles.autoSetupTitle}>📐 Auto-Generated Setup:</Text>
+                      <Text style={styles.autoSetupSub}>
+                        {propertyMode === 'PG'
+                          ? `${fc} Floors × ${rc} Rooms = ${totRooms} Rooms • ${totBeds} Total Beds Capacity`
+                          : `${fc} Floors × ${rc} Units = ${totRooms} Units / Flats (Room-wise Billing)`}
+                      </Text>
+                    </View>
+                  );
+                })()}
               </View>
 
-              <View style={styles.amenitiesWrap}>
-                {[
-                  { key: 'HIGH_SPEED_WIFI', label: '📶 High-Speed Wi-Fi' },
-                  { key: 'HOMESTYLE_FOOD', label: '🍲 3 Homestyle Meals' },
-                  { key: 'AC_ROOMS', label: '❄️ Air Conditioned (AC)' },
-                  { key: 'DAILY_HOUSEKEEPING', label: '🧹 Daily Cleaning' },
-                  { key: 'POWER_BACKUP', label: '⚡ 24/7 Power Backup' },
-                  { key: 'CCTV_SECURITY', label: '📹 CCTV Security' },
-                  { key: 'HOT_WATER', label: '🚿 Geyser / Hot Water' },
-                  { key: 'WASHING_MACHINE', label: '🧺 Washing Machine' },
-                  { key: 'RO_WATER', label: '💧 RO Purified Water' },
-                  { key: 'LIFT', label: '🛗 Lift / Elevator' },
-                  { key: 'BIKE_PARKING', label: '🛵 Two-Wheeler Parking' },
-                ].map((item) => {
-                  const isSel = newPgAmenities.includes(item.key);
-                  return (
+              {/* Quick Mode Note Row */}
+              <TouchableOpacity
+                style={styles.modeNoteRow}
+                onPress={() => setPropertyMode(propertyMode === 'PG' ? 'RENTAL' : 'PG')}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modeNoteText}>
+                  ⓘ Note: Rental Building mode changes room setup to single-unit flats without individual bed tracking
+                </Text>
+                <View style={[styles.miniSwitchTrack, propertyMode === 'RENTAL' && styles.miniSwitchTrackOn]}>
+                  <View style={[styles.miniSwitchThumb, propertyMode === 'RENTAL' && styles.miniSwitchThumbOn]} />
+                </View>
+              </TouchableOpacity>
+
+              {/* PART 3: RENT, DEPOSIT & UTILITIES */}
+              <View style={styles.addPropCard}>
+                <Text style={styles.addPropCardTitle}>3. Rent, Deposit & Utilities</Text>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>
+                      {propertyMode === 'PG' ? 'Monthly Rent / Bed (₹) *' : 'Monthly Rent / Room (₹) *'}
+                    </Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="8500"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={newPgRent}
+                      onChangeText={setNewPgRent}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>Security Deposit (₹) *</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="2500"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={newPgDeposit}
+                      onChangeText={setNewPgDeposit}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropLabel}>Notice Period (Days)</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      placeholder="30"
+                      placeholderTextColor="#9ca3af"
+                      keyboardType="numeric"
+                      value={newPgNoticeDays}
+                      onChangeText={setNewPgNoticeDays}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    {propertyMode === 'PG' ? (
+                      <>
+                        <Text style={styles.addPropLabel}>Food / Meals Policy</Text>
+                        <TouchableOpacity
+                          style={[
+                            styles.foodPolicyPillCard,
+                            newPgFoodPolicy !== 'NO_FOOD' && styles.foodPolicyPillCardActive,
+                          ]}
+                          onPress={() => {
+                            const next =
+                              newPgFoodPolicy === '3_MEALS'
+                                ? '2_MEALS'
+                                : newPgFoodPolicy === '2_MEALS'
+                                  ? 'NO_FOOD'
+                                  : '3_MEALS';
+                            setNewPgFoodPolicy(next);
+                            setNewPgFoodIncluded(next !== 'NO_FOOD');
+                          }}
+                        >
+                          <Text style={[styles.foodPolicyPillText, newPgFoodPolicy !== 'NO_FOOD' && { color: '#166534' }]}>
+                            {newPgFoodPolicy === '3_MEALS'
+                              ? '• 3 Meals Included'
+                              : newPgFoodPolicy === '2_MEALS'
+                                ? '• 2 Meals Included'
+                                : '• No Food Provided'}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.addPropLabel}>Furnishing Status</Text>
+                        <TouchableOpacity
+                          style={styles.foodPolicyPillCard}
+                          onPress={() => {
+                            const next =
+                              newPgFurnishing === 'SEMI_FURNISHED'
+                                ? 'FULLY_FURNISHED'
+                                : newPgFurnishing === 'FULLY_FURNISHED'
+                                  ? 'UNFURNISHED'
+                                  : 'SEMI_FURNISHED';
+                            setNewPgFurnishing(next);
+                          }}
+                        >
+                          <Text style={styles.foodPolicyPillText}>
+                            {newPgFurnishing === 'FULLY_FURNISHED'
+                              ? '• Fully Furnished'
+                              : newPgFurnishing === 'SEMI_FURNISHED'
+                                ? '• Semi-Furnished'
+                                : '• Unfurnished'}
+                          </Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                  </View>
+                </View>
+
+                {/* Electricity Billing Toggle */}
+                <Text style={[styles.addPropLabel, { marginTop: 6 }]}>Electricity Billing</Text>
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                  {[
+                    { key: 'METERED', label: '⚡ Metered (₹/kWh)' },
+                    { key: 'FIXED', label: 'Fixed Monthly' },
+                    { key: 'INCLUDED', label: 'Included' },
+                  ].map((el) => (
                     <TouchableOpacity
-                      key={item.key}
-                      style={[styles.amenityChip, isSel && styles.amenityChipActive]}
-                      onPress={() => {
-                        if (isSel) {
-                          setNewPgAmenities(newPgAmenities.filter((a) => a !== item.key));
-                        } else {
-                          setNewPgAmenities([...newPgAmenities, item.key]);
-                        }
-                      }}
-                      activeOpacity={0.8}
+                      key={el.key}
+                      style={[styles.addPropChipBtn, newPgElectricityMode === el.key && styles.addPropChipBtnActive]}
+                      onPress={() => setNewPgElectricityMode(el.key as any)}
                     >
-                      <Text style={[styles.amenityChipText, isSel && styles.amenityChipTextActive]}>
-                        {isSel ? '✓ ' : '+ '}{item.label}
+                      <Text style={[styles.addPropChipText, newPgElectricityMode === el.key && styles.addPropChipTextActive]}>
+                        {el.label}
                       </Text>
                     </TouchableOpacity>
+                  ))}
+                </View>
+
+                {newPgElectricityMode === 'METERED' && (
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addPropLabel}>Prev Reading</Text>
+                      <TextInput
+                        style={styles.addPropInput}
+                        keyboardType="numeric"
+                        value={newPgElecPrev}
+                        onChangeText={setNewPgElecPrev}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addPropLabel}>Curr Reading</Text>
+                      <TextInput
+                        style={styles.addPropInput}
+                        keyboardType="numeric"
+                        value={newPgElecCurr}
+                        onChangeText={setNewPgElecCurr}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addPropLabel}>Rate (₹/kWh)</Text>
+                      <TextInput
+                        style={styles.addPropInput}
+                        keyboardType="numeric"
+                        value={newPgElecRate}
+                        onChangeText={setNewPgElecRate}
+                      />
+                    </View>
+                  </View>
+                )}
+
+                {newPgElectricityMode === 'FIXED' && (
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={styles.addPropLabel}>Fixed Electricity Charge (₹/month)</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      keyboardType="numeric"
+                      value={newPgElecFixed}
+                      onChangeText={setNewPgElecFixed}
+                    />
+                  </View>
+                )}
+
+                {/* Maintenance Charges Toggle */}
+                <Text style={styles.addPropLabel}>Maintenance Charges</Text>
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                  {[
+                    { key: 'INCLUDED', label: 'Maintenance Included' },
+                    { key: 'EXTRA', label: 'Extra Monthly Maintenance (₹)' },
+                  ].map((m) => (
+                    <TouchableOpacity
+                      key={m.key}
+                      style={[styles.addPropChipBtn, newPgMaintenanceMode === m.key && styles.addPropChipBtnActive]}
+                      onPress={() => setNewPgMaintenanceMode(m.key as any)}
+                    >
+                      <Text style={[styles.addPropChipText, newPgMaintenanceMode === m.key && styles.addPropChipTextActive]}>
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {newPgMaintenanceMode === 'EXTRA' && (
+                  <View style={{ marginBottom: 8 }}>
+                    <Text style={styles.addPropLabel}>Monthly Maintenance Amount (₹)</Text>
+                    <TextInput
+                      style={styles.addPropInput}
+                      keyboardType="numeric"
+                      value={newPgMaintFee}
+                      onChangeText={setNewPgMaintFee}
+                    />
+                  </View>
+                )}
+
+                {/* Live Monthly Invoice Preview */}
+                {(() => {
+                  const inv = computeMonthlyInvoiceTotal({
+                    baseRent: parseInt(newPgRent.replace(/\D/g, '') || '0', 10),
+                    electricityMode: newPgElectricityMode,
+                    electricityFixed: parseInt(newPgElecFixed.replace(/\D/g, '') || '0', 10),
+                    prevReading: parseInt(newPgElecPrev.replace(/\D/g, '') || '0', 10),
+                    currReading: parseInt(newPgElecCurr.replace(/\D/g, '') || '0', 10),
+                    ratePerUnit: parseFloat(newPgElecRate || '0'),
+                    maintenanceMode: newPgMaintenanceMode,
+                    maintenanceFee: parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10),
+                  });
+                  return (
+                    <View style={styles.invoicePreviewBox}>
+                      <Text style={styles.invoicePreviewTitle}>Estimated Monthly Tenant Invoice:</Text>
+                      <Text style={styles.invoicePreviewBreakdown}>
+                        Rent ₹{inv.baseRent.toLocaleString('en-IN')} + Elec ₹{inv.electricityCharge.toLocaleString('en-IN')} + Maint ₹{inv.maintenanceCharge.toLocaleString('en-IN')} ={' '}
+                        <Text style={{ fontWeight: '900', color: '#ea580c' }}>
+                          ₹{inv.totalInvoice.toLocaleString('en-IN')}/mo
+                        </Text>
+                      </Text>
+                    </View>
                   );
-                })}
+                })()}
+              </View>
+
+              {/* PART 4: AMENITIES & FACILITIES */}
+              <View style={styles.addPropCard}>
+                <Text style={styles.addPropCardTitle}>4. Building Amenities & Facilities</Text>
+                <View style={styles.amenitiesWrap}>
+                  {[
+                    { key: 'HIGH_SPEED_WIFI', label: '📶 High-Speed Wi-Fi' },
+                    ...(propertyMode === 'PG' ? [{ key: 'HOMESTYLE_FOOD', label: '🍲 3 Homestyle Meals' }] : []),
+                    { key: 'AC_ROOMS', label: '❄️ Air Conditioned (AC)' },
+                    { key: 'DAILY_HOUSEKEEPING', label: '🧹 Daily Cleaning' },
+                    { key: 'POWER_BACKUP', label: '⚡ 24/7 Power Backup' },
+                    { key: 'CCTV_SECURITY', label: '📹 CCTV Security' },
+                    { key: 'HOT_WATER', label: '🚿 Geyser / Hot Water' },
+                    { key: 'WASHING_MACHINE', label: '🧺 Washing Machine' },
+                    { key: 'RO_WATER', label: '💧 RO Purified Water' },
+                    { key: 'LIFT', label: '🛗 Lift / Elevator' },
+                    { key: 'BIKE_PARKING', label: '🛵 Two-Wheeler Parking' },
+                  ].map((item) => {
+                    const isSel = newPgAmenities.includes(item.key);
+                    return (
+                      <TouchableOpacity
+                        key={item.key}
+                        style={[styles.amenityChip, isSel && styles.amenityChipActive]}
+                        onPress={() => {
+                          if (isSel) {
+                            setNewPgAmenities(newPgAmenities.filter((a) => a !== item.key));
+                          } else {
+                            setNewPgAmenities([...newPgAmenities, item.key]);
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={[styles.amenityChipText, isSel && styles.amenityChipTextActive]}>
+                          {isSel ? '✓ ' : '+ '}{item.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
 
               <TouchableOpacity
@@ -4752,7 +5142,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 {creatingPgLoading ? (
                   <ActivityIndicator color="#ffffff" size="small" />
                 ) : (
-                  <Text style={styles.submitCreatePgBtnText}>✓ Validate & Create New PG Building</Text>
+                  <Text style={styles.submitCreatePgBtnText}>
+                    ✓ Save & Create {propertyMode === 'PG' ? 'New PG Building' : 'Rental Building'}
+                  </Text>
                 )}
               </TouchableOpacity>
             </ScrollView>
@@ -7934,5 +8326,257 @@ const styles = StyleSheet.create({
   amenityChipTextActive: {
     color: '#4f46e5',
     fontWeight: '800',
+  },
+  // ─── Dual-Mode Add New Property Modal Styles ───
+  addPropModalShell: {
+    width: '100%',
+    maxWidth: 460,
+    maxHeight: '92%',
+    backgroundColor: '#faf8f6',
+    borderRadius: 24,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  dualModePillRow: {
+    flexDirection: 'row',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    marginBottom: 12,
+  },
+  dualModePill: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dualModePillActive: {
+    backgroundColor: '#ea580c',
+  },
+  dualModePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  dualModePillTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  addPropHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  addPropTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#111827',
+  },
+  addPropSub: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
+  },
+  addPropCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#efece9',
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  addPropCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+    marginBottom: 10,
+  },
+  addPropLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+    marginBottom: 4,
+  },
+  addPropInput: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: '#111827',
+    marginBottom: 10,
+  },
+  addPropChipBtn: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPropChipBtnActive: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
+  },
+  addPropChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  addPropChipTextActive: {
+    color: '#ffffff',
+    fontWeight: '800',
+  },
+  mapPreviewBox: {
+    height: 110,
+    backgroundColor: '#f3f4f6',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  mapGridLines: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#eef2f6',
+  },
+  locateMapBtn: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  locateMapBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  mapCoordsText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#4b5563',
+    marginTop: 2,
+  },
+  autoSetupBox: {
+    backgroundColor: '#f3f4f6',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  autoSetupTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#374151',
+  },
+  autoSetupSub: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 2,
+  },
+  modeNoteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 6,
+    marginBottom: 12,
+    gap: 10,
+  },
+  modeNoteText: {
+    flex: 1,
+    fontSize: 11,
+    color: '#4b5563',
+    fontWeight: '600',
+  },
+  miniSwitchTrack: {
+    width: 34,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#cbd5e1',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  miniSwitchTrackOn: {
+    backgroundColor: '#ea580c',
+  },
+  miniSwitchThumb: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#ffffff',
+  },
+  miniSwitchThumbOn: {
+    alignSelf: 'flex-end',
+  },
+  foodPolicyPillCard: {
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    backgroundColor: '#ffffff',
+    marginBottom: 10,
+  },
+  foodPolicyPillCardActive: {
+    borderColor: '#86efac',
+    backgroundColor: '#f0fdf4',
+  },
+  foodPolicyPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  invoicePreviewBox: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 4,
+  },
+  invoicePreviewTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#9a3412',
+    textTransform: 'uppercase',
+  },
+  invoicePreviewBreakdown: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#111827',
+    marginTop: 2,
   },
 });
