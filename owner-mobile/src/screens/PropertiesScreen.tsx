@@ -962,6 +962,21 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     loadPropertiesAndRooms();
   }, [initialProperty?.id]);
 
+  // Reload rooms & tenants immediately when a tenant is added/updated from Tenants or Dashboard
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      const handleTenantSync = () => {
+        loadPropertiesAndRooms();
+      };
+      window.addEventListener('staynest_tenant_updated', handleTenantSync);
+      window.addEventListener('staynest_expense_added', handleTenantSync);
+      return () => {
+        window.removeEventListener('staynest_tenant_updated', handleTenantSync);
+        window.removeEventListener('staynest_expense_added', handleTenantSync);
+      };
+    }
+  }, [activeProperty?.id]);
+
   const defaultMultiPgs: Property[] = [
     {
       id: 'prop-pg-1',
@@ -2491,7 +2506,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                             (t) =>
                               t.active !== false &&
                               t.stayStatus !== 'TERMINATED' &&
-                              t.roomNumber === room.roomNumber
+                              (t.roomId === room.id || t.roomNumber === room.roomNumber)
                           );
                         if (occ) roomOccupants.push(occ);
 
@@ -3380,9 +3395,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           <View style={[styles.modalCard, { maxHeight: '90%', paddingBottom: 16 }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <View>
-                <Text style={styles.modalTitle}>Onboard Resident to Bed</Text>
+                <Text style={styles.modalTitle}>
+                  {isRentalMode ? 'Assign Tenant to Flat / Unit' : 'Onboard Resident to Bed'}
+                </Text>
                 <Text style={styles.modalSubtitle}>
-                  Room {assigningBed?.roomNumber} • {assigningBed?.bedLabel} • Floor {assigningBed?.floorNum}
+                  {isRentalMode
+                    ? `Flat ${assigningBed?.roomNumber} • Floor ${assigningBed?.floorNum}`
+                    : `Room ${assigningBed?.roomNumber} • ${assigningBed?.bedLabel} • Floor ${assigningBed?.floorNum}`}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setAssigningBed(null)} style={styles.modalCloseCircle}>

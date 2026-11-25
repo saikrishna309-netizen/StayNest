@@ -20,6 +20,7 @@ import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
 import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
+import { logActivity } from '../services/activityLogService';
 import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
 import Svg, { Path } from 'react-native-svg';
 
@@ -307,46 +308,53 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const loadRoomsForProperty = async (propId: string) => {
     try {
       let rooms: Room[] = [];
-      try {
-        const data = await apiClient<Property>(`/properties/${propId}`);
-        rooms = data.rooms || [];
-      } catch {
-        rooms = [];
+      // 1. Check locally saved floors first (matches Room Management 1:1)
+      let cached: string | null = await safeStorage.getItem(`@staynest_floors_${propId}`).catch(() => null);
+      if (!cached && typeof window !== 'undefined' && window.localStorage) {
+        cached = window.localStorage.getItem(`staynest_floors_${propId}`);
       }
-
-      // If backend has no rooms yet, check localStorage cached floors
-      if (rooms.length === 0 && typeof window !== 'undefined' && window.localStorage) {
-        const cached = window.localStorage.getItem(`staynest_floors_${propId}`);
-        if (cached) {
-          try {
-            const floors = JSON.parse(cached);
-            if (Array.isArray(floors)) {
-              floors.forEach((f: any) => {
-                (f.rooms || []).forEach((r: any) => {
-                  rooms.push({
-                    id: r.id,
+      if (cached) {
+        try {
+          const floors = JSON.parse(cached);
+          if (Array.isArray(floors)) {
+            floors.forEach((f: any) => {
+              (f.rooms || []).forEach((r: any) => {
+                const rawBeds = Array.isArray(r.beds) && r.beds.length > 0
+                  ? r.beds
+                  : [{ id: `unit-${r.id}`, bedLabel: 'Unit', status: 'AVAILABLE' }];
+                rooms.push({
+                  id: r.id,
+                  propertyId: propId,
+                  roomNumber: r.roomNumber,
+                  sharingType: r.sharingType || 'DOUBLE',
+                  capacity: rawBeds.length,
+                  floorNumber: f.floorNumber,
+                  rentMonthlyPaise: (r.rentRupees || 8500) * 100,
+                  depositPaise: (r.depositRupees || r.rentRupees || 8500) * 100,
+                  status: 'AVAILABLE',
+                  beds: rawBeds.map((b: any) => ({
+                    id: b.id,
+                    roomId: r.id,
                     propertyId: propId,
-                    roomNumber: r.roomNumber,
-                    sharingType: r.sharingType || 'DOUBLE',
-                    capacity: r.beds?.length || 2,
-                    floorNumber: f.floorNumber,
-                    rentMonthlyPaise: (r.rentRupees || 8500) * 100,
-                    depositPaise: (r.depositRupees || 8500) * 100,
-                    status: 'AVAILABLE',
-                    beds: (r.beds || []).map((b: any) => ({
-                      id: b.id,
-                      roomId: r.id,
-                      propertyId: propId,
-                      bedLabel: b.bedLabel,
-                      status: b.status || 'AVAILABLE',
-                    })),
-                  });
+                    bedLabel: b.bedLabel,
+                    status: b.status || 'AVAILABLE',
+                  })),
                 });
               });
-            }
-          } catch {
-            // ignore
+            });
           }
+        } catch {
+          // ignore
+        }
+      }
+
+      // 2. Fallback to backend property rooms if nothing cached locally
+      if (rooms.length === 0) {
+        try {
+          const data = await apiClient<Property>(`/properties/${propId}`);
+          rooms = data.rooms || [];
+        } catch {
+          rooms = [];
         }
       }
 
@@ -556,6 +564,10 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
       const isPanValid = idProofType === 'PAN' && /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/i.test(cleanId);
       const isKycVerified = isAadhaarValid || isPanValid;
 
+      const selectedAddProp = properties.find((p) => p.id === selectedPropId);
+      const isAddRental = selectedAddProp?.propertyType === 'RENTAL_BUILDING';
+      const targetRoomObj = propRooms.find((r) => r.id === targetRoomId);
+
       const newTenantRecord: Tenant = {
         id: createdTenantId,
         fullName: fullName.trim(),
@@ -567,10 +579,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         aadhaarVerified: isKycVerified,
         kycStatus: isKycVerified ? 'VERIFIED' : 'PENDING',
         propertyId: selectedPropId,
-        propertyName: properties.find((p) => p.id === selectedPropId)?.name || 'Ramesh PG',
-        roomNumber: propRooms.find((r) => r.id === targetRoomId)?.roomNumber || '101',
-        bedId: selectedBedId,
-        bedLabel: propRooms.flatMap((r) => r.beds || []).find((b) => b.id === selectedBedId)?.bedLabel || 'Bed 1',
+        propertyName: selectedAddProp?.name || 'StayNest PG',
+        roomId: targetRoomId,
+        roomNumber: targetRoomObj?.roomNumber || '101',
+        bedId: selectedBedId || `unit-${targetRoomId}`,
+        bedLabel: isAddRental
+          ? 'Unit'
+          : (propRooms.flatMap((r) => r.beds || []).find((b) => b.id === selectedBedId)?.bedLabel || 'Bed 1'),
         monthlyRentPaise: fixedRent * 100,
         outstandingPaise: rentDue * 100,
         rentStatus: rentDue === 0 ? 'PAID' : (payingNow > 0 ? 'PARTIALLY_PAID' : 'DUE'),
@@ -587,6 +602,19 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         const customList: Tenant[] = storedCustomStr ? JSON.parse(storedCustomStr) : [];
         const mergedCustom = [newTenantRecord, ...customList.filter((ct) => ct.id !== createdTenantId && ct.phone !== phone.trim())];
         await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(mergedCustom));
+
+        await logActivity({
+          propertyId: selectedPropId,
+          type: 'TENANT_ADDED',
+          title: `${fullName.trim()} added to ${isAddRental ? 'Flat' : 'Room'} ${newTenantRecord.roomNumber}`,
+          subtitle: isAddRental ? (targetRoomObj?.sharingType || 'Flat Unit') : (newTenantRecord.bedLabel || 'Bed 1'),
+          amountRupees: payingNow > 0 ? payingNow : undefined,
+        });
+
+        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+          window.dispatchEvent(new CustomEvent('staynest_tenant_updated', { detail: newTenantRecord }));
+          window.dispatchEvent(new CustomEvent('staynest_expense_added'));
+        }
 
         if (isKycVerified) {
           await safeStorage.setItem(`staynest_kyc_${createdTenantId}`, 'VERIFIED');
@@ -986,29 +1014,69 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     }
   };
 
-  // Active occupied bed IDs to enforce 1 person = 1 bed rule
+  const selectedAddPropObj = properties.find((p) => p.id === selectedPropId);
+  const isSelectedAddRentalMode = selectedAddPropObj?.propertyType === 'RENTAL_BUILDING';
+
+  // Active occupied bed IDs and room numbers to enforce 1 person = 1 bed (or 1 flat) rule
   const activeOccupiedBedIds = new Set<string>();
+  const activeOccupiedRoomNumbers = new Set<string>();
   tenants.forEach((t) => {
-    if (t.active !== false && t.stayStatus !== 'TERMINATED' && t.bedId) {
-      activeOccupiedBedIds.add(t.bedId);
+    if (
+      t.active !== false &&
+      t.stayStatus !== 'TERMINATED' &&
+      (!selectedPropId || t.propertyId === selectedPropId)
+    ) {
+      if (t.bedId) activeOccupiedBedIds.add(t.bedId);
+      if (t.roomNumber) activeOccupiedRoomNumbers.add(t.roomNumber);
     }
   });
 
-  // Collect vacant beds only (occupied beds are hidden)
-  const availableBeds: { bed: Bed; roomNumber: string; roomId: string; rentPaise?: number; depositPaise?: number }[] = [];
+  // Collect vacant beds (PG) or vacant flats/units (Rental Building)
+  const availableBeds: {
+    bed: Bed;
+    roomNumber: string;
+    roomId: string;
+    unitLabel?: string;
+    rentPaise?: number;
+    depositPaise?: number;
+  }[] = [];
   propRooms.forEach((r) => {
-    (r.beds || []).forEach((b) => {
-      const isOccupied = b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id);
-      if (!isOccupied) {
+    if (isSelectedAddRentalMode) {
+      const anyBedOccupied = (r.beds || []).some(
+        (b) => b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id)
+      );
+      const isFlatOccupied = activeOccupiedRoomNumbers.has(r.roomNumber) || anyBedOccupied;
+      if (!isFlatOccupied) {
+        const unitBed: Bed = (r.beds && r.beds[0]) || {
+          id: `unit-${r.id}`,
+          roomId: r.id,
+          propertyId: selectedPropId,
+          bedLabel: 'Unit',
+          status: 'AVAILABLE',
+        };
         availableBeds.push({
-          bed: b,
+          bed: unitBed,
           roomNumber: r.roomNumber,
           roomId: r.id,
+          unitLabel: r.sharingType || 'Flat',
           rentPaise: r.rentMonthlyPaise,
           depositPaise: r.depositPaise,
         });
       }
-    });
+    } else {
+      (r.beds || []).forEach((b) => {
+        const isOccupied = b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id);
+        if (!isOccupied) {
+          availableBeds.push({
+            bed: b,
+            roomNumber: r.roomNumber,
+            roomId: r.id,
+            rentPaise: r.rentMonthlyPaise,
+            depositPaise: r.depositPaise,
+          });
+        }
+      });
+    }
   });
 
   // Scoped to selected property (matches Dashboard & Room Management 1:1) or ALL
@@ -1289,17 +1357,21 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             />
           </View>
 
-          {/* 4. Select Available Bed */}
+          {/* 4. Select Available Bed / Flat Unit */}
           <Text style={[styles.fieldLabel, { marginTop: 4 }]}>
-            🛏️ SELECT AVAILABLE BED ({availableBeds.length} Free) *
+            {isSelectedAddRentalMode
+              ? `🏠 SELECT AVAILABLE FLAT / UNIT (${availableBeds.length} Vacant) *`
+              : `🛏️ SELECT AVAILABLE BED (${availableBeds.length} Free) *`}
           </Text>
           {availableBeds.length === 0 ? (
             <Text style={styles.noBedWarn}>
-              No free beds available in this property. Configure rooms/beds under Properties.
+              {isSelectedAddRentalMode
+                ? 'No vacant flats or units available in this property. Configure floors/units under Rooms.'
+                : 'No free beds available in this property. Configure rooms/beds under Properties.'}
             </Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bedScroll}>
-              {availableBeds.map(({ bed, roomNumber, roomId, rentPaise, depositPaise }) => {
+              {availableBeds.map(({ bed, roomNumber, roomId, unitLabel, rentPaise, depositPaise }) => {
                 const isSelected = selectedBedId === bed.id;
                 return (
                   <TouchableOpacity
@@ -1308,7 +1380,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                     onPress={() => handleSelectBed(bed, roomId, rentPaise, depositPaise)}
                   >
                     <Text style={[styles.bedPickText, isSelected && styles.bedPickTextSelected]}>
-                      Room {roomNumber} • {bed.bedLabel}
+                      {isSelectedAddRentalMode
+                        ? `🏠 Flat ${roomNumber}${unitLabel ? ` • ${unitLabel}` : ''}`
+                        : `Room ${roomNumber} • ${bed.bedLabel}`}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -1334,7 +1408,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               <Text style={styles.lockedRentVal}>₹{fixedDepositAmount.toLocaleString('en-IN')}</Text>
             </View>
             <Text style={styles.lockedRentNotice}>
-              🔒 Fixed amounts are locked based on selected Room & Bed.
+              {isSelectedAddRentalMode
+                ? '🔒 Fixed amounts are locked based on selected Flat / Unit.'
+                : '🔒 Fixed amounts are locked based on selected Room & Bed.'}
             </Text>
           </View>
 
