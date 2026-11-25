@@ -23,6 +23,11 @@ import { validateVerhoeffAadhaar, parseAadhaarQrPayload } from '../utils/aadhaar
 import { ElectricityBillModal } from '../components/modals/ElectricityBillModal';
 import { LogIssueModal } from '../components/modals/LogIssueModal';
 import { FoodMenuModal } from '../components/modals/FoodMenuModal';
+import {
+  FloorUnitMatrixBuilder,
+  MatrixFloor,
+  getInitialMatrixFloors,
+} from '../components/FloorUnitMatrixBuilder';
 import { fastDataCache } from '../services/dataCache';
 import { safeStorage } from '../utils/safeStorage';
 import { pickMultipleImagesFromDevice } from '../utils/imagePicker';
@@ -339,7 +344,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   // Multi-PG & Rental Building Dual-Mode Onboarding State
   const [showPgDropdown, setShowPgDropdown] = useState(false);
   const [showAddPgModal, setShowAddPgModal] = useState(false);
+  const [addPropStep, setAddPropStep] = useState<1 | 2>(1);
   const [propertyMode, setPropertyMode] = useState<'PG' | 'RENTAL'>('PG');
+  const [matrixFloors, setMatrixFloors] = useState<MatrixFloor[]>(() =>
+    getInitialMatrixFloors('PG', 8500, 1200)
+  );
   const [newPgName, setNewPgName] = useState('');
   const [newPgPhone, setNewPgPhone] = useState(user?.phone || '');
   const [newPgGender, setNewPgGender] = useState<'BOYS' | 'GIRLS' | 'CO_ED'>('BOYS');
@@ -589,12 +598,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       Alert.alert('Required: Pincode', 'Please enter a valid 6-digit postal pincode.');
       return;
     }
-    const floorsCount = parseInt(newPgFloors.replace(/\D/g, '') || '0', 10);
-    const roomsCount = parseInt(newPgRoomsPerFloor.replace(/\D/g, '') || '0', 10);
-    if (floorsCount <= 0 || roomsCount <= 0) {
-      Alert.alert('Required: Structure', 'Total Floors and Rooms per Floor must both be greater than 0.');
-      return;
-    }
     const rentNum = parseInt(newPgRent.replace(/\D/g, '') || '0', 10);
     if (rentNum <= 0) {
       Alert.alert('Required: Monthly Rent', 'Please enter a valid monthly rent amount (greater than ₹0).');
@@ -607,30 +610,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     try {
       const isRentalMode = propertyMode === 'RENTAL';
       const createdPropId = `prop-${isRentalMode ? 'bldg' : 'pg'}-${Date.now()}`;
-      const bedsPerRoom = isRentalMode
-        ? 1
-        : newPgSharingType === 'SINGLE'
-          ? 1
-          : newPgSharingType === 'DOUBLE'
-            ? 2
-            : newPgSharingType === 'TRIPLE'
-              ? 3
-              : 4;
-      const roomSharingOrUnit = isRentalMode ? newPgUnitConfig : newPgSharingType;
       const generatedFloors: any[] = [];
       const generatedRoomsList: Room[] = [];
+      let totalUnitsCreated = 0;
+      let totalBedsCreated = 0;
 
-      for (let f = 1; f <= floorsCount; f++) {
+      // Build dynamic floor & unit tree from FloorUnitMatrixBuilder
+      matrixFloors.forEach((mFloor) => {
         const floorRooms: any[] = [];
-        for (let r = 1; r <= roomsCount; r++) {
-          const roomNum = `${f}${r < 10 ? '0' + r : r}`;
+        mFloor.units.forEach((mUnit) => {
+          totalUnitsCreated++;
+          const roomNum = mUnit.unit_number.trim() || `${mFloor.floor_number}01`;
           const roomId = `rm-${createdPropId}-${roomNum}`;
+          const unitRent = mUnit.monthly_rent > 0 ? mUnit.monthly_rent : rentNum;
+          const unitCapacity = isRentalMode ? 1 : Math.max(1, mUnit.sharing_capacity || 1);
           const bedsList: Bed[] = [];
           const floorBeds: any[] = [];
 
           // Only create individual bed slots if property_type === 'PG'
           if (!isRentalMode) {
-            for (let b = 1; b <= bedsPerRoom; b++) {
+            for (let b = 1; b <= unitCapacity; b++) {
+              totalBedsCreated++;
               const bedId = `b-${createdPropId}-${roomNum}-${b}`;
               const bedObj: Bed = {
                 id: bedId,
@@ -651,10 +651,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           floorRooms.push({
             id: roomId,
             roomNumber: roomNum,
-            floorNumber: f,
-            sharingType: roomSharingOrUnit,
-            rentRupees: rentNum,
+            floorNumber: mFloor.floor_number,
+            sharingType: mUnit.unit_type,
+            rentRupees: unitRent,
             depositRupees: depositNum,
+            maintenanceRupees: mUnit.maintenance || 0,
             ac: newPgAmenities.includes('AC_ROOMS'),
             attachedBathroom: true,
             beds: floorBeds,
@@ -664,21 +665,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             id: roomId,
             propertyId: createdPropId,
             roomNumber: roomNum,
-            sharingType: roomSharingOrUnit as any,
-            capacity: bedsPerRoom,
-            floorNumber: f,
-            rentMonthlyPaise: rentNum * 100,
+            sharingType: mUnit.unit_type as any,
+            capacity: unitCapacity,
+            floorNumber: mFloor.floor_number,
+            rentMonthlyPaise: unitRent * 100,
             depositPaise: depositNum * 100,
             status: 'AVAILABLE',
             beds: bedsList,
           });
-        }
+        });
 
         generatedFloors.push({
-          floorNumber: f,
+          floorNumber: mFloor.floor_number,
+          label: mFloor.label,
           rooms: floorRooms,
         });
-      }
+      });
+
+      const minUnitRent =
+        generatedRoomsList.length > 0
+          ? Math.min(...generatedRoomsList.map((r) => Math.round(r.rentMonthlyPaise / 100)))
+          : rentNum;
 
       const finalFoodIncluded = !isRentalMode && newPgFoodPolicy !== 'NO_FOOD';
       const created: Property = {
@@ -691,7 +698,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         longitude: newPgLng,
         genderPolicy: isRentalMode ? newPgRentalPolicy : newPgGender,
         propertyType: isRentalMode ? 'RENTAL_BUILDING' : newPgType,
-        startingPricePaise: rentNum * 100,
+        startingPricePaise: minUnitRent * 100,
         foodIncluded: finalFoodIncluded,
         noticePeriodDays: parseInt(newPgNoticeDays.replace(/\D/g, '') || '30', 10),
         approvalStatus: 'APPROVED',
@@ -740,13 +747,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         } catch {}
       }
 
-      // 4. Try backend API creation
+      // 4. Try backend API creation (single transaction with dynamic floor/unit tree)
       try {
         await apiClient<Property>('/owner/properties', {
           method: 'POST',
           body: JSON.stringify({
             name: created.name,
             propertyType: created.propertyType,
+            property_mode: isRentalMode ? 'RENTAL_BUILDING' : 'PG',
             genderPolicy: created.genderPolicy,
             contactPhone: cleanPhone,
             cityId: '00000000-0000-0000-0000-000000000001',
@@ -759,6 +767,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             startingPricePaise: created.startingPricePaise,
             foodIncluded: created.foodIncluded,
             amenities: created.amenities,
+            photos: newPgPhotos,
+            floors: matrixFloors,
           }),
         });
       } catch (e) {
@@ -776,15 +786,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       onActivePropertyChange?.(created);
 
       setShowAddPgModal(false);
+      setAddPropStep(1);
       setShowPgDropdown(false);
       setNewPgName('');
       setNewPgAddress('');
+      setNewPgPhotos([]);
 
-      const totalUnits = floorsCount * roomsCount;
-      const totalBedsCreated = totalUnits * bedsPerRoom;
       const successMsg = isRentalMode
-        ? `✓ ${created.name} created with ${floorsCount} floors and ${totalUnits} rentable units/flats (Room-wise billing)!`
-        : `✓ ${created.name} created with ${floorsCount} floors, ${totalUnits} rooms & ${totalBedsCreated} beds!`;
+        ? `✓ ${created.name} created with ${matrixFloors.length} floors and ${totalUnitsCreated} rentable units/flats (Room-wise billing)!`
+        : `✓ ${created.name} created with ${matrixFloors.length} floors, ${totalUnitsCreated} rooms & ${totalBedsCreated} beds!`;
       if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
         window.alert(successMsg);
       } else {
@@ -4601,38 +4611,74 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       >
         <View style={styles.modalBackdrop}>
           <View style={styles.addPropModalShell}>
-            {/* Top Dual-Mode Segmented Control */}
-            <View style={styles.dualModePillRow}>
-              <TouchableOpacity
-                style={[styles.dualModePill, propertyMode === 'PG' && styles.dualModePillActive]}
-                onPress={() => setPropertyMode('PG')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.dualModePillText, propertyMode === 'PG' && styles.dualModePillTextActive]}>
-                  PG / Hostel (Bed-wise)
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.dualModePill, propertyMode === 'RENTAL' && styles.dualModePillActive]}
-                onPress={() => setPropertyMode('RENTAL')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.dualModePillText, propertyMode === 'RENTAL' && styles.dualModePillTextActive]}>
-                  Rental Building / Flats (Room-wise)
-                </Text>
-              </TouchableOpacity>
-            </View>
+            {addPropStep === 2 ? (
+              <FloorUnitMatrixBuilder
+                propertyMode={propertyMode}
+                floors={matrixFloors}
+                defaultMaintenance={parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)}
+                onChangeFloors={setMatrixFloors}
+                onBackStep={() => setAddPropStep(1)}
+                onSubmit={handleCreateNewPg}
+                submitting={creatingPgLoading}
+              />
+            ) : (
+              <>
+                {/* Top Dual-Mode Segmented Control */}
+                <View style={styles.dualModePillRow}>
+                  <TouchableOpacity
+                    style={[styles.dualModePill, propertyMode === 'PG' && styles.dualModePillActive]}
+                    onPress={() => {
+                      setPropertyMode('PG');
+                      setMatrixFloors(
+                        getInitialMatrixFloors(
+                          'PG',
+                          parseInt(newPgRent.replace(/\D/g, '') || '8500', 10),
+                          parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)
+                        )
+                      );
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.dualModePillText, propertyMode === 'PG' && styles.dualModePillTextActive]}>
+                      PG / Hostel (Bed-wise)
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.dualModePill, propertyMode === 'RENTAL' && styles.dualModePillActive]}
+                    onPress={() => {
+                      setPropertyMode('RENTAL');
+                      setMatrixFloors(
+                        getInitialMatrixFloors(
+                          'RENTAL',
+                          parseInt(newPgRent.replace(/\D/g, '') || '12000', 10),
+                          parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)
+                        )
+                      );
+                    }}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={[styles.dualModePillText, propertyMode === 'RENTAL' && styles.dualModePillTextActive]}>
+                      Rental Building / Flats (Room-wise)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
-            {/* Modal Header */}
-            <View style={styles.addPropHeaderRow}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.addPropTitle}>Add New Property</Text>
-                <Text style={styles.addPropSub}>Complete building details, rooms, pricing & amenities</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShowAddPgModal(false)} style={styles.modalCloseIcon}>
-                <Text style={{ fontSize: 17, color: '#374151', fontWeight: '700' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
+                {/* Modal Header */}
+                <View style={styles.addPropHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.addPropTitle}>Add New Property</Text>
+                    <Text style={styles.addPropSub}>Step 1 of 2 • Details, Location, Photos & Utilities</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setShowAddPgModal(false);
+                      setAddPropStep(1);
+                    }}
+                    style={styles.modalCloseIcon}
+                  >
+                    <Text style={{ fontSize: 17, color: '#374151', fontWeight: '700' }}>✕</Text>
+                  </TouchableOpacity>
+                </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 540 }}>
               {/* PART 0: INITIAL DETAILS (BUILDING NAME & PHONE NUMBER FIRST) */}
@@ -5178,20 +5224,41 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               </View>
 
               <TouchableOpacity
-                style={[styles.submitCreatePgBtn, creatingPgLoading && { opacity: 0.7 }]}
-                onPress={handleCreateNewPg}
-                disabled={creatingPgLoading}
+                style={styles.submitCreatePgBtn}
+                onPress={() => {
+                  if (!newPgName.trim() || newPgName.trim().length < 3) {
+                    Alert.alert('Required: Property Name', 'Please enter a valid Building / PG name (at least 3 characters).');
+                    return;
+                  }
+                  const cleanPhone = newPgPhone.replace(/\D/g, '');
+                  if (cleanPhone.length < 10) {
+                    Alert.alert('Required: Phone Number', 'Please enter a valid 10-digit contact phone number.');
+                    return;
+                  }
+                  if (!newPgAddress.trim() || newPgAddress.trim().length < 3) {
+                    Alert.alert('Required: Address', 'Please enter the street address or use "Locate on Map".');
+                    return;
+                  }
+                  if (!newPgCity.trim()) {
+                    Alert.alert('Required: City', 'Please enter the city where the building is located.');
+                    return;
+                  }
+                  const cleanPincode = newPgPincode.replace(/\D/g, '');
+                  if (cleanPincode.length !== 6) {
+                    Alert.alert('Required: Pincode', 'Please enter a valid 6-digit postal pincode.');
+                    return;
+                  }
+                  setAddPropStep(2);
+                }}
                 activeOpacity={0.85}
               >
-                {creatingPgLoading ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.submitCreatePgBtnText}>
-                    ✓ Save & Create {propertyMode === 'PG' ? 'New PG Building' : 'Rental Building'}
-                  </Text>
-                )}
+                <Text style={styles.submitCreatePgBtnText}>
+                  Continue to Floor & Unit Matrix (Step 2) →
+                </Text>
               </TouchableOpacity>
             </ScrollView>
+              </>
+            )}
           </View>
         </View>
       </Modal>
