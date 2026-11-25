@@ -2210,7 +2210,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   ? displayFloors
                   : displayFloors.filter((f) => f.floorNumber === selectedFloorFilter)
                 ).map((floor) => (
-                  <View key={`floor-sec-${floor.floorNumber}`} style={styles.floorBlockWrap}>
+                  <View
+                    key={`floor-sec-${floor.floorNumber}`}
+                    style={[styles.floorBlockWrap, isRentalMode && styles.floorOrangeBox]}
+                  >
                     {/* Floor Section Header */}
                     <View style={styles.floorSectionHeader}>
                       <Text style={styles.floorSectionTitle}>
@@ -6753,6 +6756,17 @@ const styles = StyleSheet.create({
   floorBlockWrap: {
     gap: 10,
   },
+  floorOrangeBox: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 12,
+    borderWidth: 1.5,
+    borderColor: '#ea580c',
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   inlineAddRoomLink: {
     fontSize: 13,
     fontWeight: '800',
@@ -6760,23 +6774,24 @@ const styles = StyleSheet.create({
   },
   gridUnitTile: {
     borderRadius: 14,
-    padding: 10,
-    borderWidth: 1,
+    padding: 9,
+    borderWidth: 1.2,
+    borderColor: '#fb923c',
     shadowColor: '#000',
     shadowOpacity: 0.04,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
     justifyContent: 'space-between',
-    minHeight: 116,
+    minHeight: 112,
   },
   gridUnitTileOccupied: {
     backgroundColor: '#e6f7ee',
-    borderColor: '#a7f3d0',
+    borderColor: '#fb923c',
   },
   gridUnitTileVacant: {
     backgroundColor: '#ffffff',
-    borderColor: '#efece9',
+    borderColor: '#fb923c',
   },
   gridStatusRow: {
     flexDirection: 'row',
