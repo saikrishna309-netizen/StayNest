@@ -20,6 +20,7 @@ import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
 import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
+import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
 import Svg, { Path } from 'react-native-svg';
 
 const WhatsAppLogoIcon = ({ size = 13, color = '#25D366' }: { size?: number; color?: string }) => (
@@ -130,6 +131,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
 
   // Tenant Payment Modal State
   const [selectedTenantForAction, setSelectedTenantForAction] = useState<Tenant | null>(null);
+  const [invoiceTenant, setInvoiceTenant] = useState<Tenant | null>(null);
   const [manualPayAmount, setManualPayAmount] = useState('8500');
   const [manualPayMode, setManualPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [recordingPayment, setRecordingPayment] = useState(false);
@@ -1765,13 +1767,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                     </View>
                   </View>
 
-                  <View
+                  <TouchableOpacity
                     style={[
                       styles.statusPill,
                       isAct
                         ? (isPaidFull ? styles.statusPillPaid : styles.statusPillDue)
                         : styles.statusPillVacated,
                     ]}
+                    onPress={(e: any) => {
+                      e?.stopPropagation?.();
+                      setInvoiceTenant(t);
+                    }}
+                    activeOpacity={0.75}
                   >
                     <Text
                       style={[
@@ -1783,7 +1790,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                     >
                       {isAct ? (isPaidFull ? 'PAID' : 'DUE') : 'VACATED'}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 {/* Zone 2: Two-column metadata row for Property and Room/Bed */}
@@ -1947,6 +1954,26 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                   </Text>
                 </View>
               </View>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#ea580c',
+                  borderRadius: 12,
+                  paddingVertical: 11,
+                  alignItems: 'center',
+                  marginBottom: 12,
+                }}
+                onPress={() => {
+                  const target = selectedTenantForAction;
+                  setSelectedTenantForAction(null);
+                  if (target) setInvoiceTenant(target);
+                }}
+                activeOpacity={0.85}
+              >
+                <Text style={{ color: '#ffffff', fontSize: 13, fontWeight: '800' }}>
+                  🧾 Open Monthly Rent & Utility Invoice
+                </Text>
+              </TouchableOpacity>
 
               {/* ACTION SECTION 1: RECORD MANUAL RENT PAYMENT */}
               <View style={styles.actionSectionBox}>
@@ -2376,6 +2403,22 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           </View>
         </View>
       </Modal>
+
+      {/* Screen 2: Monthly Rent & Utility Invoice Modal */}
+      <MonthlyInvoiceModal
+        visible={!!invoiceTenant}
+        tenant={invoiceTenant}
+        onClose={() => setInvoiceTenant(null)}
+        onPaymentSuccess={(tenantId) => {
+          setTenants((prev) =>
+            prev.map((t) =>
+              t.id === tenantId
+                ? { ...t, rentStatus: 'PAID', outstandingPaise: 0 }
+                : t
+            )
+          );
+        }}
+      />
     </View>
   );
 };

@@ -25,6 +25,7 @@ import { LogIssueModal } from '../components/modals/LogIssueModal';
 import { FoodMenuModal } from '../components/modals/FoodMenuModal';
 import { fastDataCache } from '../services/dataCache';
 import { safeStorage } from '../utils/safeStorage';
+import { pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { isValidUuid } from '../services/propertyDataService';
 import {
   computeOccupancyMetrics,
@@ -375,7 +376,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [newPgElecCurr, setNewPgElecCurr] = useState('150');
   const [newPgElecFixed, setNewPgElecFixed] = useState('1000');
   const [newPgMaintenanceMode, setNewPgMaintenanceMode] = useState<'INCLUDED' | 'EXTRA'>('INCLUDED');
-  const [newPgMaintFee, setNewPgMaintFee] = useState('500');
+  const [newPgMaintFee, setNewPgMaintFee] = useState('1200');
+  const [newPgPhotos, setNewPgPhotos] = useState<string[]>([]);
+
+  const handlePickMultiplePropertyPhotos = async () => {
+    const picked = await pickMultipleImagesFromDevice();
+    if (picked.length > 0) {
+      setNewPgPhotos((prev) => [...prev, ...picked]);
+    }
+  };
 
   const [newPgAmenities, setNewPgAmenities] = useState<string[]>([
     'HIGH_SPEED_WIFI',
@@ -687,7 +696,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         noticePeriodDays: parseInt(newPgNoticeDays.replace(/\D/g, '') || '30', 10),
         approvalStatus: 'APPROVED',
         published: true,
-        primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
+        primaryPhotoUrl:
+          newPgPhotos[0] ||
+          'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
+        photos: newPgPhotos,
         amenities: newPgAmenities,
       };
 
@@ -4768,6 +4780,38 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
               </View>
 
+              {/* ROOM PHOTOS GALLERY (INLINE MULTI-IMAGE UPLOAD) */}
+              <View style={styles.addPropCard}>
+                <Text style={styles.addPropCardTitle}>Room Photos Gallery ({newPgPhotos.length})</Text>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingVertical: 4 }}
+                >
+                  {newPgPhotos.map((uri, idx) => (
+                    <View key={`${uri.slice(0, 24)}-${idx}`} style={styles.galleryThumbWrap}>
+                      <Image source={{ uri }} style={styles.galleryThumbImg} resizeMode="cover" />
+                      <TouchableOpacity
+                        style={styles.galleryThumbRemoveBtn}
+                        onPress={() => setNewPgPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.galleryThumbRemoveText}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+
+                  <TouchableOpacity
+                    style={styles.galleryAddTile}
+                    onPress={handlePickMultiplePropertyPhotos}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.galleryAddPlus}>+</Text>
+                    <Text style={styles.galleryAddLabel}>Add Photos</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </View>
+
               {/* PART 2: BUILDING STRUCTURE & ROOMS */}
               <View style={styles.addPropCard}>
                 <Text style={styles.addPropCardTitle}>2. Building Structure & Rooms</Text>
@@ -8577,6 +8621,61 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#111827',
+    marginTop: 2,
+  },
+  galleryThumbWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    position: 'relative',
+    overflow: 'visible',
+  },
+  galleryThumbImg: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    backgroundColor: '#f3f4f6',
+  },
+  galleryThumbRemoveBtn: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#ea580c',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  galleryThumbRemoveText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+    lineHeight: 14,
+  },
+  galleryAddTile: {
+    width: 72,
+    height: 72,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#ea580c',
+    backgroundColor: '#fff7ed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  galleryAddPlus: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#ea580c',
+    lineHeight: 22,
+  },
+  galleryAddLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#9a3412',
     marginTop: 2,
   },
 });
