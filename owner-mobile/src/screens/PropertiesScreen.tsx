@@ -71,6 +71,7 @@ const CameraMicroIcon = ({ color = '#94a3b8', size = 11 }: { color?: string; siz
 
 interface PropertiesScreenProps {
   initialProperty?: Property | null;
+  onActivePropertyChange?: (property: Property) => void;
   onBackToDashboard?: () => void;
 }
 
@@ -103,6 +104,7 @@ interface BedConfig {
 
 export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   initialProperty,
+  onActivePropertyChange,
   onBackToDashboard,
 }) => {
   const { user } = useAuth();
@@ -948,8 +950,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // Initialize and load properties & rooms
   useEffect(() => {
+    setSelectedFloorFilter('ALL');
     loadPropertiesAndRooms();
-  }, [initialProperty]);
+  }, [initialProperty?.id]);
 
   const defaultMultiPgs: Property[] = [
     {
@@ -1333,9 +1336,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   // Switch Active Property
   const handleSelectProperty = async (p: Property) => {
     setActiveProperty(p);
+    setSelectedFloorFilter('ALL');
     setShowPropertyPicker(false);
     setViewMode('OVERVIEW');
     setLoading(true);
+    onActivePropertyChange?.(p);
 
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem('staynest_active_property_id', p.id);

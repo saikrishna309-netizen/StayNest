@@ -11,6 +11,7 @@ import { TenantsScreen } from './src/screens/TenantsScreen';
 import { ManagementScreen } from './src/screens/ManagementScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { Property } from './src/types';
+import { safeStorage } from './src/utils/safeStorage';
 
 // ─── TRENDY MODERN SVG ICONS (MATCHING SCREENSHOT) ───
 const NavHomeIcon = ({ color, filled = false }: { color: string; filled?: boolean }) => (
@@ -124,9 +125,20 @@ const MainNavigator: React.FC = () => {
     );
   }
 
+  // Unified property switcher: syncs active property across all 5 tabs & storage
+  const handleActivePropertyChange = (property: Property) => {
+    setSelectedProperty(property);
+    safeStorage.setItem('@staynest_active_property_id', property.id).catch(() => {});
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        window.localStorage.setItem('staynest_active_property_id', property.id);
+      } catch {}
+    }
+  };
+
   // Direct login straight to dashboard for all owners (no blocking onboarding wizard)
   const handleOpenProperty = (property: Property) => {
-    setSelectedProperty(property);
+    handleActivePropertyChange(property);
     setCurrentTab('properties');
   };
 
@@ -174,8 +186,9 @@ const MainNavigator: React.FC = () => {
           <View style={[styles.tabPane, currentTab === 'dashboard' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <DashboardScreen
               resetTrigger={dashboardResetTrigger}
+              selectedPropertyId={selectedProperty?.id}
               onSelectPropertyForRooms={handleOpenProperty}
-              onActivePropertyChange={(p) => setSelectedProperty(p)}
+              onActivePropertyChange={handleActivePropertyChange}
               onNavigateTab={(tab) => {
                 if (tab === 'rooms') setCurrentTab('properties');
                 else if (tab === 'tenants') setCurrentTab('tenants');
@@ -189,6 +202,7 @@ const MainNavigator: React.FC = () => {
           <View style={[styles.tabPane, currentTab === 'properties' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <PropertiesScreen
               initialProperty={selectedProperty}
+              onActivePropertyChange={handleActivePropertyChange}
               onBackToDashboard={() => setCurrentTab('dashboard')}
             />
           </View>
@@ -197,18 +211,25 @@ const MainNavigator: React.FC = () => {
           <View style={[styles.tabPane, currentTab === 'tenants' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <TenantsScreen
               selectedPropertyId={selectedProperty?.id}
+              onActivePropertyChange={handleActivePropertyChange}
               onBack={() => setCurrentTab('dashboard')}
             />
           </View>
 
           {/* Tab 4: Management (Expenses, Finance & Reports) */}
           <View style={[styles.tabPane, currentTab === 'management' ? styles.tabPaneActive : styles.tabPaneHidden]}>
-            <ManagementScreen onBackToDashboard={() => setCurrentTab('dashboard')} />
+            <ManagementScreen
+              selectedPropertyId={selectedProperty?.id}
+              onActivePropertyChange={handleActivePropertyChange}
+              onBackToDashboard={() => setCurrentTab('dashboard')}
+            />
           </View>
 
           {/* Tab 5: Profile (PG Owner Account & Settings) */}
           <View style={[styles.tabPane, currentTab === 'profile' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <ProfileScreen
+              selectedPropertyId={selectedProperty?.id}
+              onActivePropertyChange={handleActivePropertyChange}
               onBackToDashboard={() => setCurrentTab('dashboard')}
               onNavigateTab={(tab) => setCurrentTab(tab)}
             />

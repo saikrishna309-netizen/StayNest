@@ -26,9 +26,16 @@ import Svg, { Path, Circle } from 'react-native-svg';
 interface ProfileScreenProps {
   onBackToDashboard: () => void;
   onNavigateTab?: (tab: 'dashboard' | 'properties' | 'tenants' | 'management') => void;
+  selectedPropertyId?: string | null;
+  onActivePropertyChange?: (property: Property) => void;
 }
 
-export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard, onNavigateTab }) => {
+export const ProfileScreen: React.FC<ProfileScreenProps> = ({
+  onBackToDashboard,
+  onNavigateTab,
+  selectedPropertyId,
+  onActivePropertyChange,
+}) => {
   const { user, updateProfile, logout } = useAuth();
 
   // Profile data
@@ -113,9 +120,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
         setProperties(loadedProps);
 
         const activeId =
+          selectedPropertyId ||
           (typeof window !== 'undefined' && window.localStorage
             ? window.localStorage.getItem('staynest_active_property_id')
-            : '') || loadedProps[0]?.id;
+            : '') ||
+          loadedProps[0]?.id;
         const activeProp = loadedProps.find((p) => p.id === activeId) || loadedProps[0];
         if (activeProp) {
           setPgName(activeProp.name);
@@ -130,7 +139,21 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
       } catch {}
     };
     loadSavedProfileAndProperties();
-  }, []);
+  }, [selectedPropertyId]);
+
+  useEffect(() => {
+    const activeProp = properties.find((p) => p.id === selectedPropertyId) || properties[0];
+    if (activeProp) {
+      setPgName(activeProp.name);
+      const floors = getInitialFloorsForProperty(activeProp.id);
+      const roomsCount = floors.reduce((s, f) => s + f.rooms.length, 0);
+      const bedsCount = floors.reduce(
+        (s, f) => s + f.rooms.reduce((rs, r) => rs + r.beds.length, 0),
+        0
+      );
+      setPropStats({ floors: floors.length, rooms: roomsCount, beds: bedsCount });
+    }
+  }, [selectedPropertyId, properties]);
 
   // Save Profile Changes
   const handleSaveProfile = async () => {
@@ -272,7 +295,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ onBackToDashboard,
     }
   };
 
-  const activeProperty = properties[0];
+  const activeProperty = properties.find((p) => p.id === selectedPropertyId) || properties[0];
   const propLocation =
     activeProperty?.cityName || activeProperty?.addressLine || location;
   const propPhotoUrl = activeProperty?.primaryPhotoUrl || defaultPgPhoto;

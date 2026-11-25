@@ -27,16 +27,31 @@ import {
 
 interface FinanceScreenProps {
   onBack: () => void;
+  selectedPropertyId?: string | null;
+  onActivePropertyChange?: (property: Property) => void;
 }
 
-export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
+export const FinanceScreen: React.FC<FinanceScreenProps> = ({
+  onBack,
+  selectedPropertyId: propSelectedPropertyId,
+  onActivePropertyChange,
+}) => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [invoices, setInvoices] = useState<RentInvoice[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [properties, setProperties] = useState<Property[]>([]);
-  const [selectedPropertyId, setSelectedPropertyId] = useState<string>('');
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string>(propSelectedPropertyId || '');
+
+  useEffect(() => {
+    if (propSelectedPropertyId && propSelectedPropertyId !== selectedPropertyId) {
+      setSelectedPropertyId(propSelectedPropertyId);
+      if (!properties.some((p) => p.id === propSelectedPropertyId)) {
+        loadFinanceData(true);
+      }
+    }
+  }, [propSelectedPropertyId]);
 
   // Selected Billing Month Filter
   const [selectedMonth, setSelectedMonth] = useState('2026-11');
@@ -207,10 +222,51 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
       setInvoices(invRes.content || []);
       setExpenses(loadedExpenses);
-      const props = propRes.content || [];
-      setProperties(props);
-      if (props.length > 0) {
-        setSelectedPropertyId((prev) => prev || props[0].id);
+      let combinedProps: Property[] = propRes.content || [];
+      if (combinedProps.length === 0) {
+        combinedProps = [
+          {
+            id: 'prop-pg-1',
+            name: "StayNest Elite Men's PG",
+            propertyType: 'HOSTEL',
+            genderPolicy: 'BOYS',
+            addressLine: 'Opp. PVP Square, MG Road',
+            cityName: 'Vijayawada',
+            foodIncluded: true,
+          },
+          {
+            id: 'prop-pg-2',
+            name: 'Sai Durga Executive Ladies PG',
+            propertyType: 'PG',
+            genderPolicy: 'GIRLS',
+            addressLine: 'Near Benz Circle',
+            cityName: 'Vijayawada',
+            foodIncluded: true,
+          },
+        ];
+      }
+      try {
+        const storedCustomProps = await safeStorage.getItem('@staynest_custom_properties');
+        if (storedCustomProps) {
+          const parsedCustom = JSON.parse(storedCustomProps);
+          if (Array.isArray(parsedCustom) && parsedCustom.length > 0) {
+            const seen = new Set(combinedProps.map((p) => p.id));
+            combinedProps = [...combinedProps, ...parsedCustom.filter((p: Property) => !seen.has(p.id))];
+          }
+        }
+      } catch {}
+
+      setProperties(combinedProps);
+      const storedActiveId =
+        propSelectedPropertyId ||
+        (await safeStorage.getItem('@staynest_active_property_id')) ||
+        (typeof window !== 'undefined' && window.localStorage
+          ? window.localStorage.getItem('staynest_active_property_id')
+          : '');
+      if (storedActiveId && combinedProps.some((p) => p.id === storedActiveId)) {
+        setSelectedPropertyId(storedActiveId);
+      } else if (combinedProps.length > 0) {
+        setSelectedPropertyId((prev) => (prev && combinedProps.some((p) => p.id === prev) ? prev : combinedProps[0].id));
       }
     } catch {
       // ignore
@@ -435,12 +491,39 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
     }
   };
 
+  // Filter tenants, invoices, and expenses by the active property
+  const activeTenants = tenants.filter((t) => {
+    if (!selectedPropertyId) return true;
+    if (t.propertyId === selectedPropertyId) return true;
+    if (!t.propertyId && (selectedPropertyId === 'prop-pg-1' || selectedPropertyId === properties[0]?.id)) return true;
+    return false;
+  });
+
+  const activeExpenses = expenses.filter((e) => {
+    if (!selectedPropertyId) return true;
+    if (e.propertyId === selectedPropertyId) return true;
+    if (
+      (selectedPropertyId === 'prop-pg-1' || selectedPropertyId === properties[0]?.id) &&
+      (e.propertyId === 'staynest-pg-01' || e.propertyId === 'staynest-prop-01' || !e.propertyId)
+    ) {
+      return true;
+    }
+    return false;
+  });
+
+  const activeInvoices = invoices.filter((inv) => {
+    if (!selectedPropertyId) return true;
+    if ((inv as any).propertyId === selectedPropertyId) return true;
+    if (!(inv as any).propertyId && activeTenants.some((t) => t.id === (inv as any).tenantId)) return true;
+    return false;
+  });
+
   // Single Source of Truth: Current Month Collection & Expense Metrics
-  const currentMonthCollection = computeCollectionMetrics(tenants, selectedMonth, invoices);
+  const currentMonthCollection = computeCollectionMetrics(activeTenants, selectedMonth, activeInvoices);
   const currentMonthExpenseProfit = computeExpenseAndProfitMetrics({
     collectedRent: currentMonthCollection.collectedRent,
     fixedBills,
-    loggedExpenses: expenses,
+    loggedExpenses: activeExpenses,
     selectedMonth,
   });
 
@@ -457,7 +540,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   const dynamicMonthMap = new Map<string, { revenue: number; expense: number }>();
 
   // 1. Aggregate invoices by YYYY-MM
-  invoices.forEach((inv) => {
+  activeInvoices.forEach((inv) => {
     const rawDate = inv.billingMonth || inv.dueDate || inv.createdAt || '';
     const key = rawDate.slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(key)) return;
@@ -468,7 +551,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
   });
 
   // 2. Aggregate expenses by YYYY-MM
-  expenses.forEach((exp) => {
+  activeExpenses.forEach((exp) => {
     const rawDate = exp.transactionDate || exp.expenseDate || exp.date || exp.createdAt || '';
     const key = rawDate.slice(0, 7);
     if (!/^\d{4}-\d{2}$/.test(key)) return;
@@ -563,6 +646,47 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
             <Text style={styles.addBtnText}>+ Log Expense</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Active Property Selector Pills (Synced across all screens) */}
+        {properties.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: 10 }}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {properties.map((p) => {
+              const isSelected = selectedPropertyId === p.id;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => {
+                    setSelectedPropertyId(p.id);
+                    onActivePropertyChange?.(p);
+                  }}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    backgroundColor: isSelected ? '#ea580c' : '#faf8f6',
+                    borderWidth: 1,
+                    borderColor: isSelected ? '#ea580c' : '#efece9',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: isSelected ? '#ffffff' : '#374151',
+                    }}
+                  >
+                    {p.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
 
         {/* Executive Quick Stats Banner */}
         <View style={styles.kpiRow}>
@@ -997,19 +1121,19 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
         {/* ─── 6. RECENT EXPENSES WITH EDIT & DELETE BUTTONS ─── */}
         <View style={{ marginTop: 24, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
-            <Text style={styles.sectionTitle}>RECENT EXPENSES ({expenses.length})</Text>
+            <Text style={styles.sectionTitle}>RECENT EXPENSES ({activeExpenses.length})</Text>
             <Text style={styles.sectionSub}>Tap Edit (✏️) to modify title, category or amount</Text>
           </View>
         </View>
 
-        {expenses.length === 0 ? (
+        {activeExpenses.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={{ fontSize: 24, marginBottom: 4 }}>🧾</Text>
             <Text style={styles.emptyTitle}>No Expenses Logged Yet</Text>
             <Text style={styles.emptyText}>Tap "+ Log Expense" above to record maintenance, food or bill payments.</Text>
           </View>
         ) : (
-          expenses.map((e) => {
+          activeExpenses.map((e) => {
             const expTitle = e.title || e.notes || e.category;
             const expDate = e.transactionDate || e.date || 'Recent';
 

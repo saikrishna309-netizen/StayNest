@@ -47,9 +47,14 @@ const PhoneCallIcon = ({ size = 12, color = '#0f172a' }: { size?: number; color?
 interface TenantsScreenProps {
   onBack: () => void;
   selectedPropertyId?: string | null;
+  onActivePropertyChange?: (property: Property) => void;
 }
 
-export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPropertyId }) => {
+export const TenantsScreen: React.FC<TenantsScreenProps> = ({
+  onBack,
+  selectedPropertyId,
+  onActivePropertyChange,
+}) => {
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -82,6 +87,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
       setPropertyFilter(selectedPropertyId);
       setSelectedPropId(selectedPropertyId);
       loadRoomsForProperty(selectedPropertyId);
+      if (!properties.some((p) => p.id === selectedPropertyId)) {
+        loadData();
+      }
     }
   }, [selectedPropertyId]);
 
@@ -1614,7 +1622,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
               return (
                 <TouchableOpacity
                   key={p.id}
-                  onPress={() => setPropertyFilter(p.id)}
+                  onPress={() => {
+                    setPropertyFilter(p.id);
+                    setSelectedPropId(p.id);
+                    loadRoomsForProperty(p.id);
+                    onActivePropertyChange?.(p);
+                  }}
                   style={{
                     paddingVertical: 6,
                     paddingHorizontal: 12,

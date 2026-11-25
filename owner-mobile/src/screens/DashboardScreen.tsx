@@ -57,6 +57,7 @@ interface DashboardScreenProps {
   onSelectPropertyForRooms: (property: Property) => void;
   onNavigateTab: (tab: 'rooms' | 'tenants' | 'finance' | 'profile') => void;
   onActivePropertyChange?: (property: Property) => void;
+  selectedPropertyId?: string | null;
   resetTrigger?: number;
 }
 
@@ -64,6 +65,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onSelectPropertyForRooms,
   onNavigateTab,
   onActivePropertyChange,
+  selectedPropertyId,
   resetTrigger,
 }) => {
   const { user, logout } = useAuth();
@@ -79,7 +81,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Onboarding Modal State
   const [showOnboardModal, setShowOnboardModal] = useState(false);
-  const [selectedPropId, setSelectedPropId] = useState('');
+  const [selectedPropId, setSelectedPropId] = useState(selectedPropertyId || '');
+
+  // Keep Dashboard in sync when active property changes on another screen
+  useEffect(() => {
+    if (selectedPropertyId && selectedPropertyId !== selectedPropId) {
+      setSelectedPropId(selectedPropertyId);
+    }
+  }, [selectedPropertyId]);
   const [onboardFullName, setOnboardFullName] = useState('');
   const [onboardPhone, setOnboardPhone] = useState('');
   const [onboardIdProof, setOnboardIdProof] = useState('');
@@ -948,11 +957,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       } catch {}
 
       setProperties(combinedProps);
-      const activeIdFromStorage = await safeStorage.getItem('@staynest_active_property_id');
-      if (activeIdFromStorage && combinedProps.some((p) => p.id === activeIdFromStorage)) {
-        setSelectedPropId(activeIdFromStorage);
-      } else if (!selectedPropId || !combinedProps.some((p) => p.id === selectedPropId)) {
-        setSelectedPropId(combinedProps[0].id);
+      const activeIdFromStorage =
+        selectedPropertyId ||
+        (await safeStorage.getItem('@staynest_active_property_id')) ||
+        (typeof window !== 'undefined' && window.localStorage
+          ? window.localStorage.getItem('staynest_active_property_id')
+          : '');
+      const resolvedProp =
+        (activeIdFromStorage && combinedProps.find((p) => p.id === activeIdFromStorage)) ||
+        (selectedPropId && combinedProps.find((p) => p.id === selectedPropId)) ||
+        combinedProps[0];
+      if (resolvedProp) {
+        setSelectedPropId(resolvedProp.id);
+        if (!selectedPropertyId) {
+          onActivePropertyChange?.(resolvedProp);
+        }
       }
 
       let loadedTenants = tRes || [];
