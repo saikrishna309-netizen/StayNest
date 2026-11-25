@@ -1155,32 +1155,61 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         loadedTenants = tenantRes.content || [];
       } catch { }
 
-      if (loadedTenants.length < 5) {
-        const multiPgTenants: Tenant[] = [
-          // PG 1 (StayNest Elite Men's PG)
-          { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+      const multiPgTenants: Tenant[] = [
+        // PG 1 (StayNest Elite Men's PG - 6 active residents)
+        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
 
-          // PG 2 (Sai Durga Executive Ladies PG)
-          { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        ];
-        const existingPhones = new Set(loadedTenants.map((t) => t.phone));
-        const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone));
-        loadedTenants = [...loadedTenants, ...extraTenants];
-      }
+        // PG 2 (Sai Durga Executive Ladies PG - 4 active residents)
+        { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+        { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+      ];
+      const existingPhones = new Set(loadedTenants.map((t) => t.phone));
+      const existingIds = new Set(loadedTenants.map((t) => t.id));
+      const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone) && !existingIds.has(mt.id));
+      loadedTenants = [...loadedTenants, ...extraTenants];
+
+      // Merge locally onboarded custom tenants from safeStorage
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        if (storedCustomStr) {
+          const customList: Tenant[] = JSON.parse(storedCustomStr);
+          const cIds = new Set(customList.map((c) => c.id));
+          const cPhones = new Set(customList.map((c) => c.phone));
+          loadedTenants = [
+            ...customList,
+            ...loadedTenants.filter((lt) => !cIds.has(lt.id) && !cPhones.has(lt.phone)),
+          ];
+        }
+      } catch {}
 
       // Filter tenants strictly for target property
       const propTenants = loadedTenants.filter(
         (t) => t.propertyId === targetProp.id || (!t.propertyId && targetProp.id === 'prop-pg-1')
       );
       setTenants(propTenants);
+
+      // Build occupant lookup for syncing bed statuses
+      const initialOccupantMap = new Map<string, Tenant>();
+      propTenants.forEach((t) => {
+        if (t.active !== false && t.stayStatus !== 'TERMINATED') {
+          if (t.bedId) initialOccupantMap.set(t.bedId, t);
+          if (t.roomNumber && t.bedLabel) {
+            initialOccupantMap.set(`${t.roomNumber}-${t.bedLabel}`, t);
+            const numOnly = t.bedLabel.replace(/[^0-9]/g, '');
+            if (numOnly) {
+              initialOccupantMap.set(`${t.roomNumber}-Bed ${numOnly}`, t);
+              initialOccupantMap.set(`${t.roomNumber}-${numOnly}`, t);
+            }
+          }
+        }
+      });
 
       // Check cached floors for this property
       let targetFloors: FloorConfig[] | null = null;
@@ -1197,8 +1226,27 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         targetFloors = getInitialFloorsForProperty(targetProp.id);
       }
 
-      setFloors(targetFloors);
-      setOriginalFloors(JSON.parse(JSON.stringify(targetFloors)));
+      const syncedInitialFloors = targetFloors.map((fl) => ({
+        ...fl,
+        rooms: fl.rooms.map((rm) => ({
+          ...rm,
+          beds: rm.beds.map((b, bIdx) => {
+            const bNum = String(bIdx + 1);
+            const isOcc =
+              initialOccupantMap.has(b.id) ||
+              initialOccupantMap.has(`${rm.roomNumber}-${b.bedLabel}`) ||
+              initialOccupantMap.has(`${rm.roomNumber}-Bed ${bNum}`) ||
+              initialOccupantMap.has(`${rm.roomNumber}-${bNum}`);
+            return {
+              ...b,
+              status: (isOcc ? 'OCCUPIED' : 'AVAILABLE') as 'AVAILABLE' | 'OCCUPIED',
+            };
+          }),
+        })),
+      }));
+
+      setFloors(syncedInitialFloors);
+      setOriginalFloors(JSON.parse(JSON.stringify(syncedInitialFloors)));
     } catch (err: any) {
       console.warn('loadPropertiesAndRooms error:', err.message);
       setOriginalFloors(JSON.parse(JSON.stringify(floors)));
@@ -1245,26 +1293,39 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         // ignore
       }
 
-      if (loadedTenants.length < 5) {
-        const multiPgTenants: Tenant[] = [
-          // PG 1 (StayNest Elite Men's PG)
-          { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+      const multiPgTenants: Tenant[] = [
+        // PG 1 (StayNest Elite Men's PG - 6 active residents)
+        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
 
-          // PG 2 (Sai Durga Executive Ladies PG)
-          { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-          { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-          { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        ];
-        const existingPhones = new Set(loadedTenants.map((t) => t.phone));
-        const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone));
-        loadedTenants = [...loadedTenants, ...extraTenants];
-      }
+        // PG 2 (Sai Durga Executive Ladies PG - 4 active residents)
+        { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+        { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
+        { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
+      ];
+      const existingPhones = new Set(loadedTenants.map((t) => t.phone));
+      const existingIds = new Set(loadedTenants.map((t) => t.id));
+      const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone) && !existingIds.has(mt.id));
+      loadedTenants = [...loadedTenants, ...extraTenants];
+
+      // Merge locally onboarded custom tenants from safeStorage
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        if (storedCustomStr) {
+          const customList: Tenant[] = JSON.parse(storedCustomStr);
+          const cIds = new Set(customList.map((c) => c.id));
+          const cPhones = new Set(customList.map((c) => c.phone));
+          loadedTenants = [
+            ...customList,
+            ...loadedTenants.filter((lt) => !cIds.has(lt.id) && !cPhones.has(lt.phone)),
+          ];
+        }
+      } catch {}
 
       // Filter tenants strictly for selected property
       const propTenants = loadedTenants.filter(
@@ -1276,7 +1337,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       propTenants.forEach((t) => {
         if (t.active !== false && t.stayStatus !== 'TERMINATED') {
           if (t.bedId) occupantMap.set(t.bedId, t);
-          if (t.roomNumber && t.bedLabel) occupantMap.set(`${t.roomNumber}-${t.bedLabel}`, t);
+          if (t.roomNumber && t.bedLabel) {
+            occupantMap.set(`${t.roomNumber}-${t.bedLabel}`, t);
+            const numOnly = t.bedLabel.replace(/[^0-9]/g, '');
+            if (numOnly) {
+              occupantMap.set(`${t.roomNumber}-Bed ${numOnly}`, t);
+              occupantMap.set(`${t.roomNumber}-${numOnly}`, t);
+            }
+          }
         }
       });
 
@@ -1299,10 +1367,18 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         ...fl,
         rooms: fl.rooms.map((rm: RoomConfig) => ({
           ...rm,
-          beds: rm.beds.map((b) => ({
-            ...b,
-            status: ((occupantMap.has(b.id) || occupantMap.has(`${rm.roomNumber}-${b.bedLabel}`)) ? 'OCCUPIED' : 'AVAILABLE') as 'AVAILABLE' | 'OCCUPIED',
-          })),
+          beds: rm.beds.map((b, bIdx) => {
+            const bNum = String(bIdx + 1);
+            const isOcc =
+              occupantMap.has(b.id) ||
+              occupantMap.has(`${rm.roomNumber}-${b.bedLabel}`) ||
+              occupantMap.has(`${rm.roomNumber}-Bed ${bNum}`) ||
+              occupantMap.has(`${rm.roomNumber}-${bNum}`);
+            return {
+              ...b,
+              status: (isOcc ? 'OCCUPIED' : 'AVAILABLE') as 'AVAILABLE' | 'OCCUPIED',
+            };
+          }),
         })),
       }));
 
@@ -1426,6 +1502,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       if (t.bedId) bedOccupantMap.set(t.bedId, t);
       if (t.roomNumber && t.bedLabel) {
         bedOccupantMap.set(`${t.roomNumber}-${t.bedLabel}`, t);
+        const numOnly = t.bedLabel.replace(/[^0-9]/g, '');
+        if (numOnly) {
+          bedOccupantMap.set(`${t.roomNumber}-Bed ${numOnly}`, t);
+          bedOccupantMap.set(`${t.roomNumber}-${numOnly}`, t);
+        }
       }
     }
   });
@@ -2167,10 +2248,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                               {/* Beds Grid inside Room (Matching Screenshot, Sequential Unique Numbers 1, 2, 3...) */}
                               <View style={styles.roomBedsGridRow}>
                                 {room.beds.map((bed, bedIdx) => {
-                                  const occupant = bedOccupantMap.get(bed.id) || bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`);
-                                  const isOccupied = !!occupant;
                                   // Strictly unique sequential bed number 1, 2, 3, 4... per room
                                   const bedNumStr = String(bedIdx + 1);
+                                  const occupant =
+                                    bedOccupantMap.get(bed.id) ||
+                                    bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`) ||
+                                    bedOccupantMap.get(`${room.roomNumber}-Bed ${bedNumStr}`) ||
+                                    bedOccupantMap.get(`${room.roomNumber}-${bedNumStr}`);
+                                  const isOccupied = !!occupant;
 
                                   if (isOccupied && occupant) {
                                     const tenantName = occupant.fullName;

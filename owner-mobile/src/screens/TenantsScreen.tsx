@@ -46,10 +46,17 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DUE' | 'ACTIVE' | 'VACATED'>('ALL');
-  const [propertyFilter, setPropertyFilter] = useState<string>('ALL');
+  const [propertyFilter, setPropertyFilter] = useState<string>(() => {
+    if (selectedPropertyId) return selectedPropertyId;
+    if (typeof window !== 'undefined' && window.localStorage) {
+      return window.localStorage.getItem('staynest_active_property_id') || 'prop-pg-1';
+    }
+    return 'prop-pg-1';
+  });
 
   useEffect(() => {
     if (selectedPropertyId) {
+      setPropertyFilter(selectedPropertyId);
       setSelectedPropId(selectedPropertyId);
       loadRoomsForProperty(selectedPropertyId);
     }
@@ -972,8 +979,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     });
   });
 
+  // Scoped to selected property (matches Dashboard & Room Management 1:1) or ALL
+  const propertyScopedTenants = tenants.filter((t) => {
+    if (propertyFilter === 'ALL') return true;
+    return t.propertyId === propertyFilter || (!t.propertyId && propertyFilter === 'prop-pg-1');
+  });
+
   // Filtered tenants list
-  const filteredTenants = tenants.filter((t) => {
+  const filteredTenants = propertyScopedTenants.filter((t) => {
     const isAct = t.active !== false && t.stayStatus !== 'TERMINATED';
     const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
     const dueRent = typeof t.outstandingPaise === 'number'
@@ -984,10 +997,6 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
     if (statusFilter === 'ACTIVE' && !isAct) return false;
     if (statusFilter === 'VACATED' && isAct) return false;
     if (statusFilter === 'DUE' && (!isAct || !isDue)) return false;
-
-    if (propertyFilter !== 'ALL' && t.propertyId && t.propertyId !== propertyFilter) {
-      return false;
-    }
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -1001,8 +1010,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
   });
 
   // Single Source of Truth: Month-Wise Collection Calculation
-  const activeTenantsList = tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED');
-  const collectionSummary = computeCollectionMetrics(tenants, selectedMonth);
+  const activeTenantsList = propertyScopedTenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED');
+  const collectionSummary = computeCollectionMetrics(propertyScopedTenants, selectedMonth);
   const monthExpectedRent = collectionSummary.expectedRent;
   const monthCollectedRent = collectionSummary.collectedRent;
   const monthPendingDue = collectionSummary.pendingDue;
@@ -1565,6 +1574,68 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           </View>
         </View>
 
+        {/* ─── Property Scope Selector (Synced with Dashboard) ─── */}
+        {properties.length > 1 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: 10 }}
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {properties.map((p) => {
+              const isSelected = propertyFilter === p.id;
+              const propCount = tenants.filter(
+                (t) => (t.propertyId === p.id || (!t.propertyId && p.id === 'prop-pg-1')) && t.active !== false && t.stayStatus !== 'TERMINATED'
+              ).length;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  onPress={() => setPropertyFilter(p.id)}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 12,
+                    backgroundColor: isSelected ? '#1e293b' : '#ffffff',
+                    borderWidth: 1,
+                    borderColor: isSelected ? '#1e293b' : '#e5e7eb',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '700',
+                      color: isSelected ? '#ffffff' : '#374151',
+                    }}
+                  >
+                    {p.name} ({propCount})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              onPress={() => setPropertyFilter('ALL')}
+              style={{
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                backgroundColor: propertyFilter === 'ALL' ? '#1e293b' : '#ffffff',
+                borderWidth: 1,
+                borderColor: propertyFilter === 'ALL' ? '#1e293b' : '#e5e7eb',
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: propertyFilter === 'ALL' ? '#ffffff' : '#374151',
+                }}
+              >
+                All PGs ({tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED').length})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        )}
+
         {/* ─── Search & Filter Bar ─── */}
         <View style={styles.searchBarBox}>
           <TextInput
@@ -1581,12 +1652,12 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
           {(['ALL', 'DUE', 'ACTIVE', 'VACATED'] as const).map((tab) => {
             const count =
               tab === 'ALL'
-                ? tenants.length
+                ? propertyScopedTenants.length
                 : tab === 'DUE'
-                  ? tenants.filter((t) => (t.active !== false && t.stayStatus !== 'TERMINATED') && ((typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0) || t.rentStatus === 'DUE' || t.rentStatus === 'OVERDUE' || t.rentStatus === 'PARTIALLY_PAID')).length
+                  ? collectionSummary.rentDueCount
                   : tab === 'ACTIVE'
-                    ? tenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED').length
-                    : tenants.filter((t) => t.active === false || t.stayStatus === 'TERMINATED').length;
+                    ? propertyScopedTenants.filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED').length
+                    : propertyScopedTenants.filter((t) => t.active === false || t.stayStatus === 'TERMINATED').length;
 
             const label =
               tab === 'ALL'
