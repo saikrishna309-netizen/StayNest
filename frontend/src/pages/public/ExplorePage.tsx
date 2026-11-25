@@ -265,7 +265,7 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
     try {
       let baseList: PropertySummary[] = [];
       try {
-        const res = await propertyApi.searchProperties({ size: 50 });
+        const res = await propertyApi.searchProperties({ size: 100 });
         if (res && res.content && res.content.length > 0) {
           baseList = res.content;
         }
@@ -273,10 +273,13 @@ export const ExplorePage: React.FC<ExplorePageProps> = ({ onSelectProperty }) =>
         console.warn('[ExplorePage] Backend search unavailable, falling back:', apiErr);
       }
 
-      // If backend returned no properties (offline or empty DB), use verified starter list
-      if (baseList.length === 0) {
-        baseList = [...VERIFIED_FALLBACK_PGS];
-      }
+      // Merge verified fallback PGs alongside live backend properties (deduplicated by id/name)
+      const seenIds = new Set(baseList.map((p) => p.id));
+      const seenNames = new Set(baseList.map((p) => (p.name || '').trim().toLowerCase()));
+      const extraFallbacks = VERIFIED_FALLBACK_PGS.filter(
+        (fp) => !seenIds.has(fp.id) && !seenNames.has((fp.name || '').trim().toLowerCase())
+      );
+      baseList = [...baseList, ...extraFallbacks];
 
       // Merge owner-created properties from localStorage (Requirement 5)
       if (typeof window !== 'undefined' && window.localStorage) {
