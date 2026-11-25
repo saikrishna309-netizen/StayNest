@@ -4373,7 +4373,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         if (typeof window !== 'undefined' && window.localStorage) {
                           window.localStorage.setItem('staynest_active_property_id', p.id);
                         }
-                        onSelectPropertyForRooms?.(p);
+                        onActivePropertyChange?.(p);
                       }}
                       activeOpacity={0.8}
                     >

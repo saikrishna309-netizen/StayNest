@@ -645,10 +645,18 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.chartScrollContent}
             >
-              <View style={styles.chartBarsContainer}>
+              <View
+                style={[
+                  styles.chartBarsContainer,
+                  {
+                    justifyContent: displayPnlRecords.length <= 2 ? 'center' : 'space-around',
+                    minWidth: Math.max(280, displayPnlRecords.length * 64),
+                  },
+                ]}
+              >
                 {displayPnlRecords.map((item, idx) => {
-                  const revH = item.revenue > 0 ? Math.max(12, Math.min(100, Math.round((item.revenue / maxVal) * 95))) : 6;
-                  const expH = item.expense > 0 ? Math.max(12, Math.min(100, Math.round((item.expense / maxVal) * 95))) : 6;
+                  const revH = item.revenue > 0 ? Math.max(12, Math.min(96, Math.round((item.revenue / maxVal) * 92))) : 6;
+                  const expH = item.expense > 0 ? Math.max(12, Math.min(96, Math.round((item.expense / maxVal) * 92))) : 6;
                   const isSelected = inspectedMonthData?.month === item.month;
 
                   return (
@@ -683,7 +691,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                         </Text>
                       </View>
 
-                      {/* Dual Bars: Revenue & Expense */}
+                      {/* Dual Bars: Revenue & Expense aligned to fixed baseline */}
                       <View style={styles.barsPillarRow}>
                         <View style={[styles.singleBar, { height: revH, backgroundColor: '#7aa992' }]} />
                         <View style={[styles.singleBar, { height: expH, backgroundColor: '#ea580c' }]} />
@@ -839,17 +847,17 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
 
                 return (
                   <View key={bill.id} style={styles.billRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, paddingRight: 8 }}>
                       <View style={styles.billIconCircle}>
                         <Text style={{ fontSize: 16 }}>{bill.icon}</Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.billTitle}>{bill.title}</Text>
+                        <Text style={styles.billTitle} numberOfLines={2}>{bill.title}</Text>
                         <Text style={styles.billDueInfo}>Due: {bill.dueDate}</Text>
                       </View>
                     </View>
 
-                    <View style={{ alignItems: 'flex-end', marginRight: 10 }}>
+                    <View style={{ width: 82, alignItems: 'flex-end', marginRight: 10 }}>
                       <Text style={styles.billAmount}>₹{displayAmount.toLocaleString('en-IN')}</Text>
                       <Text style={styles.billPerText}>{timeframeMode === 'MONTHLY' ? '/mo' : '/yr'}</Text>
                     </View>
@@ -858,6 +866,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({ onBack }) => {
                     <TouchableOpacity
                       style={[
                         styles.billStatusPill,
+                        { width: 68, alignItems: 'center', justifyContent: 'center' },
                         bill.isPaidThisMonth ? styles.billStatusPaid : styles.billStatusPending,
                       ]}
                       onPress={() => handleToggleBillStatus(bill.id)}
@@ -1369,25 +1378,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'flex-end',
     width: '100%',
-    minWidth: 320,
-    height: 156,
-    paddingTop: 20,
+    minHeight: 175,
+    paddingTop: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
     paddingBottom: 8,
+    gap: 8,
   },
   barGroup: {
     alignItems: 'center',
     justifyContent: 'flex-end',
-    minWidth: 48,
-    paddingHorizontal: 5,
+    minWidth: 52,
+    paddingHorizontal: 6,
     paddingVertical: 6,
   },
   barProfitBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   barProfitBadgeText: {
     fontSize: 9,
@@ -1396,6 +1405,8 @@ const styles = StyleSheet.create({
   barsPillarRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
+    justifyContent: 'center',
+    height: 100,
     gap: 4,
   },
   singleBar: {

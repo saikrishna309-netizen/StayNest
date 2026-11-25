@@ -20,6 +20,28 @@ import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
 import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
+import Svg, { Path } from 'react-native-svg';
+
+const WhatsAppLogoIcon = ({ size = 13, color = '#25D366' }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.03 14.69 2 12.04 2ZM17.85 16.12C17.6 16.82 16.41 17.46 15.83 17.54C15.32 17.61 14.67 17.64 13.96 17.41C13.52 17.27 12.96 17.08 12.24 16.77C9.22 15.46 7.25 12.42 7.1 12.22C6.95 12.02 5.87 10.58 5.87 9.1C5.87 7.62 6.64 6.89 6.92 6.59C7.2 6.29 7.53 6.21 7.73 6.21C7.93 6.21 8.13 6.21 8.31 6.22C8.5 6.23 8.75 6.15 9 6.75C9.25 7.36 9.86 8.86 9.94 9.01C10.02 9.16 10.07 9.34 9.96 9.54C9.85 9.74 9.8 9.86 9.65 10.04C9.5 10.22 9.33 10.44 9.19 10.58C9.04 10.73 8.88 10.9 9.06 11.21C9.24 11.52 9.85 12.52 10.76 13.33C11.93 14.37 12.92 14.7 13.23 14.85C13.54 15 13.72 14.97 13.9 14.77C14.08 14.57 14.67 13.87 14.88 13.56C15.09 13.25 15.3 13.3 15.58 13.41C15.87 13.51 17.4 14.27 17.71 14.42C18.02 14.57 18.23 14.65 18.31 14.78C18.39 14.91 18.39 15.53 17.85 16.12Z"
+      fill={color}
+    />
+  </Svg>
+);
+
+const PhoneCallIcon = ({ size = 12, color = '#0f172a' }: { size?: number; color?: string }) => (
+  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M22 16.92V19.92C22.0011 20.1985 21.9441 20.4742 21.8325 20.7293C21.7209 20.9845 21.5573 21.2136 21.3521 21.4019C21.1468 21.5901 20.9046 21.7335 20.6407 21.8227C20.3769 21.9119 20.0974 21.9451 19.82 21.92C16.7428 21.5856 13.787 20.5341 11.19 18.85C8.77382 17.3147 6.72533 15.2662 5.18999 12.85C3.49997 10.2412 2.44824 7.27099 2.11999 4.18C2.095 3.90347 2.12787 3.62476 2.21649 3.36162C2.30512 3.09849 2.44756 2.85669 2.63476 2.65162C2.82196 2.44655 3.0498 2.28271 3.30379 2.17052C3.55777 2.05833 3.83233 2.00026 4.10999 2H7.10999C7.5953 1.99522 8.06579 2.16708 8.43376 2.48353C8.80173 2.79999 9.04207 3.23945 9.10999 3.72C9.23662 4.68007 9.47144 5.62273 9.80999 6.53C9.94454 6.88792 9.97366 7.27691 9.8939 7.65088C9.81415 8.02485 9.62886 8.36811 9.35999 8.64L8.08999 9.91C9.51355 12.4135 11.5864 14.4864 14.09 15.91L15.36 14.64C15.6319 14.3711 15.9751 14.1858 16.3491 14.1061C16.7231 14.0263 17.1121 14.0555 17.47 14.19C18.3773 14.5286 19.3199 14.7634 20.28 14.89C20.7658 14.9585 21.2094 15.2032 21.5265 15.5775C21.8437 15.9518 22.0122 16.4296 22 16.92Z"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
 
 interface TenantsScreenProps {
   onBack: () => void;
@@ -1766,22 +1788,22 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
 
                 {/* Zone 2: Two-column metadata row for Property and Room/Bed */}
                 <View style={styles.metaRow}>
-                  <View style={styles.metaCol}>
+                  <View style={[styles.metaCol, { flex: 1.25, paddingRight: 8 }]}>
                     <View style={styles.metaLabelRow}>
                       <Text style={styles.metaLabel}>PROPERTY</Text>
                       <Text style={{ fontSize: 11, marginLeft: 4 }}>🏠</Text>
                     </View>
-                    <Text style={styles.metaVal} numberOfLines={1}>
+                    <Text style={styles.metaVal} numberOfLines={2}>
                       {t.propertyName || 'Sai Durga Executive Ladies PG'}
                     </Text>
                   </View>
 
-                  <View style={styles.metaCol}>
+                  <View style={[styles.metaCol, { flex: 0.9 }]}>
                     <View style={styles.metaLabelRow}>
                       <Text style={styles.metaLabel}>ROOM & BED</Text>
                       <Text style={{ fontSize: 11, marginLeft: 4 }}>🛏️</Text>
                     </View>
-                    <Text style={styles.metaVal}>
+                    <Text style={styles.metaVal} numberOfLines={2}>
                       {isAct
                         ? `Room ${t.roomNumber || '101'} • ${t.bedLabel || 'Bed 1'}`
                         : 'Not Assigned (Vacated)'}
@@ -1831,6 +1853,23 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                   {isAct && (
                     <View style={styles.actionBtnsGroup}>
                       <TouchableOpacity
+                        style={styles.callBtn}
+                        onPress={(e: any) => {
+                          e?.stopPropagation?.();
+                          const cleanNum = (t.phone || '').replace(/[^0-9+]/g, '');
+                          if (cleanNum) {
+                            Linking.openURL(`tel:${cleanNum}`).catch(() =>
+                              Alert.alert('Cannot Call', `Could not open dialer for ${t.phone}`)
+                            );
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <PhoneCallIcon size={11} color="#0f172a" />
+                        <Text style={styles.callBtnText}>Call</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
                         style={styles.whatsAppBtn}
                         onPress={(e: any) => {
                           e?.stopPropagation?.();
@@ -1838,7 +1877,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({ onBack, selectedPr
                         }}
                         activeOpacity={0.8}
                       >
-                        <Text style={{ fontSize: 12, marginRight: 4 }}>💬</Text>
+                        <WhatsAppLogoIcon size={12} color="#25D366" />
                         <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
                       </TouchableOpacity>
 
@@ -2943,6 +2982,7 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    gap: 14,
     marginTop: 10,
     marginBottom: 12,
   },
@@ -3027,34 +3067,50 @@ const styles = StyleSheet.create({
   },
   actionBtnsGroup: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
+  },
+  callBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  callBtnText: {
+    color: '#0f172a',
+    fontSize: 10.5,
+    fontWeight: '700',
   },
   whatsAppBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1e293b',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     borderRadius: 8,
     gap: 4,
   },
   whatsAppBtnText: {
     color: '#ffffff',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   exitBtn: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 8,
   },
   exitBtnText: {
     color: '#dc2626',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '700',
   },
   // Legacy aliases
