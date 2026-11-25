@@ -32,6 +32,7 @@ import { fastDataCache } from '../services/dataCache';
 import { safeStorage } from '../utils/safeStorage';
 import { pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { fetchCurrentPropertyLocation } from '../utils/locationHelper';
+import { emitDataChanged, onDataChanged } from '../utils/appEvents';
 import { isValidUuid } from '../services/propertyDataService';
 import { buildRentReminderMessage, getOwnerPayoutDetails } from '../services/upiPaymentService';
 import {
@@ -862,6 +863,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     loadData();
     loadEnquiries();
 
+    const unsubNative = onDataChanged(() => {
+      loadData(true);
+      getLoggedActivities().then(setLoggedActivities).catch(() => {});
+    });
+
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleSync = () => loadEnquiries();
       const handleActivitySync = () => {
@@ -873,12 +879,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       window.addEventListener('staynest_expense_added', () => loadData(true));
       window.addEventListener('storage', handleSync);
       return () => {
+        unsubNative();
         window.removeEventListener('staynest_new_enquiry', handleSync);
         window.removeEventListener('staynest_enquiry_updated', handleSync);
         window.removeEventListener('staynest_activity_added', handleActivitySync);
         window.removeEventListener('storage', handleSync);
       };
     }
+    return unsubNative;
   }, []);
 
   const loadData = async (silent = false) => {
@@ -2037,6 +2045,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           subtitle: `Room ${fullNewTenant.roomNumber || '101'} (${fullNewTenant.bedLabel || 'Bed 1'})`,
           amountRupees: rentPayingNow > 0 ? rentPayingNow : undefined,
         });
+        emitDataChanged();
       } catch {}
 
       const alertMsg = rentDue > 0

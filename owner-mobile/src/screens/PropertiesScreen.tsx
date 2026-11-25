@@ -23,6 +23,7 @@ import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imag
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 import { fetchCurrentPropertyLocation } from '../utils/locationHelper';
+import { emitDataChanged, onDataChanged } from '../utils/appEvents';
 import { logActivity } from '../services/activityLogService';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
@@ -779,6 +780,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       });
       setFloors(updatedFloors);
 
+      if (activeProperty?.id) {
+        await safeStorage.setItem(`@staynest_floors_${activeProperty.id}`, JSON.stringify(updatedFloors)).catch(() => {});
+      }
       if (typeof window !== 'undefined' && window.localStorage) {
         if (activeProperty?.id) {
           window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(updatedFloors));
@@ -786,8 +790,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (isAadhaarVerified) {
           window.localStorage.setItem(`staynest_kyc_${fullTenant.id}`, 'VERIFIED');
         }
-        window.dispatchEvent(new Event('staynest_expense_added'));
       }
+      emitDataChanged();
 
       const alertMsg = rentDue > 0
         ? `✓ ${assignTenantName} onboarded to ${assigningBed.bedLabel}! Received ₹${payingNow.toLocaleString('en-IN')}, Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
@@ -972,6 +976,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
   // Reload rooms & tenants immediately when a tenant is added/updated from Tenants or Dashboard
   useEffect(() => {
+    const unsubNative = onDataChanged(() => {
+      loadPropertiesAndRooms();
+    });
     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       const handleTenantSync = () => {
         loadPropertiesAndRooms();
@@ -980,11 +987,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       window.addEventListener('staynest_property_created', handleTenantSync);
       window.addEventListener('staynest_expense_added', handleTenantSync);
       return () => {
+        unsubNative();
         window.removeEventListener('staynest_tenant_updated', handleTenantSync);
         window.removeEventListener('staynest_property_created', handleTenantSync);
         window.removeEventListener('staynest_expense_added', handleTenantSync);
       };
     }
+    return unsubNative;
   }, [activeProperty?.id]);
 
   const defaultMultiPgs: Property[] = [

@@ -21,6 +21,7 @@ import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDa
 import { computeCollectionMetrics } from '../services/financeSummaryService';
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 import { logActivity } from '../services/activityLogService';
+import { emitDataChanged, onDataChanged } from '../utils/appEvents';
 import { buildRentReminderMessage, getOwnerPayoutDetails } from '../services/upiPaymentService';
 import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
 import Svg, { Path } from 'react-native-svg';
@@ -83,6 +84,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     }
     return 'prop-pg-1';
   });
+
+  useEffect(() => {
+    const unsub = onDataChanged(() => {
+      loadData();
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (selectedPropertyId) {
@@ -649,10 +657,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           amountRupees: payingNow > 0 ? payingNow : undefined,
         });
 
-        if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
-          window.dispatchEvent(new CustomEvent('staynest_tenant_updated', { detail: newTenantRecord }));
-          window.dispatchEvent(new CustomEvent('staynest_expense_added'));
-        }
+        emitDataChanged();
 
         if (isKycVerified) {
           await safeStorage.setItem(`staynest_kyc_${createdTenantId}`, 'VERIFIED');
