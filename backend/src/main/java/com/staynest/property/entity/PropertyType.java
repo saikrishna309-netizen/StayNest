@@ -2,6 +2,8 @@ package com.staynest.property.entity;
 
 public enum PropertyType {
     PG,
-    HOSTEL
+    HOSTEL,
+    CO_LIVING,
+    RENTAL_BUILDING
 }
 

@@ -20,6 +20,7 @@ import { safeStorage } from '../utils/safeStorage';
 import { Property, Room, Bed, Tenant } from '../types';
 import { pickImageFromDevice, pickMultipleImagesFromDevice } from '../utils/imagePicker';
 import { getInitialFloorsForProperty as getModularFloors } from '../services/propertyDataService';
+import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
@@ -562,13 +563,32 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     );
   };
 
-  // Assign resident to empty bed (+ Add Mark) with full onboarding
+  // Assign resident to empty bed (+ Add Mark) with full onboarding & Aadhaar KYC verification
   const handleAssignTenantToBed = async () => {
     if (!assigningBed) return;
     if (!assignTenantName.trim() || !assignTenantPhone.trim()) {
       Alert.alert('Required', 'Please enter resident name and phone');
       return;
     }
+
+    // Validate Aadhaar number using official Verhoeff checksum if provided
+    const trimmedId = assignIdProofNumber.trim();
+    let isAadhaarVerified = false;
+    let normalizedIdProof = trimmedId;
+
+    if (assignIdProofType === 'AADHAAR' && trimmedId.length > 0) {
+      const cleanAadhaar = trimmedId.replace(/\D/g, '');
+      if (!validateVerhoeffAadhaar(cleanAadhaar)) {
+        Alert.alert(
+          'Invalid Aadhaar Number',
+          'Please enter a valid 12-digit Aadhaar number (Verhoeff checksum failed), or leave it blank to verify later.'
+        );
+        return;
+      }
+      isAadhaarVerified = true;
+      normalizedIdProof = cleanAadhaar;
+    }
+
     setSubmittingAssign(true);
     try {
       const fixedRent = Number(assignRentAmount || assigningBed.rentRupees || 8500);
@@ -587,7 +607,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             phone: assignTenantPhone.trim(),
             email: assignTenantEmail.trim() || undefined,
             idProofType: assignIdProofType,
-            idProofNumber: assignIdProofNumber.trim() || 'NOT_PROVIDED',
+            idProofNumber: normalizedIdProof || 'NOT_PROVIDED',
           }),
         });
 
@@ -654,7 +674,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           phone: assignTenantPhone.trim(),
           email: assignTenantEmail.trim() || undefined,
           idProofType: assignIdProofType,
-          idProofNumber: assignIdProofNumber.trim() || '--',
+          idProofNumber: normalizedIdProof || '--',
+          aadhaarVerified: isAadhaarVerified,
+          kycStatus: isAadhaarVerified ? 'VERIFIED' : 'PENDING',
           propertyId: activeProperty?.id,
           propertyName: activeProperty?.name || 'StayNest PG',
           roomId: assigningBed.roomId,
@@ -673,6 +695,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         ...newTenant,
         fullName: assignTenantName.trim(),
         phone: assignTenantPhone.trim(),
+        idProofType: assignIdProofType,
+        idProofNumber: normalizedIdProof || '--',
+        aadhaarVerified: isAadhaarVerified,
+        kycStatus: isAadhaarVerified ? 'VERIFIED' : 'PENDING',
         propertyId: activeProperty?.id,
         propertyName: activeProperty?.name || 'StayNest PG',
         roomId: assigningBed.roomId,
@@ -687,6 +713,17 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       };
 
       setTenants((prev) => [...prev.filter((t) => t.bedId !== assigningBed.bedId && t.id !== fullTenant.id), fullTenant]);
+
+      // Persist tenant & Aadhaar KYC status across Dashboard and Tenants screens
+      try {
+        const existingCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
+        const existingCustom: Tenant[] = existingCustomStr ? JSON.parse(existingCustomStr) : [];
+        const nextCustom = [
+          fullTenant,
+          ...existingCustom.filter((c) => c.id !== fullTenant.id && c.phone !== fullTenant.phone),
+        ];
+        await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(nextCustom));
+      } catch {}
 
       const updatedFloors = floors.map((f) => {
         if (f.floorNumber !== assigningBed.floorNum) return f;
@@ -703,8 +740,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       });
       setFloors(updatedFloors);
 
-      if (typeof window !== 'undefined' && window.localStorage && activeProperty?.id) {
-        window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(updatedFloors));
+      if (typeof window !== 'undefined' && window.localStorage) {
+        if (activeProperty?.id) {
+          window.localStorage.setItem(`staynest_floors_${activeProperty.id}`, JSON.stringify(updatedFloors));
+        }
+        if (isAadhaarVerified) {
+          window.localStorage.setItem(`staynest_kyc_${fullTenant.id}`, 'VERIFIED');
+        }
+        window.dispatchEvent(new Event('staynest_expense_added'));
       }
 
       const alertMsg = rentDue > 0
@@ -2148,48 +2191,301 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                       </View>
                     </View>
 
-                    {/* Unified Room / Flat Cards (No Individual Bed Boxes) */}
-                    <View style={{ gap: 12 }}>
+                    {/* Room Cards: Classic Bed-Grid for PG / Hostel vs Unified Flat Card for Rental Building */}
+                    <View style={{ gap: isRentalMode ? 12 : 16 }}>
                       {floor.rooms.map((room) => {
-                        const roomPhotos = room.photos || [];
-                        const totalBedsInRoom = isRentalMode ? 1 : Math.max(1, room.beds.length);
+                        if (!isRentalMode) {
+                          const roomSharingLabel = formatSharingBadge(room.beds.length);
 
-                        // Collect active occupants for this room
+                          return (
+                            <View key={room.id} style={styles.roomWiseCard}>
+                              {/* Room Top Bar */}
+                              <View style={styles.roomWiseTopBar}>
+                                <View style={styles.roomWiseLeftInfo}>
+                                  <View style={styles.roomWiseNumBadge}>
+                                    <Text style={styles.roomWiseNumText}>
+                                      Room {room.roomNumber}
+                                    </Text>
+                                  </View>
+
+                                  <View style={styles.roomWiseTypeBadge}>
+                                    <Text style={styles.roomWiseTypeText}>
+                                      {roomSharingLabel}
+                                    </Text>
+                                  </View>
+
+                                  <View style={styles.roomWiseRentBadge}>
+                                    <Text style={styles.roomWiseRentText}>
+                                      ₹{room.rentRupees.toLocaleString('en-IN')}/mo
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                {/* Room Action Buttons: 🛏️ Add/Edit Beds & ⚙️ Edit Room */}
+                                <View style={styles.roomWiseActionButtons}>
+                                  <TouchableOpacity
+                                    style={styles.roomWiseAddBedBtn}
+                                    onPress={() => setManagingBedsRoom({ floorNum: floor.floorNumber, roomId: room.id })}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.roomWiseAddBedBtnText}>🛏️ Add/Edit Beds</Text>
+                                  </TouchableOpacity>
+
+                                  <TouchableOpacity
+                                    style={styles.roomWiseSettingsBtn}
+                                    onPress={() => setEditingRoomDetails({ floorNum: floor.floorNumber, room })}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.roomWiseSettingsBtnText}>⚙️ Edit Room</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+
+                              {/* Beds Grid inside Room (Sequential Unique Numbers 1, 2, 3...) */}
+                              <View style={styles.roomBedsGridRow}>
+                                {room.beds.map((bed, bedIdx) => {
+                                  const bedNumStr = String(bedIdx + 1);
+                                  const occupant =
+                                    bedOccupantMap.get(bed.id) ||
+                                    bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`) ||
+                                    bedOccupantMap.get(`${room.roomNumber}-Bed ${bedNumStr}`) ||
+                                    bedOccupantMap.get(`${room.roomNumber}-${bedNumStr}`);
+                                  const isOccupied = !!occupant;
+
+                                  if (isOccupied && occupant) {
+                                    const tenantName = occupant.fullName;
+                                    const styleIdx = bedIdx % BED_STYLES.length;
+                                    const styleObj = BED_STYLES[styleIdx];
+
+                                    return (
+                                      <TouchableOpacity
+                                        key={bed.id}
+                                        style={[
+                                          styles.bedBoxCard,
+                                          bed.photo
+                                            ? styles.bedBoxWithPhoto
+                                            : { backgroundColor: styleObj.bg, borderColor: styleObj.border },
+                                        ]}
+                                        onPress={() =>
+                                          setOccupiedBedAction({
+                                            floorNum: floor.floorNumber,
+                                            roomId: room.id,
+                                            roomNumber: room.roomNumber,
+                                            bed,
+                                            tenantName,
+                                            tenantPhone: occupant?.phone || '9876543210',
+                                            tenantId: occupant?.id,
+                                          })
+                                        }
+                                        activeOpacity={0.8}
+                                      >
+                                        {bed.photo ? (
+                                          <>
+                                            <Image
+                                              source={{ uri: bed.photo }}
+                                              style={styles.bedBoxImageCover}
+                                              resizeMode="cover"
+                                            />
+                                            <View style={styles.bedNumberHighlightBadge}>
+                                              <Text style={styles.bedNumberHighlightText}>{bedNumStr}</Text>
+                                            </View>
+                                            <View style={styles.bedActionBadgeRow}>
+                                              <TouchableOpacity
+                                                style={styles.bedPhotoEditBtn}
+                                                onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                                activeOpacity={0.8}
+                                              >
+                                                <Text style={{ fontSize: 9 }}>✏️</Text>
+                                              </TouchableOpacity>
+                                              <TouchableOpacity
+                                                style={styles.bedPhotoDeleteBtn}
+                                                onPress={() => handleDeleteBedPhoto(floor.floorNumber, room.id, bed.id, `Bed ${bedNumStr}`)}
+                                                activeOpacity={0.8}
+                                              >
+                                                <Text style={{ fontSize: 9, color: '#ffffff', fontWeight: '900' }}>✕</Text>
+                                              </TouchableOpacity>
+                                            </View>
+                                            <View style={styles.bedTenantHighlightBar}>
+                                              <Text style={styles.bedTenantHighlightText} numberOfLines={1}>
+                                                {tenantName}
+                                              </Text>
+                                            </View>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <TouchableOpacity
+                                              style={styles.bedInlineAddPhotoBtn}
+                                              onPress={(e: any) => {
+                                                e?.stopPropagation?.();
+                                                handleUploadBedPhoto(floor.floorNumber, room.id, bed.id);
+                                              }}
+                                              activeOpacity={0.8}
+                                            >
+                                              <CameraMicroIcon color="#94a3b8" size={11} />
+                                            </TouchableOpacity>
+                                            <BedVectorIcon color="#64748b" size={24} />
+                                            <Text style={[styles.bedBoxNumber, { color: styleObj.numColor }]}>
+                                              {bedNumStr}
+                                            </Text>
+                                            <Text style={[styles.bedBoxTenantName, { color: styleObj.textColor }]} numberOfLines={1}>
+                                              {tenantName}
+                                            </Text>
+                                          </>
+                                        )}
+                                      </TouchableOpacity>
+                                    );
+                                  } else {
+                                    return (
+                                      <TouchableOpacity
+                                        key={bed.id}
+                                        style={[
+                                          styles.bedBoxVacantCard,
+                                          bed.photo && styles.bedBoxWithPhoto,
+                                        ]}
+                                        onPress={() =>
+                                          openAssignModalForBed({
+                                            floorNum: floor.floorNumber,
+                                            roomId: room.id,
+                                            roomNumber: room.roomNumber,
+                                            bedId: bed.id,
+                                            bedLabel: `Bed ${bedNumStr}`,
+                                            rentRupees: room.rentRupees,
+                                          })
+                                        }
+                                        activeOpacity={0.8}
+                                      >
+                                        {bed.photo ? (
+                                          <>
+                                            <Image
+                                              source={{ uri: bed.photo }}
+                                              style={styles.bedBoxImageCover}
+                                              resizeMode="cover"
+                                            />
+                                            <View style={[styles.bedNumberHighlightBadge, { backgroundColor: '#3b82f6' }]}>
+                                              <Text style={styles.bedNumberHighlightText}>{bedNumStr}</Text>
+                                            </View>
+                                            <View style={styles.bedActionBadgeRow}>
+                                              <TouchableOpacity
+                                                style={styles.bedPhotoEditBtn}
+                                                onPress={() => handleUploadBedPhoto(floor.floorNumber, room.id, bed.id)}
+                                                activeOpacity={0.8}
+                                              >
+                                                <Text style={{ fontSize: 9 }}>✏️</Text>
+                                              </TouchableOpacity>
+                                              <TouchableOpacity
+                                                style={styles.bedPhotoDeleteBtn}
+                                                onPress={() => handleDeleteBedPhoto(floor.floorNumber, room.id, bed.id, `Bed ${bedNumStr}`)}
+                                                activeOpacity={0.8}
+                                              >
+                                                <Text style={{ fontSize: 9, color: '#ffffff', fontWeight: '900' }}>✕</Text>
+                                              </TouchableOpacity>
+                                            </View>
+                                            <View style={[styles.bedTenantHighlightBar, { backgroundColor: 'rgba(234, 88, 12, 0.95)' }]}>
+                                              <Text style={styles.bedTenantHighlightText}>+ Add</Text>
+                                            </View>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <TouchableOpacity
+                                              style={styles.bedInlineAddPhotoBtn}
+                                              onPress={(e: any) => {
+                                                e?.stopPropagation?.();
+                                                handleUploadBedPhoto(floor.floorNumber, room.id, bed.id);
+                                              }}
+                                              activeOpacity={0.8}
+                                            >
+                                              <CameraMicroIcon color="#94a3b8" size={11} />
+                                            </TouchableOpacity>
+                                            <BedVectorIcon color="#94a3b8" size={24} />
+                                            <Text style={styles.bedBoxVacantNumber}>{bedNumStr}</Text>
+                                            <Text style={styles.bedBoxAddText}>+ Add</Text>
+                                          </>
+                                        )}
+                                      </TouchableOpacity>
+                                    );
+                                  }
+                                })}
+
+                                {/* Inline + Add Bed Option */}
+                                <TouchableOpacity
+                                  style={styles.inlineAddBedCard}
+                                  onPress={() => handleIncreaseBeds(floor.floorNumber, room.id)}
+                                  activeOpacity={0.8}
+                                >
+                                  <Text style={styles.inlineAddBedPlus}>+</Text>
+                                  <Text style={styles.inlineAddBedText}>Add Bed</Text>
+                                </TouchableOpacity>
+                              </View>
+
+                              {/* Room Photos Gallery */}
+                              <View style={styles.roomPhotosSection}>
+                                <View style={styles.roomPhotosHeaderRow}>
+                                  <Text style={styles.roomPhotosTitle}>
+                                    📷 Room Photos ({room.photos?.length || 0})
+                                  </Text>
+                                  <TouchableOpacity
+                                    style={styles.addRoomPhotoBtn}
+                                    onPress={() => setTargetPhotoRoom({ floorNum: floor.floorNumber, room })}
+                                    activeOpacity={0.8}
+                                  >
+                                    <Text style={styles.addRoomPhotoBtnText}>+ Add Photo</Text>
+                                  </TouchableOpacity>
+                                </View>
+
+                                {room.photos && room.photos.length > 0 ? (
+                                  <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.roomPhotosScroll}
+                                  >
+                                    {room.photos.map((photoUri, pIdx) => (
+                                      <View key={`photo-${room.id}-${pIdx}`} style={styles.roomPhotoThumbWrapper}>
+                                        <Image
+                                          source={{ uri: photoUri }}
+                                          style={styles.roomPhotoThumb}
+                                          resizeMode="cover"
+                                        />
+                                        <TouchableOpacity
+                                          style={styles.deletePhotoBadge}
+                                          onPress={() => handleDeleteRoomPhoto(floor.floorNumber, room.id, pIdx)}
+                                          activeOpacity={0.8}
+                                        >
+                                          <Text style={styles.deletePhotoBadgeText}>✕</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                    ))}
+                                  </ScrollView>
+                                ) : (
+                                  <Text style={styles.noRoomPhotosText}>
+                                    No room photos yet. Tap "+ Add Photo" to upload from device.
+                                  </Text>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        }
+
+                        const roomPhotos = room.photos || [];
+                        const totalBedsInRoom = 1;
+
+                        // Collect active occupants for this rental unit/flat
                         const roomOccupants: Tenant[] = [];
                         let firstVacantBed: BedConfig | null = null;
 
-                        if (isRentalMode) {
-                          const occ =
-                            bedOccupantMap.get(room.id) ||
-                            tenants.find(
-                              (t) =>
-                                t.active !== false &&
-                                t.stayStatus !== 'TERMINATED' &&
-                                t.roomNumber === room.roomNumber
-                            );
-                          if (occ) roomOccupants.push(occ);
-                        } else {
-                          room.beds.forEach((bed, bIdx) => {
-                            const bNum = String(bIdx + 1);
-                            const occ =
-                              bedOccupantMap.get(bed.id) ||
-                              bedOccupantMap.get(`${room.roomNumber}-${bed.bedLabel}`) ||
-                              bedOccupantMap.get(`${room.roomNumber}-Bed ${bNum}`) ||
-                              bedOccupantMap.get(`${room.roomNumber}-${bNum}`);
-                            if (occ) {
-                              roomOccupants.push(occ);
-                            } else if (!firstVacantBed) {
-                              firstVacantBed = bed;
-                            }
-                          });
-                        }
+                        const occ =
+                          bedOccupantMap.get(room.id) ||
+                          tenants.find(
+                            (t) =>
+                              t.active !== false &&
+                              t.stayStatus !== 'TERMINATED' &&
+                              t.roomNumber === room.roomNumber
+                          );
+                        if (occ) roomOccupants.push(occ);
 
                         const occupiedCount = roomOccupants.length;
                         const freeBeds = Math.max(0, totalBedsInRoom - occupiedCount);
                         const isFull = freeBeds === 0;
-                        const configLabel = isRentalMode
-                          ? room.sharingType || '1BHK'
-                          : `${totalBedsInRoom}-Share`;
+                        const configLabel = room.sharingType || '1BHK';
                         const maintAmount = room.maintenanceRupees || 0;
 
                         return (
@@ -3141,9 +3437,43 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 style={styles.modalTextInput}
                 value={assignIdProofNumber}
                 onChangeText={setAssignIdProofNumber}
-                placeholder="e.g. 5432-8765-1098"
+                placeholder={assignIdProofType === 'AADHAAR' ? '12-digit Aadhaar (e.g. 5432 8765 1098)' : 'Enter ID Number'}
                 placeholderTextColor="#94a3b8"
+                keyboardType={assignIdProofType === 'AADHAAR' ? 'numeric' : 'default'}
+                maxLength={assignIdProofType === 'AADHAAR' ? 14 : 20}
               />
+              {assignIdProofType === 'AADHAAR' && assignIdProofNumber.trim().length > 0 && (() => {
+                const digits = assignIdProofNumber.replace(/\D/g, '');
+                const isValid = validateVerhoeffAadhaar(digits);
+                return (
+                  <View
+                    style={{
+                      backgroundColor: isValid ? '#ecfdf5' : '#fef2f2',
+                      borderWidth: 1,
+                      borderColor: isValid ? '#a7f3d0' : '#fecaca',
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      marginTop: 4,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '700',
+                        color: isValid ? '#059669' : '#dc2626',
+                      }}
+                    >
+                      {isValid
+                        ? '✓ Valid 12-Digit Aadhaar (KYC Verified)'
+                        : digits.length < 12
+                          ? `Enter ${12 - digits.length} more digits (${digits.length}/12)`
+                          : '⚠️ Invalid Aadhaar Number (Checksum failed)'}
+                    </Text>
+                  </View>
+                );
+              })()}
 
               {/* Fixed Monthly Rent & Security Deposit Banner */}
               <View style={styles.assignRentBanner}>
