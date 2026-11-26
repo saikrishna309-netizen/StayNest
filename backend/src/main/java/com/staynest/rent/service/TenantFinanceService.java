@@ -114,7 +114,7 @@ public class TenantFinanceService {
             if (activeStay.getBedId() != null) {
                 bedRepository.findById(activeStay.getBedId()).ifPresent(b -> res.setBedLabel(b.getBedLabel()));
             }
-        } else {
+        } else if (!stays.isEmpty()) {
             // Vacated / Exited resident: explicitly clear bed and room
             res.setActive(false);
             res.setStayStatus("TERMINATED");
@@ -126,15 +126,17 @@ public class TenantFinanceService {
             res.setSharingType(null);
             res.setMonthlyRentPaise(null);
 
-            if (!stays.isEmpty()) {
-                TenantStay lastStay = stays.get(stays.size() - 1);
-                res.setCheckIn(lastStay.getCheckIn());
-                res.setCheckOut(lastStay.getCheckOut());
-                if (lastStay.getPropertyId() != null) {
-                    propertyRepository.findById(lastStay.getPropertyId())
-                            .ifPresent(p -> res.setPropertyName(p.getName() + " (Past)"));
-                }
+            TenantStay lastStay = stays.get(stays.size() - 1);
+            res.setCheckIn(lastStay.getCheckIn());
+            res.setCheckOut(lastStay.getCheckOut());
+            if (lastStay.getPropertyId() != null) {
+                propertyRepository.findById(lastStay.getPropertyId())
+                        .ifPresent(p -> res.setPropertyName(p.getName() + " (Past)"));
             }
+        } else {
+            // Newly onboarded tenant with no stay row yet: respect tenant.active from DB
+            res.setActive(tenant.isActive());
+            res.setStayStatus(tenant.isActive() ? "ACTIVE" : "TERMINATED");
         }
 
         // Rent payment status
