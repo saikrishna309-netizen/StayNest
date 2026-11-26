@@ -137,7 +137,7 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
         apiClient<{ content: RentInvoice[] }>('/owner/rent-invoices').catch(() => ({ content: [] })),
         apiClient<{ content: Expense[] }>('/owner/expenses').catch(() => ({ content: [] })),
         apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
-        apiClient<{ content: Tenant[] }>('/owner/tenants').catch(() => ({ content: [] })),
+        apiClient<{ content: Tenant[] }>('/owner/tenants?size=100').catch(() => ({ content: [] })),
       ]);
 
       let customTenantsList: Tenant[] = [];

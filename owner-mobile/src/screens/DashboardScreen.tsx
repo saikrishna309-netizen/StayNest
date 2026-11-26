@@ -2713,10 +2713,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
         {/* ─── 2.5 KYC VERIFICATION CARD / CAROUSEL ─── */}
         {(() => {
-          const displayKycTenants = pendingKycTenants.length > 0 ? pendingKycTenants : [
-            { id: 'mock-1', fullName: 'Kiran', roomNumber: '101', phone: '9876543214' } as any,
-            { id: 'mock-2', fullName: 'Suresh', roomNumber: '102', phone: '9876543215' } as any,
-          ];
+          if (pendingKycTenants.length === 0) {
+            return null;
+          }
+          const displayKycTenants = pendingKycTenants;
           const currentKycTenant = displayKycTenants[kycCarouselIndex % displayKycTenants.length];
 
           return (

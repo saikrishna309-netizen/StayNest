@@ -101,10 +101,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'DUE' | 'ACTIVE' | 'VACATED'>('ALL');
   const [propertyFilter, setPropertyFilter] = useState<string>(() => {
     if (selectedPropertyId) return selectedPropertyId;
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return window.localStorage.getItem('staynest_active_property_id') || 'prop-pg-1';
-    }
-    return 'prop-pg-1';
+    return 'ALL';
   });
 
   useEffect(() => {
@@ -278,8 +275,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     setLoading(true);
     try {
       const [tRes, pRes, billsList, loadedSub, usedCount] = await Promise.all([
-        apiClient<{ content: Tenant[] }>('/owner/tenants').catch(() => ({ content: [] })),
-        apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] })),
+        apiClient<{ content: Tenant[] }>('/owner/tenants?size=100').catch(() => ({ content: [] })),
+        apiClient<{ content: Property[] }>('/owner/properties?size=100').catch(() => ({ content: [] })),
         getAllMonthlyBills(),
         getSubscriptionState(),
         getMonthlyReminderCount(selectedMonth),
@@ -486,8 +483,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone) {
       nextErrors.phone = '10-digit phone number is required';
-    } else if (cleanPhone.length < 10) {
-      nextErrors.phone = 'Enter a valid 10-digit mobile number';
+    } else if (cleanPhone.length !== 10) {
+      nextErrors.phone = 'Phone number must be exactly 10 digits';
     }
 
     const cleanId = idProofNumber.replace(/\s+/g, '');
@@ -525,6 +522,23 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           animated: true,
         });
       }
+      return;
+    }
+
+    const payingRentCheck = Number(rentPayingNow || 0);
+    if (fixedRentAmount > 0 && payingRentCheck > fixedRentAmount) {
+      Alert.alert(
+        'Invalid Rent Amount',
+        `Rent Amount Paying Now (₹${payingRentCheck.toLocaleString('en-IN')}) cannot exceed the locked Monthly Rent (₹${fixedRentAmount.toLocaleString('en-IN')}).`
+      );
+      return;
+    }
+    const payingDepositCheck = Number(depositPayingNow || 0);
+    if (fixedDepositAmount > 0 && payingDepositCheck > fixedDepositAmount) {
+      Alert.alert(
+        'Invalid Deposit Amount',
+        `Security Deposit Paying Now (₹${payingDepositCheck.toLocaleString('en-IN')}) cannot exceed the locked Security Deposit (₹${fixedDepositAmount.toLocaleString('en-IN')}).`
+      );
       return;
     }
 
@@ -1426,6 +1440,8 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           style={styles.separatePageContent}
           contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
           showsVerticalScrollIndicator={false}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
         >
           {/* 1. Property Selector */}
           {properties.length > 1 && (
@@ -1501,7 +1517,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               ]}
               value={phone}
               onChangeText={(val) => {
-                setPhone(val);
+                const digitsOnly = val.replace(/\D/g, '');
+                if (digitsOnly.length > 10) {
+                  setPhone(digitsOnly.slice(0, 10));
+                  setFormErrors((prev) => ({ ...prev, phone: 'Maximum 10 digits allowed' }));
+                  return;
+                }
+                setPhone(digitsOnly);
                 if (formErrors.phone) setFormErrors((prev) => ({ ...prev, phone: undefined }));
               }}
               keyboardType="phone-pad"
@@ -1710,9 +1732,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             <View style={styles.currencyInputRow}>
               <Text style={styles.currencyInrLight}>₹</Text>
               <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 10, marginBottom: 0, backgroundColor: 'transparent', letterSpacing: 0 }]}
                 value={rentPayingNow}
-                onChangeText={setRentPayingNow}
+                onChangeText={(v) => setRentPayingNow(v.replace(/\D/g, ''))}
                 keyboardType="numeric"
                 placeholder={String(fixedRentAmount)}
                 placeholderTextColor="#94a3b8"
@@ -1724,6 +1746,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           {(() => {
             const paying = Number(rentPayingNow || 0);
             const due = Math.max(0, fixedRentAmount - paying);
+            if (fixedRentAmount > 0 && paying > fixedRentAmount) {
+              return (
+                <View style={[styles.rentDueAlertBox, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
+                  <Text style={[styles.rentDueAlertTitle, { color: '#dc2626' }]}>
+                    ⚠️ AMOUNT EXCEEDS LOCKED RENT (₹{fixedRentAmount.toLocaleString('en-IN')})
+                  </Text>
+                  <Text style={[styles.rentDueAlertSub, { color: '#b91c1c' }]}>
+                    Entered ₹{paying.toLocaleString('en-IN')} is more than the locked rent. Please enter ₹{fixedRentAmount.toLocaleString('en-IN')} or less.
+                  </Text>
+                </View>
+              );
+            }
             if (due > 0) {
               return (
                 <View style={styles.rentDueAlertBox}>
@@ -1735,7 +1769,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                   </Text>
                 </View>
               );
-            } else if (paying >= fixedRentAmount && fixedRentAmount > 0) {
+            } else if (paying === fixedRentAmount && fixedRentAmount > 0) {
               return (
                 <View style={styles.rentPaidAlertBox}>
                   <Text style={styles.rentPaidAlertTitle}>
@@ -1756,9 +1790,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             <View style={styles.currencyInputRow}>
               <Text style={styles.currencyInrLight}>₹</Text>
               <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, backgroundColor: 'transparent' }]}
+                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 10, marginBottom: 0, backgroundColor: 'transparent', letterSpacing: 0 }]}
                 value={depositPayingNow}
-                onChangeText={setDepositPayingNow}
+                onChangeText={(v) => setDepositPayingNow(v.replace(/\D/g, ''))}
                 keyboardType="numeric"
                 placeholder={String(fixedDepositAmount)}
                 placeholderTextColor="#94a3b8"
@@ -1899,12 +1933,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.backBtn} onPress={onBack}>
-          <Text style={styles.backBtnText}>← Dashboard</Text>
+        <TouchableOpacity style={[styles.backBtn, { flexShrink: 0 }]} onPress={onBack}>
+          <Text style={styles.backBtnText}>← Home</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Tenant Management</Text>
+        <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', marginHorizontal: 8 }]} numberOfLines={1}>
+          Tenant Management
+        </Text>
         <TouchableOpacity
-          style={styles.addBtn}
+          style={[styles.addBtn, { flexShrink: 0 }]}
           onPress={() => setShowForm(true)}
         >
           <Text style={styles.addBtnText}>+ Onboard</Text>

@@ -185,15 +185,20 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     bedId: string;
     bedLabel: string;
     rentRupees: number;
+    depositRupees?: number;
   } | null>(null);
   const [assignTenantName, setAssignTenantName] = useState('');
   const [assignTenantPhone, setAssignTenantPhone] = useState('');
+  const [assignPhoneError, setAssignPhoneError] = useState('');
   const [assignTenantEmail, setAssignTenantEmail] = useState('');
-  const [assignIdProofType, setAssignIdProofType] = useState<'AADHAAR' | 'PAN' | 'VOTER_ID'>('AADHAAR');
+  const [assignIdProofType, setAssignIdProofType] = useState<'AADHAAR' | 'PAN'>('AADHAAR');
   const [assignIdProofNumber, setAssignIdProofNumber] = useState('');
   const [assignRentAmount, setAssignRentAmount] = useState('');
+  const [assignLockedDeposit, setAssignLockedDeposit] = useState('');
   const [assignRentPayingNow, setAssignRentPayingNow] = useState('');
   const [assignDepositPayingNow, setAssignDepositPayingNow] = useState('');
+  const [assignStartingMeter, setAssignStartingMeter] = useState('0');
+  const [assignDateOfJoining, setAssignDateOfJoining] = useState(new Date().toISOString().split('T')[0]);
   const [assignPayMode, setAssignPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [submittingAssign, setSubmittingAssign] = useState(false);
 
@@ -204,16 +209,27 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     bedId: string;
     bedLabel: string;
     rentRupees: number;
+    depositRupees?: number;
   }) => {
-    setAssigningBed(bedData);
+    const matchedRoom = floors
+      .flatMap((f) => f.rooms)
+      .find((r) => r.id === bedData.roomId);
+    const resolvedRent = Number(bedData.rentRupees || matchedRoom?.rentRupees || 8500);
+    const resolvedDeposit = Number(bedData.depositRupees ?? matchedRoom?.depositRupees ?? resolvedRent);
+
+    setAssigningBed({ ...bedData, rentRupees: resolvedRent, depositRupees: resolvedDeposit });
     setAssignTenantName('');
     setAssignTenantPhone('');
+    setAssignPhoneError('');
     setAssignTenantEmail('');
     setAssignIdProofType('AADHAAR');
     setAssignIdProofNumber('');
-    setAssignRentAmount('');
-    setAssignRentPayingNow('');
-    setAssignDepositPayingNow('');
+    setAssignRentAmount(String(resolvedRent));
+    setAssignLockedDeposit(String(resolvedDeposit));
+    setAssignRentPayingNow(String(resolvedRent));
+    setAssignDepositPayingNow(String(resolvedDeposit));
+    setAssignStartingMeter('0');
+    setAssignDateOfJoining(new Date().toISOString().split('T')[0]);
     setAssignPayMode('UPI');
   };
 
@@ -589,8 +605,33 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   // Assign resident to empty bed (+ Add Mark) with full onboarding & Aadhaar KYC verification
   const handleAssignTenantToBed = async () => {
     if (!assigningBed) return;
-    if (!assignTenantName.trim() || !assignTenantPhone.trim()) {
-      Alert.alert('Required', 'Please enter resident name and phone');
+    const cleanPhone = assignTenantPhone.replace(/\D/g, '');
+    if (!assignTenantName.trim()) {
+      Alert.alert('Required', 'Please enter resident full name.');
+      return;
+    }
+    if (cleanPhone.length !== 10) {
+      Alert.alert('Invalid Phone Number', 'Phone number must be exactly 10 digits.');
+      return;
+    }
+
+    const fixedRent = Number(assignRentAmount || assigningBed.rentRupees || 8500);
+    const fixedDeposit = Number(assignLockedDeposit || assigningBed.depositRupees || fixedRent);
+    const payingNow = Number(assignRentPayingNow || 0);
+    const depositPaying = Number(assignDepositPayingNow || 0);
+
+    if (fixedRent > 0 && payingNow > fixedRent) {
+      Alert.alert(
+        'Invalid Rent Amount',
+        `Rent Amount Paying Now (₹${payingNow.toLocaleString('en-IN')}) cannot be more than the locked Monthly Rent (₹${fixedRent.toLocaleString('en-IN')}).`
+      );
+      return;
+    }
+    if (fixedDeposit > 0 && depositPaying > fixedDeposit) {
+      Alert.alert(
+        'Invalid Deposit Amount',
+        `Security Deposit Paying Now (₹${depositPaying.toLocaleString('en-IN')}) cannot be more than the locked Security Deposit (₹${fixedDeposit.toLocaleString('en-IN')}).`
+      );
       return;
     }
 
@@ -624,11 +665,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
     setSubmittingAssign(true);
     try {
-      const fixedRent = Number(assignRentAmount || assigningBed.rentRupees || 8500);
-      const payingNow = Number(assignRentPayingNow || 0);
       const rentDue = Math.max(0, fixedRent - payingNow);
-      const depositPaying = Number(assignDepositPayingNow || 2500);
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = assignDateOfJoining.trim() || new Date().toISOString().split('T')[0];
       const currentMonth = new Date().toISOString().slice(0, 7);
 
       let newTenant: Tenant;
@@ -1247,7 +1285,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
       let loadedTenants: Tenant[] = [];
       try {
-        const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
+        const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants?size=100');
         loadedTenants = tenantRes.content || [];
       } catch { }
 
@@ -1376,7 +1414,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     try {
       let loadedTenants: Tenant[] = [];
       try {
-        const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
+        const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants?size=100');
         loadedTenants = tenantRes.content || [];
       } catch {
         // ignore
@@ -3445,48 +3483,63 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 460 }}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={{ maxHeight: 460 }}
+              keyboardDismissMode="on-drag"
+              keyboardShouldPersistTaps="handled"
+            >
               <Text style={styles.modalInputLabel}>Resident Full Name *</Text>
               <TextInput
                 style={styles.modalTextInput}
                 value={assignTenantName}
                 onChangeText={setAssignTenantName}
                 placeholder="e.g. Harsha Vardhan"
-                placeholderTextColor="#334155"
+                placeholderTextColor="#94a3b8"
               />
 
-              <Text style={styles.modalInputLabel}>Phone Number *</Text>
+              <Text style={styles.modalInputLabel}>Phone Number (10 Digits) *</Text>
               <TextInput
-                style={styles.modalTextInput}
+                style={[
+                  styles.modalTextInput,
+                  assignPhoneError ? { borderColor: '#dc2626', backgroundColor: '#fef2f2' } : null,
+                ]}
                 value={assignTenantPhone}
-                onChangeText={setAssignTenantPhone}
+                onChangeText={(val) => {
+                  const digitsOnly = val.replace(/\D/g, '');
+                  if (digitsOnly.length > 10) {
+                    setAssignTenantPhone(digitsOnly.slice(0, 10));
+                    setAssignPhoneError('Maximum 10 digits allowed');
+                    return;
+                  }
+                  setAssignTenantPhone(digitsOnly);
+                  if (assignPhoneError) setAssignPhoneError('');
+                }}
                 keyboardType="phone-pad"
+                maxLength={10}
                 placeholder="e.g. 9876543210"
                 placeholderTextColor="#94a3b8"
               />
+              {assignPhoneError ? (
+                <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: -6, marginBottom: 8 }}>
+                  ⚠️ {assignPhoneError}
+                </Text>
+              ) : null}
 
-              <Text style={styles.modalInputLabel}>Email Address (Optional)</Text>
-              <TextInput
-                style={styles.modalTextInput}
-                value={assignTenantEmail}
-                onChangeText={setAssignTenantEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                placeholder="resident@gmail.com"
-                placeholderTextColor="#94a3b8"
-              />
-
-              {/* ID Proof Selection */}
-              <Text style={styles.modalInputLabel}>Government ID Proof</Text>
+              {/* ID Proof Selection (Unified with Tenants Screen: Aadhaar & PAN) */}
+              <Text style={styles.modalInputLabel}>Government ID Proof *</Text>
               <View style={styles.assignProofRow}>
-                {(['AADHAAR', 'PAN', 'VOTER_ID'] as const).map((type) => (
+                {(['AADHAAR', 'PAN'] as const).map((type) => (
                   <TouchableOpacity
                     key={type}
                     style={[
                       styles.assignProofBtn,
                       assignIdProofType === type && styles.assignProofBtnActive,
                     ]}
-                    onPress={() => setAssignIdProofType(type)}
+                    onPress={() => {
+                      setAssignIdProofType(type);
+                      setAssignIdProofNumber('');
+                    }}
                   >
                     <Text
                       style={[
@@ -3494,7 +3547,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                         assignIdProofType === type && styles.assignProofBtnTextActive,
                       ]}
                     >
-                      {type === 'AADHAAR' ? 'Aadhaar' : type === 'PAN' ? 'PAN Card' : 'Voter ID'}
+                      {type === 'AADHAAR' ? '🪪 Aadhaar (12 Digits)' : '💳 PAN Card (10 Chars)'}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -3555,45 +3608,31 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 );
               })()}
 
-              {/* Fixed Monthly Rent & Security Deposit Banner */}
-              <View style={styles.assignRentBanner}>
-                <View style={styles.assignRentBannerCol}>
-                  <Text style={styles.assignRentBannerLabel}>MONTHLY RENT</Text>
-                  <Text style={styles.assignRentBannerVal}>₹{Number(assignRentAmount || assigningBed?.rentRupees || 8500).toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={[styles.assignRentBannerCol, { borderLeftWidth: 1, borderLeftColor: '#f1f5f9' }]}>
-                  <Text style={styles.assignRentBannerLabel}>SECURITY DEPOSIT</Text>
-                  <Text style={styles.assignRentBannerVal}>₹{Number(assignDepositPayingNow || 2500).toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>🔒 Monthly Rent (Locked)</Text>
-                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', paddingVertical: 11 }]}>
-                    <Text style={styles.currencyPrefixLight}>INR</Text>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>
-                      {Number(assignRentAmount || assigningBed?.rentRupees || 8500).toLocaleString('en-IN')}
-                    </Text>
+              {/* Fixed Monthly Rent & Security Deposit Banner (Accurate Room/Bed Config) */}
+              {(() => {
+                const fixedRentVal = Number(assignRentAmount || assigningBed?.rentRupees || 8500);
+                const fixedDepVal = Number(assignLockedDeposit || assigningBed?.depositRupees || fixedRentVal);
+                return (
+                  <View style={styles.assignRentBanner}>
+                    <View style={styles.assignRentBannerCol}>
+                      <Text style={styles.assignRentBannerLabel}>🔒 MONTHLY RENT (LOCKED)</Text>
+                      <Text style={styles.assignRentBannerVal}>₹{fixedRentVal.toLocaleString('en-IN')}/mo</Text>
+                    </View>
+                    <View style={[styles.assignRentBannerCol, { borderLeftWidth: 1, borderLeftColor: '#f1f5f9' }]}>
+                      <Text style={styles.assignRentBannerLabel}>🔒 DEPOSIT (LOCKED)</Text>
+                      <Text style={styles.assignRentBannerVal}>₹{fixedDepVal.toLocaleString('en-IN')}</Text>
+                    </View>
                   </View>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.modalInputLabel}>🔒 Deposit (Locked)</Text>
-                  <View style={[styles.currencyInputRow, { backgroundColor: '#f1f5f9', borderColor: '#cbd5e1', paddingVertical: 11 }]}>
-                    <Text style={styles.currencyPrefixLight}>INR</Text>
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#475569' }}>
-                      {Number(assignDepositPayingNow || 2500).toLocaleString('en-IN')}
-                    </Text>
-                  </View>
-                </View>
-              </View>
+                );
+              })()}
 
               <Text style={styles.modalInputLabel}>Rent Amount Paying Now (₹) *</Text>
               <View style={styles.currencyInputRow}>
-                <Text style={styles.currencyPrefixLight}>INR</Text>
+                <Text style={styles.currencyPrefixLight}>₹</Text>
                 <TextInput
                   style={[
                     styles.modalInnerCurrencyInput,
+                    { paddingVertical: 10, marginBottom: 0, letterSpacing: 0 },
                     Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null,
                   ]}
                   value={assignRentPayingNow}
@@ -3604,11 +3643,23 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 />
               </View>
 
-              {/* Dynamic Rent Due Indicator */}
+              {/* Dynamic Rent Due / Exceeded Indicator */}
               {(() => {
                 const fixedRent = Number(assignRentAmount || assigningBed?.rentRupees || 8500);
                 const paying = Number(assignRentPayingNow || 0);
                 const due = Math.max(0, fixedRent - paying);
+                if (fixedRent > 0 && paying > fixedRent) {
+                  return (
+                    <View style={[styles.assignDueAlertBox, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
+                      <Text style={[styles.assignDueAlertTitle, { color: '#dc2626' }]}>
+                        ⚠️ CANNOT EXCEED LOCKED RENT (₹{fixedRent.toLocaleString('en-IN')})
+                      </Text>
+                      <Text style={[styles.assignDueAlertSub, { color: '#b91c1c' }]}>
+                        Entered ₹{paying.toLocaleString('en-IN')} is more than the locked rent. Please enter ₹{fixedRent.toLocaleString('en-IN')} or less.
+                      </Text>
+                    </View>
+                  );
+                }
                 if (due > 0) {
                   return (
                     <View style={styles.assignDueAlertBox}>
@@ -3618,7 +3669,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                       </Text>
                     </View>
                   );
-                } else if (paying >= fixedRent && fixedRent > 0) {
+                } else if (paying === fixedRent && fixedRent > 0) {
                   return (
                     <View style={styles.assignPaidAlertBox}>
                       <Text style={styles.assignPaidAlertTitle}>✓ FULL RENT PAID (₹0 Due)</Text>
@@ -3630,6 +3681,42 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 }
                 return null;
               })()}
+
+              <Text style={styles.modalInputLabel}>Security Deposit Paying Now (₹) *</Text>
+              <View style={styles.currencyInputRow}>
+                <Text style={styles.currencyPrefixLight}>₹</Text>
+                <TextInput
+                  style={[
+                    styles.modalInnerCurrencyInput,
+                    { paddingVertical: 10, marginBottom: 0, letterSpacing: 0 },
+                    Platform.OS === 'web' ? ({ outlineStyle: 'none' } as any) : null,
+                  ]}
+                  value={assignDepositPayingNow}
+                  onChangeText={(val) => setAssignDepositPayingNow(val.replace(/\D/g, ''))}
+                  keyboardType="numeric"
+                  placeholder={String(assignLockedDeposit || assigningBed?.depositRupees || 8500)}
+                  placeholderTextColor="#94a3b8"
+                />
+              </View>
+
+              <Text style={styles.modalInputLabel}>Starting Meter Reading (kWh - Optional)</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignStartingMeter}
+                onChangeText={(val) => setAssignStartingMeter(val.replace(/\D/g, ''))}
+                keyboardType="numeric"
+                placeholder="0"
+                placeholderTextColor="#94a3b8"
+              />
+
+              <Text style={styles.modalInputLabel}>Date of Joining (Check-in) *</Text>
+              <TextInput
+                style={styles.modalTextInput}
+                value={assignDateOfJoining}
+                onChangeText={setAssignDateOfJoining}
+                placeholder="YYYY-MM-DD"
+                placeholderTextColor="#94a3b8"
+              />
 
               {/* Payment Mode Selector */}
               <Text style={styles.modalInputLabel}>Payment Mode</Text>
