@@ -160,6 +160,27 @@ const MainNavigator: React.FC = () => {
     );
   }
 
+  // 2. If new owner (profile incomplete) -> Show 1-time Owner & First Property Setup
+  const needsOwnerOnboarding =
+    !registrationSkipped &&
+    (!user?.fullName ||
+      user.fullName === 'PG Owner' ||
+      !user?.email ||
+      user.email.startsWith('owner_'));
+
+  if (needsOwnerOnboarding) {
+    return (
+      <OwnerRegistrationScreen
+        onComplete={(createdProp) => {
+          if (createdProp) {
+            setSelectedProperty(createdProp);
+          }
+          setRegistrationSkipped(true);
+        }}
+      />
+    );
+  }
+
   // Unified property switcher: syncs active property across all 5 tabs & storage
   const handleActivePropertyChange = (property: Property) => {
     setSelectedProperty(property);
