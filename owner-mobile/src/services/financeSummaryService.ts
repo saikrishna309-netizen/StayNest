@@ -345,10 +345,9 @@ export const mergePortfolioTenants = (
 
   if (customTenants.length > 0) {
     const cIds = new Set(customTenants.map((c) => c.id));
-    const cPhones = new Set(customTenants.map((c) => c.phone));
     merged = [
       ...customTenants,
-      ...merged.filter((lt) => !cIds.has(lt.id) && !cPhones.has(lt.phone)),
+      ...merged.filter((lt) => !cIds.has(lt.id)),
     ];
   }
 

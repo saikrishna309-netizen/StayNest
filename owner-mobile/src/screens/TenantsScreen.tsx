@@ -306,10 +306,9 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         if (storedCustomStr) {
           const customList: Tenant[] = JSON.parse(storedCustomStr);
           const customIds = new Set(customList.map((ct) => ct.id));
-          const customPhones = new Set(customList.map((ct) => ct.phone));
           loadedTenants = [
             ...customList,
-            ...loadedTenants.filter((lt) => !customIds.has(lt.id) && !customPhones.has(lt.phone)),
+            ...loadedTenants.filter((lt) => !customIds.has(lt.id)),
           ];
         }
       } catch {}

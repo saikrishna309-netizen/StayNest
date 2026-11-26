@@ -1295,10 +1295,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (storedCustomStr) {
           const customList: Tenant[] = JSON.parse(storedCustomStr);
           const cIds = new Set(customList.map((c) => c.id));
-          const cPhones = new Set(customList.map((c) => c.phone));
           loadedTenants = [
             ...customList,
-            ...loadedTenants.filter((lt) => !cIds.has(lt.id) && !cPhones.has(lt.phone)),
+            ...loadedTenants.filter((lt) => !cIds.has(lt.id)),
           ];
         }
       } catch {}
@@ -1446,10 +1445,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         if (storedCustomStr) {
           const customList: Tenant[] = JSON.parse(storedCustomStr);
           const cIds = new Set(customList.map((c) => c.id));
-          const cPhones = new Set(customList.map((c) => c.phone));
           loadedTenants = [
             ...customList,
-            ...loadedTenants.filter((lt) => !cIds.has(lt.id) && !cPhones.has(lt.phone)),
+            ...loadedTenants.filter((lt) => !cIds.has(lt.id)),
           ];
         }
       } catch {}
