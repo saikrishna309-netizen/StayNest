@@ -1076,7 +1076,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     if (t.active === false || t.stayStatus === 'TERMINATED') return false;
     if (!selectedPropId) return true;
     if (t.propertyId === selectedPropId) return true;
-    if (!t.propertyId && (selectedPropId === 'prop-pg-1' || selectedPropId === properties[0]?.id)) return true;
+    if (!t.propertyId && (properties.length <= 1 || selectedPropId === properties[0]?.id)) return true;
     return false;
   });
 

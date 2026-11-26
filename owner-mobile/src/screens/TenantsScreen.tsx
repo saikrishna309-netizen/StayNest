@@ -1331,7 +1331,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   // Scoped to selected property (matches Dashboard & Room Management 1:1) or ALL
   const propertyScopedTenants = tenants.filter((t) => {
     if (propertyFilter === 'ALL') return true;
-    return t.propertyId === propertyFilter || (!t.propertyId && propertyFilter === 'prop-pg-1');
+    if (t.propertyId === propertyFilter) return true;
+    if (!t.propertyId && (properties.length <= 1 || propertyFilter === properties[0]?.id || !properties.some((p) => p.id === propertyFilter))) {
+      return true;
+    }
+    return false;
   });
 
   // Filtered tenants list
