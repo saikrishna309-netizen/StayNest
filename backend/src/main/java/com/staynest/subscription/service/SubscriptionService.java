@@ -310,7 +310,9 @@ public class SubscriptionService {
                     sub.setPlanTier("PRO_TRIAL");
                     sub.setAutopayStatus("ACTIVE");
                     sub.setStatus("ACTIVE");
-                    sub.setEndDate(LocalDate.now().plusDays(30));
+                    if (sub.getEndDate() == null) {
+                        sub.setEndDate(LocalDate.now().plusDays(30));
+                    }
                     ownerSubscriptionRepository.save(sub);
                     verified = true;
                 } else {
@@ -341,7 +343,9 @@ public class SubscriptionService {
                         sub.setPlanTier("active".equals(rzpStatus) ? "PRO_ACTIVE" : "PRO_TRIAL");
                         sub.setAutopayStatus("ACTIVE");
                         sub.setStatus("ACTIVE");
-                        sub.setEndDate(LocalDate.now().plusDays(30));
+                        if (sub.getEndDate() == null) {
+                            sub.setEndDate(LocalDate.now().plusDays(30));
+                        }
                         ownerSubscriptionRepository.save(sub);
                         verified = true;
                     }
@@ -424,7 +428,9 @@ public class SubscriptionService {
                 sub.setPlanTier("PRO_TRIAL");
                 sub.setAutopayStatus("ACTIVE");
                 sub.setStatus("ACTIVE");
-                sub.setEndDate(LocalDate.now().plusDays(30));
+                if (sub.getEndDate() == null) {
+                    sub.setEndDate(LocalDate.now().plusDays(30));
+                }
                 ownerSubscriptionRepository.save(sub);
             } else if ("subscription.charged".equalsIgnoreCase(event)) {
                 sub.setPlanTier("PRO_ACTIVE");
