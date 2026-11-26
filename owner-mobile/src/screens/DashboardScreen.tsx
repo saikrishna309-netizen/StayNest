@@ -1059,69 +1059,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 }
               }
             }
-            if (rooms.length === 0) {
-              if (p.id === 'prop-pg-2') {
-                // Sai Durga Executive Ladies PG (4 rooms, 12 beds, 4 occupied matching 4 tenants)
-                const config2 = [
-                  { f: 1, r: '101', cap: 3, occ: ['Bed 1', 'Bed 2'] },
-                  { f: 1, r: '102', cap: 3, occ: ['Bed 1'] },
-                  { f: 2, r: '201', cap: 3, occ: ['Bed 1'] },
-                  { f: 2, r: '202', cap: 3, occ: [] },
-                ];
-                config2.forEach(({ f, r, cap, occ }) => {
-                  const beds: Bed[] = Array.from({ length: cap }, (_, i) => ({
-                    id: `b-${p.id}-${r}-${i + 1}`,
-                    roomId: `rm-${p.id}-${r}`,
-                    propertyId: p.id,
-                    bedLabel: `Bed ${i + 1}`,
-                    status: (occ.includes(`Bed ${i + 1}`) ? 'OCCUPIED' : 'AVAILABLE') as any,
-                  }));
-                  rooms.push({
-                    id: `rm-${p.id}-${r}`,
-                    propertyId: p.id,
-                    roomNumber: r,
-                    sharingType: 'TRIPLE' as any,
-                    capacity: cap,
-                    floorNumber: f,
-                    rentMonthlyPaise: 950000,
-                    depositPaise: 950000,
-                    status: 'AVAILABLE',
-                    beds,
-                  });
-                });
-              } else {
-                // StayNest Elite Men's PG (6 rooms, 18 beds, 6 occupied matching 6 tenants)
-                const config1 = [
-                  { f: 1, r: '101', cap: 6, occ: ['Bed 1', 'Bed 2', 'Bed 3', 'Bed 6'] },
-                  { f: 1, r: '102', cap: 2, occ: ['Bed 1'] },
-                  { f: 2, r: '201', cap: 2, occ: ['Bed 1'] },
-                  { f: 2, r: '202', cap: 2, occ: [] },
-                  { f: 3, r: '301', cap: 3, occ: [] },
-                  { f: 3, r: '302', cap: 3, occ: [] },
-                ];
-                config1.forEach(({ f, r, cap, occ }) => {
-                  const beds: Bed[] = Array.from({ length: cap }, (_, i) => ({
-                    id: `b-${p.id}-${r}-${i + 1}`,
-                    roomId: `rm-${p.id}-${r}`,
-                    propertyId: p.id,
-                    bedLabel: `Bed ${i + 1}`,
-                    status: (occ.includes(`Bed ${i + 1}`) ? 'OCCUPIED' : 'AVAILABLE') as any,
-                  }));
-                  rooms.push({
-                    id: `rm-${p.id}-${r}`,
-                    propertyId: p.id,
-                    roomNumber: r,
-                    sharingType: (cap === 6 ? 'SIX' : cap === 2 ? 'DOUBLE' : 'TRIPLE') as any,
-                    capacity: cap,
-                    floorNumber: f,
-                    rentMonthlyPaise: 850000,
-                    depositPaise: 850000,
-                    status: 'AVAILABLE',
-                    beds,
-                  });
-                });
-              }
-            }
             roomsMap[p.id] = rooms;
           } catch {}
         })
@@ -4772,10 +4709,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     propTotalBeds += beds.length;
                     propOccupiedBeds += beds.filter((b) => b.status === 'OCCUPIED').length;
                   });
-                  if (propTotalBeds === 0) {
-                    propTotalBeds = p.id === 'prop-pg-2' ? 12 : 18;
-                    propOccupiedBeds = p.id === 'prop-pg-2' ? 4 : 6;
-                  }
+                  const occPct = propTotalBeds > 0 ? Math.round((propOccupiedBeds / propTotalBeds) * 100) : 0;
+                  const typeLabel =
+                    p.propertyType === 'RENTAL_BUILDING'
+                      ? 'Rental Building'
+                      : p.genderPolicy === 'GIRLS'
+                      ? 'Girls PG'
+                      : p.genderPolicy === 'BOYS'
+                      ? 'Boys PG'
+                      : 'Co-Living PG';
 
                   return (
                     <TouchableOpacity
@@ -4802,22 +4744,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                         {isSelected && <View style={styles.pgItemActiveDot} />}
                       </View>
 
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-                          <Text style={styles.pgItemName} numberOfLines={1}>{p.name}</Text>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2, gap: 6 }}>
+                          <Text style={[styles.pgItemName, { flex: 1, flexShrink: 1 }]} numberOfLines={1}>{p.name}</Text>
                           {isSelected && (
-                            <View style={styles.activePill}>
+                            <View style={[styles.activePill, { flexShrink: 0 }]}>
                               <Text style={styles.activePillText}>✓ Active</Text>
                             </View>
                           )}
                         </View>
                         <Text style={styles.pgItemAddress} numberOfLines={1}>📍 {p.addressLine || p.cityName}</Text>
-                        <View style={styles.pgItemMetricsRow}>
+                        <View style={[styles.pgItemMetricsRow, { flexWrap: 'wrap', gap: 6 }]}>
                           <Text style={styles.pgItemMetricText}>
-                            🛏️ {propOccupiedBeds}/{propTotalBeds} Beds ({Math.round((propOccupiedBeds / propTotalBeds) * 100)}% Occupied)
+                            🛏️ {propOccupiedBeds}/{propTotalBeds} Beds ({occPct}% Occupied)
                           </Text>
-                          <Text style={[styles.pgItemMetricText, { color: '#4f46e5', fontWeight: '800' }]}>
-                            {p.genderPolicy || 'BOYS'} PG
+                          <Text style={[styles.pgItemMetricText, { color: '#ea580c', fontWeight: '800', flexShrink: 0 }]}>
+                            {typeLabel}
                           </Text>
                         </View>
                       </View>
