@@ -482,8 +482,18 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     const cleanPhone = phone.replace(/\D/g, '');
     if (!cleanPhone) {
       nextErrors.phone = '10-digit phone number is required';
-    } else if (cleanPhone.length !== 10) {
-      nextErrors.phone = 'Phone number must be exactly 10 digits';
+    } else if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      nextErrors.phone = 'Enter a valid 10-digit Indian mobile number (starts with 6-9)';
+    } else {
+      const dupTenant = tenants.find(
+        (t) =>
+          t.active !== false &&
+          t.stayStatus !== 'TERMINATED' &&
+          (t.phone || '').replace(/\D/g, '').slice(-10) === cleanPhone
+      );
+      if (dupTenant) {
+        nextErrors.phone = `Active tenant ${dupTenant.fullName} already uses +91 ${cleanPhone}`;
+      }
     }
 
     const cleanId = idProofNumber.replace(/\s+/g, '');

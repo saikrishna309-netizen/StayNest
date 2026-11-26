@@ -18,6 +18,8 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
 
     Optional<Tenant> findByIdAndOwnerId(UUID id, UUID ownerId);
 
+    boolean existsByOwnerIdAndPhoneAndActiveTrue(UUID ownerId, String phone);
+
     @Query("""
         SELECT t FROM Tenant t
         WHERE t.ownerId = :ownerId

@@ -610,8 +610,23 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       Alert.alert('Required', 'Please enter resident full name.');
       return;
     }
-    if (cleanPhone.length !== 10) {
-      Alert.alert('Invalid Phone Number', 'Phone number must be exactly 10 digits.');
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      setAssignPhoneError('Enter a valid 10-digit Indian mobile number (starts with 6-9)');
+      Alert.alert('Invalid Phone Number', 'Please enter a valid 10-digit Indian mobile number starting with 6-9.');
+      return;
+    }
+    const dupTenant = tenants.find(
+      (t) =>
+        t.active !== false &&
+        t.stayStatus !== 'TERMINATED' &&
+        (t.phone || '').replace(/\D/g, '').slice(-10) === cleanPhone
+    );
+    if (dupTenant) {
+      setAssignPhoneError(`Active tenant ${dupTenant.fullName} already uses +91 ${cleanPhone}`);
+      Alert.alert(
+        'Duplicate Phone Number',
+        `An active tenant (${dupTenant.fullName}) already uses +91 ${cleanPhone}.`
+      );
       return;
     }
 

@@ -155,7 +155,16 @@ public class TenantFinanceService {
 
     @Transactional
     public TenantResponse createTenant(UUID ownerId, CreateTenantRequest request) {
-        Tenant tenant = new Tenant(ownerId, request.getFullName().trim(), request.getPhone().trim(), request.getEmail());
+        String digits = request.getPhone() != null ? request.getPhone().replaceAll("[^0-9]", "") : "";
+        String cleanPhone = digits.length() > 10 ? digits.substring(digits.length() - 10) : digits;
+        if (!cleanPhone.matches("^[6-9][0-9]{9}$")) {
+            throw new BadRequestException("INVALID_PHONE", "Enter a valid 10-digit Indian mobile number (starting with 6-9).");
+        }
+        if (tenantRepository.existsByOwnerIdAndPhoneAndActiveTrue(ownerId, cleanPhone)) {
+            throw new BadRequestException("DUPLICATE_TENANT_PHONE", "An active tenant with mobile +91 " + cleanPhone + " already exists.");
+        }
+
+        Tenant tenant = new Tenant(ownerId, request.getFullName().trim(), cleanPhone, request.getEmail());
         tenant.setEmergencyContact(request.getEmergencyContact());
         tenant.setIdProofType(request.getIdProofType());
         tenant.setIdProofNumber(request.getIdProofNumber());
