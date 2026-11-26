@@ -11,34 +11,19 @@ const BRAND_IMAGE_URIS = {
 };
 
 export const PhonePeLogo: React.FC<{ size?: number }> = ({ size = 24 }) => {
-  const [imgError, setImgError] = useState(false);
-
-  if (!imgError) {
-    return (
-      <Image
-        source={{ uri: BRAND_IMAGE_URIS.phonepe }}
-        style={{ width: size, height: size, borderRadius: size * 0.2 }}
-        resizeMode="contain"
-        onError={() => setImgError(true)}
-      />
-    );
-  }
-
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">
-      <Rect width="48" height="48" rx="10" fill="#5F259F" />
-      <Path
-        d="M14 13h17c2.2 0 4 1.8 4 4v1c0 2.2-1.8 4-4 4h-9v13H14V13z"
+      <Circle cx="24" cy="24" r="24" fill="#5F259F" />
+      <SvgText
+        x="24"
+        y="32"
+        textAnchor="middle"
         fill="#FFFFFF"
-      />
-      <Path
-        d="M22 22h9c2.8 0 5-2.2 5-5s-2.2-5-5-5h-9v10z"
-        fill="#FFFFFF"
-      />
-      <Path
-        d="M20 22l11 13h-6l-8-10v-3h3z"
-        fill="#FFFFFF"
-      />
+        fontSize="24"
+        fontWeight="bold"
+      >
+        पे
+      </SvgText>
     </Svg>
   );
 };

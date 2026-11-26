@@ -3067,18 +3067,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
                   {/* Bottom Row: Amount & Action Buttons */}
                   <View style={styles.dueCardBottomRow}>
-                    <Text style={styles.dueTenantAmount}>
-                      ₹ {dueAmount.toLocaleString('en-IN')} <Text style={{ fontSize: 11, color: '#ef4444' }}>Due</Text>
+                    <Text style={[styles.dueTenantAmount, { flexShrink: 1, marginRight: 8 }]} numberOfLines={1}>
+                      ₹{dueAmount.toLocaleString('en-IN')} <Text style={{ fontSize: 11, color: '#ef4444' }}>Due</Text>
                     </Text>
 
-                    <View style={styles.dueActionBtnGroup}>
-                      {/* Direct 1-Click WhatsApp Button */}
+                    <View style={[styles.dueActionBtnGroup, { flexShrink: 0, gap: 6 }]}>
+                      {/* Direct 1-Click Round WhatsApp Button */}
                       <TouchableOpacity
-                        style={styles.dueWhatsAppPillBtn}
+                        style={styles.dueWhatsAppCircleBtn}
                         onPress={() => handleDirectWhatsAppReminder(t)}
                         activeOpacity={0.8}
                       >
-                        <Text style={styles.dueWhatsAppPillBtnText}>💬 WhatsApp</Text>
+                        <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                          <Path
+                            d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.38 5.07L2 22l5.08-1.33C8.53 21.52 10.21 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.47 14.21c-.23.65-1.34 1.24-1.85 1.32-.47.07-1.08.1-1.74-.11-.4-.13-.92-.3-1.58-.59-2.78-1.2-4.6-4.01-4.74-4.2-.14-.19-1.13-1.5-1.13-2.86 0-1.36.71-2.03.97-2.31.26-.28.56-.35.75-.35.19 0 .37 0 .54.01.17.01.4-.07.63.48.23.56.79 1.93.86 2.07.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.17-.29.38-.42.51-.14.14-.28.29-.12.57.16.28.72 1.19 1.55 1.93 1.07.95 1.97 1.25 2.25 1.39.28.14.44.12.6-.07.16-.19.69-.8.88-1.08.19-.28.37-.23.63-.14.26.09 1.63.77 1.91.91.28.14.47.21.54.33.07.12.07.69-.16 1.34z"
+                            fill="#ffffff"
+                          />
+                        </Svg>
                       </TouchableOpacity>
 
                       {/* Call button */}
@@ -5761,24 +5766,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef2ff',
   },
   modalPlanCardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginBottom: 6,
   },
   modalPlanCardTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
   },
   modalPlanCardBadge: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '900',
     color: '#4f46e5',
     backgroundColor: '#e0e7ff',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    overflow: 'hidden',
   },
   modalPlanCardPrice: {
     fontSize: 18,
@@ -5846,8 +5852,10 @@ const styles = StyleSheet.create({
   saveChangesBtn: {
     backgroundColor: '#0f172a',
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 10,
     marginBottom: 6,
   },
@@ -5855,6 +5863,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 0,
+    lineHeight: 18,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -6826,6 +6837,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  dueWhatsAppCircleBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#16a34a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#16a34a',
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 2,
   },
   dueWhatsAppPillBtn: {
     backgroundColor: '#25D366',

@@ -136,7 +136,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }
 
       try {
-        const propRes = await apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] }));
+        const propRes = await apiClient<{ content: Property[] }>('/owner/properties?size=100').catch(() => ({ content: [] }));
         let loadedProps: Property[] = propRes.content || [];
         if (loadedProps.length === 0) {
           loadedProps = [
@@ -582,17 +582,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     style={styles.propertyThumb}
                     resizeMode="cover"
                   />
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <View style={styles.propertyTitleRow}>
-                      <Text style={styles.pgCardName} numberOfLines={1}>
+                      <Text style={[styles.pgCardName, { flex: 1, flexShrink: 1 }]} numberOfLines={1}>
                         {prop.name}
                       </Text>
                       {isPropActive ? (
-                        <View style={styles.activeGreenBadge}>
+                        <View style={[styles.activeGreenBadge, { flexShrink: 0 }]}>
                           <Text style={styles.activeGreenBadgeText}>Active</Text>
                         </View>
                       ) : (
-                        <View style={[styles.activeGreenBadge, { backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }]}>
+                        <View style={[styles.activeGreenBadge, { flexShrink: 0, backgroundColor: '#fff7ed', borderWidth: 1, borderColor: '#fed7aa' }]}>
                           <Text style={[styles.activeGreenBadgeText, { color: '#ea580c' }]}>Select</Text>
                         </View>
                       )}
@@ -730,6 +730,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                   paddingHorizontal: 12,
                   paddingVertical: 10,
                   fontSize: 14,
+                  letterSpacing: 0,
                   color: '#0f172a',
                   marginBottom: upiError ? 4 : 12,
                 }}
@@ -1936,8 +1937,10 @@ const styles = StyleSheet.create({
   saveModalBtn: {
     backgroundColor: '#4f46e5',
     borderRadius: 14,
-    paddingVertical: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 8,
     marginBottom: 6,
   },
@@ -1945,6 +1948,9 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 13,
     fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 0,
+    lineHeight: 18,
   },
   btnDisabled: {
     opacity: 0.6,
@@ -1964,24 +1970,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#eef2ff',
   },
   modalPlanTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+    marginBottom: 6,
   },
   modalPlanTitle: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '800',
     color: '#0f172a',
   },
   modalPlanTag: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: '900',
     color: '#4f46e5',
     backgroundColor: '#e0e7ff',
-    paddingHorizontal: 4,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
+    overflow: 'hidden',
   },
   modalPlanPrice: {
     fontSize: 18,

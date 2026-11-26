@@ -2375,15 +2375,14 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
 
                       {dueRent > 0 ? (
                         <TouchableOpacity
-                          style={[styles.whatsAppBtn, { backgroundColor: '#16a34a' }]}
+                          style={styles.whatsAppCircleBtn}
                           onPress={(e: any) => {
                             e?.stopPropagation?.();
                             handleDirectWhatsAppReminder(t);
                           }}
                           activeOpacity={0.8}
                         >
-                          <WhatsAppLogoIcon size={12} color="#ffffff" />
-                          <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
+                          <WhatsAppLogoIcon size={14} color="#ffffff" />
                         </TouchableOpacity>
                       ) : (
                         <View
@@ -3379,6 +3378,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 13,
+    letterSpacing: 0,
     color: '#111827',
     shadowColor: '#000',
     shadowOpacity: 0.02,
@@ -3851,6 +3851,14 @@ const styles = StyleSheet.create({
     color: '#0f172a',
     fontSize: 10.5,
     fontWeight: '700',
+  },
+  whatsAppCircleBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   whatsAppBtn: {
     flexDirection: 'row',
