@@ -1530,7 +1530,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
             <TextInput
               style={[
                 styles.input,
-                formErrors.phone && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5 },
+                formErrors.phone && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5, marginBottom: 4 },
               ]}
               value={phone}
               onChangeText={(val) => {
@@ -1541,7 +1541,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                   return;
                 }
                 setPhone(digitsOnly);
-                if (formErrors.phone) setFormErrors((prev) => ({ ...prev, phone: undefined }));
+                if (digitsOnly.length > 0 && !/^[6-9]/.test(digitsOnly)) {
+                  setFormErrors((prev) => ({ ...prev, phone: 'Mobile number must start with 6, 7, 8, or 9' }));
+                } else if (formErrors.phone) {
+                  setFormErrors((prev) => ({ ...prev, phone: undefined }));
+                }
               }}
               keyboardType="phone-pad"
               placeholder="e.g. 9876543210"
@@ -1549,7 +1553,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
               maxLength={10}
             />
             {formErrors.phone && (
-              <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
+              <Text style={{ color: '#dc2626', fontSize: 11.5, fontWeight: '700', marginTop: 2, marginBottom: 4 }}>
                 ⚠️ {formErrors.phone}
               </Text>
             )}

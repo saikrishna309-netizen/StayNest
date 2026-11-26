@@ -3520,7 +3520,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               <TextInput
                 style={[
                   styles.modalTextInput,
-                  assignPhoneError ? { borderColor: '#dc2626', backgroundColor: '#fef2f2' } : null,
+                  assignPhoneError ? { borderColor: '#dc2626', backgroundColor: '#fef2f2', marginBottom: 4 } : null,
                 ]}
                 value={assignTenantPhone}
                 onChangeText={(val) => {
@@ -3531,7 +3531,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                     return;
                   }
                   setAssignTenantPhone(digitsOnly);
-                  if (assignPhoneError) setAssignPhoneError('');
+                  if (digitsOnly.length > 0 && !/^[6-9]/.test(digitsOnly)) {
+                    setAssignPhoneError('Mobile number must start with 6, 7, 8, or 9');
+                  } else if (assignPhoneError) {
+                    setAssignPhoneError('');
+                  }
                 }}
                 keyboardType="phone-pad"
                 maxLength={10}
@@ -3539,7 +3543,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 placeholderTextColor="#94a3b8"
               />
               {assignPhoneError ? (
-                <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: -6, marginBottom: 8 }}>
+                <Text style={{ color: '#dc2626', fontSize: 11.5, fontWeight: '700', marginTop: 2, marginBottom: 10 }}>
                   ⚠️ {assignPhoneError}
                 </Text>
               ) : null}

@@ -1029,10 +1029,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         combinedProps.map(async (p) => {
           try {
             let rooms: Room[] = p.rooms || [];
-            if (rooms.length === 0 && typeof window !== 'undefined' && window.localStorage) {
-              const cached = window.localStorage.getItem(`staynest_floors_${p.id}`);
-              if (cached) {
-                const floors = JSON.parse(cached);
+            if (rooms.length === 0 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id)) {
+              try {
+                const detail = await apiClient<Property>(`/properties/${p.id}`);
+                if (detail?.rooms && detail.rooms.length > 0) {
+                  rooms = detail.rooms;
+                }
+              } catch {}
+            }
+            if (rooms.length === 0) {
+              const cachedNative = await safeStorage.getItem(`@staynest_floors_${p.id}`).catch(() => null);
+              const cachedWeb =
+                !cachedNative && typeof window !== 'undefined' && window.localStorage
+                  ? window.localStorage.getItem(`staynest_floors_${p.id}`)
+                  : null;
+              const rawFloors = cachedNative || cachedWeb;
+              if (rawFloors) {
+                const floors = JSON.parse(rawFloors);
                 if (Array.isArray(floors)) {
                   floors.forEach((f: any) => {
                     (f.rooms || []).forEach((r: any) => {
