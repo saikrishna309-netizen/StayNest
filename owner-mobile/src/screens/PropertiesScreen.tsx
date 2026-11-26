@@ -1881,16 +1881,27 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         }),
       });
 
-      const createdBeds: BedConfig[] = [];
-      for (const b of tempRoom.beds) {
-        try {
-          const cb = await apiClient<Bed>(`/owner/rooms/${createdRoom.id}/beds`, {
-            method: 'POST',
-            body: JSON.stringify({ bedLabel: b.bedLabel }),
-          });
-          createdBeds.push({ id: cb.id, bedLabel: cb.bedLabel, status: cb.status || b.status });
-        } catch {
-          createdBeds.push(b);
+      const backendBeds = Array.isArray((createdRoom as any)?.beds) ? (createdRoom as any).beds : [];
+      const createdBeds: BedConfig[] =
+        backendBeds.length > 0
+          ? backendBeds.map((cb: any) => ({
+              id: cb.id,
+              bedLabel: cb.bedLabel,
+              status: cb.status || 'AVAILABLE',
+            }))
+          : [];
+
+      if (createdBeds.length === 0) {
+        for (const b of tempRoom.beds) {
+          try {
+            const cb = await apiClient<Bed>(`/owner/rooms/${createdRoom.id}/beds`, {
+              method: 'POST',
+              body: JSON.stringify({ bedLabel: b.bedLabel }),
+            });
+            createdBeds.push({ id: cb.id, bedLabel: cb.bedLabel, status: cb.status || b.status });
+          } catch {
+            createdBeds.push(b);
+          }
         }
       }
 

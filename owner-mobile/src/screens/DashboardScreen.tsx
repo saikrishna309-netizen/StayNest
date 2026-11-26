@@ -777,13 +777,46 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         console.log('Backend property sync notice (saved locally in persistent storage):', e);
       }
 
-      // 5. Update local state immediately
+      // 5. Update local state immediately using real backend rooms/beds if returned
+      const persistedRooms = (created.rooms && created.rooms.length > 0) ? created.rooms : generatedRoomsList;
       setProperties([created, ...properties.filter((p) => p.id !== created.id)]);
       setSelectedPropId(created.id);
       setPropertyRoomsMap((prev) => ({
         ...prev,
-        [created.id]: generatedRoomsList,
+        [created.id]: persistedRooms,
       }));
+      if (created.rooms && created.rooms.length > 0) {
+        const byFloor = new Map<number, any[]>();
+        created.rooms.forEach((r) => {
+          const flNum = r.floorNumber || 1;
+          if (!byFloor.has(flNum)) byFloor.set(flNum, []);
+          byFloor.get(flNum)!.push({
+            id: r.id,
+            roomNumber: r.roomNumber,
+            floorNumber: flNum,
+            sharingType: r.sharingType || 'DOUBLE',
+            rentRupees: r.rentMonthlyPaise ? Math.round(r.rentMonthlyPaise / 100) : 8500,
+            depositRupees: r.depositPaise ? Math.round(r.depositPaise / 100) : 8500,
+            ac: true,
+            attachedBathroom: true,
+            beds: (r.beds || []).map((b) => ({
+              id: b.id,
+              bedLabel: b.bedLabel,
+              status: b.status || 'AVAILABLE',
+            })),
+          });
+        });
+        const realFloors = Array.from(byFloor.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
+        await safeStorage.setItem(`@staynest_floors_${created.id}`, JSON.stringify(realFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${created.id}`, JSON.stringify(realFloors));
+          } catch {}
+        }
+      }
+      emitDataChanged();
 
       onActivePropertyChange?.(created);
 

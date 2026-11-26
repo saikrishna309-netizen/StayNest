@@ -200,6 +200,56 @@ public class PropertyService {
         property.setPublishedAt(Instant.now());
 
         property = propertyRepository.save(property);
+
+        // Persist initial floors, rooms & beds from Add Property wizard in the same transaction
+        if (request.getFloors() != null && !request.getFloors().isEmpty()) {
+            for (CreatePropertyRequest.FloorInput fl : request.getFloors()) {
+                int floorNum = fl.getFloorNumber() != null ? fl.getFloorNumber() : 1;
+                if (fl.getRooms() == null) continue;
+                for (CreatePropertyRequest.RoomInput rm : fl.getRooms()) {
+                    if (rm.getRoomNumber() == null || rm.getRoomNumber().isBlank()) continue;
+                    int bedCount = (rm.getBeds() != null && !rm.getBeds().isEmpty())
+                            ? rm.getBeds().size()
+                            : (rm.getCapacity() != null && rm.getCapacity() > 0 ? rm.getCapacity() : 1);
+
+                    com.staynest.room.entity.SharingType sharing = com.staynest.room.entity.SharingType.DOUBLE;
+                    if (bedCount == 1) sharing = com.staynest.room.entity.SharingType.SINGLE;
+                    else if (bedCount == 2) sharing = com.staynest.room.entity.SharingType.DOUBLE;
+                    else if (bedCount == 3) sharing = com.staynest.room.entity.SharingType.TRIPLE;
+                    else if (bedCount >= 4) sharing = com.staynest.room.entity.SharingType.FOUR_PLUS;
+
+                    long rentPaise = rm.getRentMonthlyPaise() != null
+                            ? rm.getRentMonthlyPaise()
+                            : (rm.getRentRupees() != null ? rm.getRentRupees() * 100L : 850000L);
+                    long depPaise = rm.getDepositPaise() != null
+                            ? rm.getDepositPaise()
+                            : (rm.getDepositRupees() != null ? rm.getDepositRupees() * 100L : rentPaise);
+
+                    Room room = new Room();
+                    room.setPropertyId(property.getId());
+                    room.setFloorNumber(floorNum);
+                    room.setRoomNumber(rm.getRoomNumber().trim());
+                    room.setSharingType(sharing);
+                    room.setCapacity(bedCount);
+                    room.setRentMonthlyPaise(rentPaise);
+                    room.setDepositPaise(depPaise);
+                    room = roomRepository.save(room);
+
+                    if (rm.getBeds() != null && !rm.getBeds().isEmpty()) {
+                        for (int i = 0; i < rm.getBeds().size(); i++) {
+                            String label = rm.getBeds().get(i).getBedLabel();
+                            if (label == null || label.isBlank()) label = "Bed " + (i + 1);
+                            bedRepository.save(new Bed(room.getId(), property.getId(), label.trim()));
+                        }
+                    } else {
+                        for (int i = 1; i <= bedCount; i++) {
+                            bedRepository.save(new Bed(room.getId(), property.getId(), "Bed " + i));
+                        }
+                    }
+                }
+            }
+        }
+
         return mapToDetailResponse(property);
     }
 
@@ -252,6 +302,7 @@ public class PropertyService {
         if (request.getAmenities() != null) property.setAmenities(request.getAmenities());
 
         property = propertyRepository.save(property);
+
         return mapToDetailResponse(property);
     }
 
@@ -266,6 +317,7 @@ public class PropertyService {
 
         property.setApprovalStatus(ApprovalStatus.SUBMITTED);
         property = propertyRepository.save(property);
+
         return mapToDetailResponse(property);
     }
 
