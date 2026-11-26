@@ -138,30 +138,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       try {
         const propRes = await apiClient<{ content: Property[] }>('/owner/properties?size=100').catch(() => ({ content: [] }));
         let loadedProps: Property[] = propRes.content || [];
-        if (loadedProps.length === 0) {
-          loadedProps = [
-            {
-              id: 'prop-pg-1',
-              name: "StayNest Elite Men's PG",
-              propertyType: 'HOSTEL',
-              genderPolicy: 'MALE',
-              addressLine: 'Opp. PVP Square, MG Road, Vijayawada',
-              cityName: 'Vijayawada, Andhra Pradesh',
-              foodIncluded: true,
-              primaryPhotoUrl: defaultPgPhoto,
-            },
-            {
-              id: 'prop-pg-2',
-              name: 'Sai Durga Executive Ladies PG',
-              propertyType: 'PG',
-              genderPolicy: 'FEMALE',
-              addressLine: 'Near Benz Circle, Vijayawada',
-              cityName: 'Vijayawada, Andhra Pradesh',
-              foodIncluded: true,
-              primaryPhotoUrl: defaultPgPhoto,
-            },
-          ];
-        }
 
         // Merge custom properties saved in safeStorage / localStorage
         try {

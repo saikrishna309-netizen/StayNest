@@ -269,21 +269,7 @@ export const computePeriodPnlMetrics = (records: MonthlyPnlRecord[]): PeriodPnlM
   };
 };
 
-export const DEFAULT_PORTFOLIO_TENANTS: Tenant[] = [
-  // PG 2 (Sai Durga Executive Ladies PG)
-  { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
-  { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000 },
-  { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 950000, outstandingPaise: 0 },
-  { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', propertyName: 'Sai Durga Executive Ladies PG', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
-
-  // PG 1 (StayNest Elite Men's PG)
-  { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-  { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
-  { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-  { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-  { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
-  { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', propertyName: "StayNest Elite Men's PG", roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-];
+export const DEFAULT_PORTFOLIO_TENANTS: Tenant[] = [];
 
 export interface MonthlyInvoiceBreakdown {
   baseRent: number;

@@ -1217,13 +1217,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     try {
       const propsRes = await apiClient<{ content: Property[] }>('/owner/properties').catch(() => ({ content: [] }));
       const backendProps = propsRes.content || [];
-      let combinedProps = [...defaultMultiPgs];
-
-      if (backendProps.length > 0) {
-        const defaultNames = new Set(defaultMultiPgs.map((p) => p.name));
-        const extra = backendProps.filter((p) => !defaultNames.has(p.name) && p.id !== 'prop-pg-1' && p.id !== 'prop-pg-2');
-        combinedProps = [...combinedProps, ...extra];
-      }
+      let combinedProps: Property[] = [...backendProps];
 
       try {
         const customPStr = await safeStorage.getItem('@staynest_custom_properties');
@@ -1256,26 +1250,6 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         const tenantRes = await apiClient<{ content: Tenant[] }>('/owner/tenants');
         loadedTenants = tenantRes.content || [];
       } catch { }
-
-      const multiPgTenants: Tenant[] = [
-        // PG 1 (StayNest Elite Men's PG - 6 active residents)
-        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-
-        // PG 2 (Sai Durga Executive Ladies PG - 4 active residents)
-        { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-        { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false },
-        { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true },
-      ];
-      const existingPhones = new Set(loadedTenants.map((t) => t.phone));
-      const existingIds = new Set(loadedTenants.map((t) => t.id));
-      const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone) && !existingIds.has(mt.id));
-      loadedTenants = [...loadedTenants, ...extraTenants];
 
       // Merge locally onboarded custom tenants from safeStorage
       try {

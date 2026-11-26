@@ -185,9 +185,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await safeStorage.setItem('@staynest_owner_user', JSON.stringify(res.user));
   };
 
+  const clearAccountScopedCaches = () => {
+    const keys = [
+      '@staynest_custom_properties',
+      '@staynest_active_property_id',
+      '@staynest_custom_tenants',
+      '@staynest_owner_payout',
+      '@staynest_owner_subscription_v2',
+      '@staynest_owner_custom_profile',
+    ];
+    keys.forEach((k) => {
+      safeStorage.removeItem(k).catch(() => {});
+    });
+    if (typeof window !== 'undefined' && window.localStorage) {
+      [
+        'staynest_custom_properties',
+        'staynest_active_property_id',
+        'staynest_owner_subscription_v2',
+      ].forEach((k) => {
+        try {
+          window.localStorage.removeItem(k);
+        } catch {}
+      });
+    }
+  };
+
   const logout = () => {
     safeStorage.removeItem('@staynest_owner_token').catch(() => {});
     safeStorage.removeItem('@staynest_owner_user').catch(() => {});
+    clearAccountScopedCaches();
     setAuthToken(null);
     setToken(null);
     setUser(null);

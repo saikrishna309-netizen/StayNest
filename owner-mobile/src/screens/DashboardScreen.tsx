@@ -915,44 +915,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         setBackendActivities(apiActs);
       }
 
-      // Multi-PG Setup: Two distinct PGs with completely different names (Requirements 1, 2)
-      const defaultMultiPgs: Property[] = [
-        {
-          id: 'prop-pg-1',
-          name: 'StayNest Elite Men\'s PG',
-          addressLine: 'Opp. PVP Square, MG Road',
-          cityName: 'Vijayawada',
-          genderPolicy: 'BOYS',
-          propertyType: 'PG',
-          primaryPhotoUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-          startingPricePaise: 850000,
-          foodIncluded: true,
-          approvalStatus: 'APPROVED',
-          published: true,
-          amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'AC_ROOMS'],
-        },
-        {
-          id: 'prop-pg-2',
-          name: 'Sai Durga Executive Ladies PG',
-          addressLine: 'Near Benz Circle, Ring Road',
-          cityName: 'Vijayawada',
-          genderPolicy: 'GIRLS',
-          propertyType: 'PG',
-          primaryPhotoUrl: 'https://images.unsplash.com/photo-1555854877-bab0e564b8d5?auto=format&fit=crop&w=800&q=80',
-          startingPricePaise: 950000,
-          foodIncluded: true,
-          approvalStatus: 'APPROVED',
-          published: true,
-          amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'BIKE_PARKING', 'CCTV_SECURITY'],
-        },
-      ];
-
-      let combinedProps = [...defaultMultiPgs];
-      if (pRes && pRes.length > 0) {
-        const defaultNames = new Set(defaultMultiPgs.map((p) => p.name));
-        const extraBackend = pRes.filter((p) => !defaultNames.has(p.name) && p.id !== 'prop-pg-1' && p.id !== 'prop-pg-2');
-        combinedProps = [...combinedProps, ...extraBackend];
-      }
+      let combinedProps: Property[] = [...(pRes || [])];
 
       // Load custom properties from persistent safeStorage (and fallback to window.localStorage)
       try {
@@ -987,27 +950,6 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
 
       let loadedTenants = tRes || [];
-
-      // Multi-PG Demo Tenants for PG 1 and PG 2 (Always retained and merged)
-      const multiPgTenants: Tenant[] = [
-        // PG 1 Residents (StayNest Elite Men's PG - MG Road)
-        { id: 't-pg1-1', fullName: 'Amit Sharma', phone: '9876543210', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-        { id: 't-pg1-2', fullName: 'Rahul Kumar', phone: '9876543211', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 850000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
-        { id: 't-pg1-3', fullName: 'Siva Mani', phone: '9876543212', propertyId: 'prop-pg-1', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-        { id: 't-pg1-4', fullName: 'Arjun Reddy', phone: '9876543213', propertyId: 'prop-pg-1', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-        { id: 't-pg1-5', fullName: 'Kiran', phone: '9876543214', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 3', rentStatus: 'OVERDUE', outstandingPaise: 450000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 850000 },
-        { id: 't-pg1-6', fullName: 'Kishare', phone: '9876543215', propertyId: 'prop-pg-1', roomNumber: '101', bedLabel: 'Bed 6', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 850000, outstandingPaise: 0 },
-
-        // PG 2 Residents (Sai Durga Executive Ladies PG - Benz Circle)
-        { id: 't-pg2-1', fullName: 'Sneha Reddy', phone: '9876543220', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
-        { id: 't-pg2-2', fullName: 'Ananya Roy', phone: '9876543221', propertyId: 'prop-pg-2', roomNumber: '101', bedLabel: 'Bed 2', rentStatus: 'OVERDUE', outstandingPaise: 950000, active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000 },
-        { id: 't-pg2-3', fullName: 'Pooja Patel', phone: '9876543222', propertyId: 'prop-pg-2', roomNumber: '102', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: false, monthlyRentPaise: 950000, outstandingPaise: 0 },
-        { id: 't-pg2-4', fullName: 'Meera Bai', phone: '9876543223', propertyId: 'prop-pg-2', roomNumber: '201', bedLabel: 'Bed 1', rentStatus: 'PAID', active: true, stayStatus: 'ACTIVE', aadhaarVerified: true, monthlyRentPaise: 950000, outstandingPaise: 0 },
-      ];
-      const existingPhones = new Set(loadedTenants.map((t) => t.phone));
-      const existingIds = new Set(loadedTenants.map((t) => t.id));
-      const extraTenants = multiPgTenants.filter((mt) => !existingPhones.has(mt.phone) && !existingIds.has(mt.id));
-      loadedTenants = [...loadedTenants, ...extraTenants];
 
       // Merge local custom onboarded tenants from safeStorage so they never disappear
       try {

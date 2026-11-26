@@ -224,28 +224,6 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
       setInvoices(invRes.content || []);
       setExpenses(loadedExpenses);
       let combinedProps: Property[] = propRes.content || [];
-      if (combinedProps.length === 0) {
-        combinedProps = [
-          {
-            id: 'prop-pg-1',
-            name: "StayNest Elite Men's PG",
-            propertyType: 'HOSTEL',
-            genderPolicy: 'BOYS',
-            addressLine: 'Opp. PVP Square, MG Road',
-            cityName: 'Vijayawada',
-            foodIncluded: true,
-          },
-          {
-            id: 'prop-pg-2',
-            name: 'Sai Durga Executive Ladies PG',
-            propertyType: 'PG',
-            genderPolicy: 'GIRLS',
-            addressLine: 'Near Benz Circle',
-            cityName: 'Vijayawada',
-            foodIncluded: true,
-          },
-        ];
-      }
       try {
         const storedCustomProps = await safeStorage.getItem('@staynest_custom_properties');
         if (storedCustomProps) {
