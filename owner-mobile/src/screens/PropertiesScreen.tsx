@@ -699,8 +699,28 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
         if (activeProperty?.id && (assigningBed.bedId || assigningBed.roomId)) {
           const isUuid = (v?: string) => Boolean(v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v));
-          // 1. Allocate Stay with REQUIRED checkIn date (omit synthetic bedId so backend resolves/creates unit bed by roomId)
-          if (isUuid(activeProperty.id) && (isUuid(assigningBed.bedId) || isUuid(assigningBed.roomId))) {
+          let resolvedRoomId = assigningBed.roomId;
+          let resolvedBedId = assigningBed.bedId;
+
+          // If room was only local (non-UUID), persist it + its beds to PostgreSQL first so /stays links cleanly
+          if (isUuid(activeProperty.id) && !isUuid(resolvedRoomId)) {
+            const localRoom = floors.flatMap((f) => f.rooms).find((r) => r.id === assigningBed.roomId);
+            if (localRoom) {
+              const synced = await syncRoomToBackend(activeProperty.id, localRoom);
+              if (synced) {
+                resolvedRoomId = synced.id;
+                const bedIdx = localRoom.beds.findIndex((b) => b.id === assigningBed.bedId);
+                if (bedIdx >= 0 && synced.beds[bedIdx]) {
+                  resolvedBedId = synced.beds[bedIdx].id;
+                } else if (synced.beds[0]) {
+                  resolvedBedId = synced.beds[0].id;
+                }
+              }
+            }
+          }
+
+          // 1. Allocate Stay with REQUIRED checkIn date
+          if (isUuid(activeProperty.id) && (isUuid(resolvedBedId) || isUuid(resolvedRoomId))) {
             try {
               const stayBody: Record<string, any> = {
                 propertyId: activeProperty.id,
@@ -708,8 +728,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 securityDepositPaise: depositPaying * 100,
                 checkIn: todayDate,
               };
-              if (isUuid(assigningBed.roomId)) stayBody.roomId = assigningBed.roomId;
-              if (isUuid(assigningBed.bedId)) stayBody.bedId = assigningBed.bedId;
+              if (isUuid(resolvedRoomId)) stayBody.roomId = resolvedRoomId;
+              if (isUuid(resolvedBedId)) stayBody.bedId = resolvedBedId;
 
               await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
                 method: 'POST',
@@ -1843,8 +1863,69 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     });
   };
 
+  // Persist a newly created room and its beds to PostgreSQL immediately and replace temp IDs with backend UUIDs
+  const syncRoomToBackend = async (propId: string, tempRoom: RoomConfig): Promise<RoomConfig | null> => {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propId)) {
+      return null;
+    }
+    try {
+      const createdRoom = await apiClient<Room>(`/owner/properties/${propId}/rooms`, {
+        method: 'POST',
+        body: JSON.stringify({
+          floorNumber: tempRoom.floorNumber,
+          roomNumber: tempRoom.roomNumber,
+          sharingType: getSharingEnum(tempRoom.beds.length),
+          capacity: tempRoom.beds.length,
+          rentMonthlyPaise: tempRoom.rentRupees * 100,
+          depositPaise: tempRoom.depositRupees * 100,
+        }),
+      });
+
+      const createdBeds: BedConfig[] = [];
+      for (const b of tempRoom.beds) {
+        try {
+          const cb = await apiClient<Bed>(`/owner/rooms/${createdRoom.id}/beds`, {
+            method: 'POST',
+            body: JSON.stringify({ bedLabel: b.bedLabel }),
+          });
+          createdBeds.push({ id: cb.id, bedLabel: cb.bedLabel, status: cb.status || b.status });
+        } catch {
+          createdBeds.push(b);
+        }
+      }
+
+      const syncedRoom: RoomConfig = {
+        ...tempRoom,
+        id: createdRoom.id,
+        beds: createdBeds,
+      };
+
+      setFloors((prev) => {
+        const nextFloors = prev.map((f) => {
+          if (f.floorNumber !== tempRoom.floorNumber) return f;
+          return {
+            ...f,
+            rooms: f.rooms.map((r) => (r.id === tempRoom.id ? syncedRoom : r)),
+          };
+        });
+        safeStorage.setItem(`@staynest_floors_${propId}`, JSON.stringify(nextFloors)).catch(() => {});
+        if (typeof window !== 'undefined' && window.localStorage) {
+          try {
+            window.localStorage.setItem(`staynest_floors_${propId}`, JSON.stringify(nextFloors));
+          } catch {}
+        }
+        return nextFloors;
+      });
+      emitDataChanged();
+      return syncedRoom;
+    } catch {
+      return null;
+    }
+  };
+
   // 2. Room Counter Controls for Floor
   const handleIncreaseRooms = (floorNum: number) => {
+    let createdLocalRoom: RoomConfig | null = null;
     setFloors((prev) => {
       const nextFloors = prev.map((f) => {
         if (f.floorNumber !== floorNum) return f;
@@ -1872,6 +1953,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                 { id: `bed-${roomNumStr}-2-${nowTs}`, bedLabel: 'Bed 2', status: 'AVAILABLE' as const },
               ],
         };
+        createdLocalRoom = newRoom;
         return {
           ...f,
           rooms: [...f.rooms, newRoom],
@@ -1889,6 +1971,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
       return nextFloors;
     });
+
+    if (activeProperty?.id && createdLocalRoom) {
+      void syncRoomToBackend(activeProperty.id, createdLocalRoom);
+    }
   };
 
   const handleDecreaseRooms = (floorNum: number) => {
@@ -2034,6 +2120,21 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
       return nextFloors;
     });
+
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(updated.id)) {
+      apiClient(`/owner/rooms/${updated.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          roomNumber: updated.roomNumber,
+          sharingType: getSharingEnum(updated.beds.length),
+          rentMonthlyPaise: updated.rentRupees * 100,
+          depositPaise: updated.depositRupees * 100,
+        }),
+      })
+        .then(() => emitDataChanged())
+        .catch(() => {});
+    }
+
     setEditingRoomDetails(null);
   };
 
