@@ -52,7 +52,7 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
         onClose();
         Alert.alert(
           '👑 Pro Trial Activated!',
-          `UPI AutoPay confirmed! Your 1-Month Free Trial is active (₹0 today, ₹99/mo starting ${formatDisplayDate(state.nextBillingDate)}).`
+          `UPI AutoPay confirmed! Your 1-Month Free Trial is active (₹0 today, ₹149/mo starting ${formatDisplayDate(state.nextBillingDate)}).`
         );
       } else if (!silent) {
         Alert.alert(
@@ -77,7 +77,7 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
 
   const reasonBannerText =
     reason === 'PROPERTY_LIMIT'
-      ? 'Free plan includes 1 property. Start your 1-Month Free Trial (₹0 today, ₹99/mo after) to manage unlimited properties.'
+      ? 'Free plan includes 1 property. Start your 1-Month Free Trial (₹0 today, ₹149/mo after) to manage unlimited properties.'
       : reason === 'WHATSAPP_LIMIT'
       ? "You've reached 5/5 free WhatsApp reminders this month. Upgrade to Pro for unlimited reminders."
       : 'Unlock unlimited properties & unlimited WhatsApp rent reminders with your 1-Month Free Trial.';
@@ -131,7 +131,7 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
                 <Text style={styles.priceToday}>Today</Text>
               </View>
               <Text style={styles.priceSub}>
-                Then <Text style={{ fontWeight: '800', color: '#0f172a' }}>₹99/month</Text> starting {nextMonthDate} • Cancel anytime in 1 tap
+                Then <Text style={{ fontWeight: '800', color: '#0f172a' }}>₹149/month</Text> starting {nextMonthDate} • Cancel anytime in 1 tap
               </Text>
             </View>
 
@@ -216,7 +216,7 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
             )}
 
             <Text style={styles.footnote}>
-              🔒 UPI AutoPay Mandate • Auto-debits ₹99/mo from {nextMonthDate}. Cancel anytime in Profile.
+              🔒 UPI AutoPay Mandate • Auto-debits ₹149/mo from {nextMonthDate}. Cancel anytime in Profile.
             </Text>
           </ScrollView>
         </View>

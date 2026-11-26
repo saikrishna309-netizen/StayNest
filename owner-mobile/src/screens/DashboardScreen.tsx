@@ -180,12 +180,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const handleConfirmAutoPay = async () => {
     setSubscribing(true);
     try {
-      const planName = selectedPlanPeriod === 'MONTHLY' ? 'Monthly Plan (₹99/mo)' : 'Annual Plan (₹1,099/yr)';
+      const planName = selectedPlanPeriod === 'MONTHLY' ? 'Monthly Plan (₹149/mo)' : 'Annual Plan (₹1,099/yr)';
       const subData = {
         active: true,
         planPeriod: selectedPlanPeriod,
         planName,
-        price: selectedPlanPeriod === 'MONTHLY' ? 99 : 1099,
+        price: selectedPlanPeriod === 'MONTHLY' ? 149 : 1099,
         activatedAt: new Date().toISOString(),
         nextBillingDate: '22 Dec 2026',
         method: autoPayMethod,
@@ -3255,7 +3255,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             <View style={styles.subPriceRow}>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.subPriceAmount}>
-                  {selectedPlanPeriod === 'MONTHLY' ? '₹99' : '₹1,099'}
+                  {selectedPlanPeriod === 'MONTHLY' ? '₹149' : '₹1,099'}
                   <Text style={styles.subPricePeriod}>
                     {selectedPlanPeriod === 'MONTHLY' ? ' / month' : ' / year (Save 8%)'}
                   </Text>
@@ -3328,7 +3328,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <Text style={styles.subPrimaryBtnText}>
                 {subscriptionActive
                   ? 'Manage Auto-Pay & Plan Details ⚙️'
-                  : 'Start 30-Day Free Trial (₹0 Today, Auto-Pay ₹99/mo) →'}
+                  : 'Start 30-Day Free Trial (₹0 Today, Auto-Pay ₹149/mo) →'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -4332,7 +4332,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                     <Text style={styles.modalPlanCardTitle}>Monthly Plan</Text>
                     <Text style={styles.modalPlanCardBadge}>RECOMMENDED</Text>
                   </View>
-                  <Text style={styles.modalPlanCardPrice}>₹99 <Text style={{ fontSize: 12, color: '#64748b' }}>/ mo</Text></Text>
+                  <Text style={styles.modalPlanCardPrice}>₹149 <Text style={{ fontSize: 12, color: '#64748b' }}>/ mo</Text></Text>
                   <Text style={styles.modalPlanCardSub}>Billed monthly after 30-day trial</Text>
                 </TouchableOpacity>
 
@@ -4360,7 +4360,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
                 <View style={styles.mandateRow}>
                   <Text style={styles.mandateLabel}>Recurring Auto-Pay:</Text>
-                  <Text style={styles.mandateVal}>{selectedPlanPeriod === 'MONTHLY' ? '₹99 / month' : '₹1,099 / year'}</Text>
+                  <Text style={styles.mandateVal}>{selectedPlanPeriod === 'MONTHLY' ? '₹149 / month' : '₹1,099 / year'}</Text>
                 </View>
                 <View style={styles.mandateRow}>
                   <Text style={styles.mandateLabel}>First Auto-Debit Date:</Text>

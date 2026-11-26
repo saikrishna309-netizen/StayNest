@@ -140,10 +140,10 @@ public class SubscriptionService {
     @Transactional
     public Map<String, Object> createAutoPayMandate(UUID ownerId, String preferredApp) {
         SubscriptionPlan proPlan = subscriptionPlanRepository.findByActiveTrue().stream()
-                .filter(p -> p.getPriceMonthlyPaise() >= 9900L || "PRO".equalsIgnoreCase(p.getPlanCode()))
+                .filter(p -> p.getPriceMonthlyPaise() >= 14900L || "PRO".equalsIgnoreCase(p.getPlanCode()) || "PRO_149".equalsIgnoreCase(p.getPlanCode()))
                 .findFirst()
                 .orElseGet(() -> subscriptionPlanRepository.save(
-                        new SubscriptionPlan("PRO_99", "StayNest Pro Plan", 9900L, 999, 9999, 10, true)
+                        new SubscriptionPlan("PRO_149", "StayNest Pro Plan", 14900L, 999, 9999, 10, true)
                 ));
 
         LocalDate today = LocalDate.now();
@@ -207,10 +207,10 @@ public class SubscriptionService {
         String cleanMerchantUpi = merchantUpiId != null && !merchantUpiId.isBlank()
                 ? merchantUpiId.trim()
                 : "staynest.subscription@okaxis";
-        String tn = URLEncoder.encode("StayNest Pro AutoPay 99/mo", StandardCharsets.UTF_8);
+        String tn = URLEncoder.encode("StayNest Pro AutoPay 149/mo", StandardCharsets.UTF_8);
         String pn = URLEncoder.encode("StayNest PG", StandardCharsets.UTF_8);
         String mandateUrl = String.format(
-                "upi://mandate?pa=%s&pn=%s&am=99.00&cu=INR&recur=MONTHLY&tr=%s&tn=%s",
+                "upi://mandate?pa=%s&pn=%s&am=149.00&cu=INR&recur=MONTHLY&tr=%s&tn=%s",
                 cleanMerchantUpi, pn, gatewaySubId, tn
         );
 
@@ -220,7 +220,7 @@ public class SubscriptionService {
         resp.put("status", "PENDING");
         resp.put("autopayStatus", "PENDING");
         resp.put("trialAmountRupees", 0);
-        resp.put("monthlyAmountRupees", 99);
+        resp.put("monthlyAmountRupees", 149);
         resp.put("totalCount", 120);
         resp.put("startAt", nextBilling.toString());
         resp.put("nextBillingDate", nextBilling.toString());

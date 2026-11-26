@@ -56,7 +56,7 @@ public class SubscriptionController {
     @PostMapping("/subscriptions/create-mandate")
     @SecurityRequirement(name = "bearerAuth")
     @PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
-    @Operation(summary = "Create a PENDING Razorpay UPI AutoPay mandate (1-Month Free Trial, ₹99/mo after)")
+    @Operation(summary = "Create a PENDING Razorpay UPI AutoPay mandate (1-Month Free Trial, ₹149/mo after)")
     public ResponseEntity<Map<String, Object>> createAutoPayMandate(
             @AuthenticationPrincipal UserPrincipal user,
             @RequestBody(required = false) Map<String, String> body) {

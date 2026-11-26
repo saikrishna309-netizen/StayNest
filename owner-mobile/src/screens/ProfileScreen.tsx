@@ -295,7 +295,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const handleConfirmAutoPay = async () => {
     setSubscribing(true);
     try {
-      const planName = selectedPlanPeriod === 'MONTHLY' ? 'Monthly Plan (₹99/mo)' : 'Annual Plan (₹1,099/yr)';
+      const planName = selectedPlanPeriod === 'MONTHLY' ? 'Monthly Plan (₹149/mo)' : 'Annual Plan (₹1,099/yr)';
       setIsSubscriptionActive(true);
       setIsSubscriptionModalOpen(false);
 
@@ -807,7 +807,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               <Text style={{ fontSize: 12.5, color: '#475569', marginBottom: 12 }}>
                 {subState.autopayStatus === 'CANCELLED'
                   ? `Pro access remains active until ${formatDisplayDate(subState.nextBillingDate)}.`
-                  : `Next Auto-Debit: ₹99 on ${formatDisplayDate(subState.nextBillingDate)}`}
+                  : `Next Auto-Debit: ₹149 on ${formatDisplayDate(subState.nextBillingDate)}`}
               </Text>
               {subState.autopayStatus !== 'CANCELLED' && (
                 <TouchableOpacity
@@ -823,12 +823,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     const doCancel = async () => {
                       const updated = await cancelProAutoPay();
                       setSubState(updated);
-                      Alert.alert('AutoPay Cancelled', `You won't be charged ₹99. Pro stays active until ${formatDisplayDate(updated.nextBillingDate)}.`);
+                      Alert.alert('AutoPay Cancelled', `You won't be charged ₹149. Pro stays active until ${formatDisplayDate(updated.nextBillingDate)}.`);
                     };
                     if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
-                      if (window.confirm('Cancel ₹99/mo UPI AutoPay?')) doCancel();
+                      if (window.confirm('Cancel ₹149/mo UPI AutoPay?')) doCancel();
                     } else {
-                      Alert.alert('Cancel AutoPay', 'Stop recurring ₹99/mo auto-debit? Your Pro access continues until the end of the current period.', [
+                      Alert.alert('Cancel AutoPay', 'Stop recurring ₹149/mo auto-debit? Your Pro access continues until the end of the current period.', [
                         { text: 'Keep Pro', style: 'cancel' },
                         { text: 'Cancel AutoPay', style: 'destructive', onPress: doCancel },
                       ]);
@@ -851,7 +851,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </View>
               </View>
               <Text style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-                Includes 1 Property & 5 WhatsApp reminders/month. Start your 1-Month Free Trial (₹0 today, ₹99/mo after).
+                Includes 1 Property & 5 WhatsApp reminders/month. Start your 1-Month Free Trial (₹0 today, ₹149/mo after).
               </Text>
               <TouchableOpacity
                 style={styles.managePropertyBtn}
@@ -1072,7 +1072,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     <Text style={styles.modalPlanTitle}>Monthly Plan</Text>
                     <Text style={styles.modalPlanTag}>POPULAR</Text>
                   </View>
-                  <Text style={styles.modalPlanPrice}>₹99 <Text style={{ fontSize: 12, color: '#64748b' }}>/ mo</Text></Text>
+                  <Text style={styles.modalPlanPrice}>₹149 <Text style={{ fontSize: 12, color: '#64748b' }}>/ mo</Text></Text>
                   <Text style={styles.modalPlanSub}>Billed monthly after trial</Text>
                 </TouchableOpacity>
 
@@ -1100,7 +1100,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 </View>
                 <View style={styles.mandateRow}>
                   <Text style={styles.mandateKey}>Auto-Pay Recurring:</Text>
-                  <Text style={styles.mandateVal}>{selectedPlanPeriod === 'MONTHLY' ? '₹99 / month' : '₹1,099 / year'}</Text>
+                  <Text style={styles.mandateVal}>{selectedPlanPeriod === 'MONTHLY' ? '₹149 / month' : '₹1,099 / year'}</Text>
                 </View>
                 <View style={styles.mandateRow}>
                   <Text style={styles.mandateKey}>First Deduction Date:</Text>
