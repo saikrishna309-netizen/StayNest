@@ -2487,57 +2487,115 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
                 </Text>
               </TouchableOpacity>
 
-              {/* ACTION SECTION 1: RECORD MANUAL RENT PAYMENT */}
-              <View style={styles.actionSectionBox}>
-                <Text style={styles.actionSectionTitle}>💰 Record Rent Payment</Text>
-                <Text style={styles.actionSectionSub}>Record money received from resident</Text>
+              {/* ACTION SECTION 1: LOCKED RECEIPT WHEN PAID OR RECORD PAYMENT WHEN DUE > 0 */}
+              {(() => {
+                const tModalBill = selectedTenantForAction
+                  ? getMonthlyBill(monthlyBills, selectedTenantForAction.id, selectedMonth)
+                  : undefined;
+                const tModalBaseRent = tModalBill?.baseRent ?? (selectedTenantForAction?.monthlyRentPaise
+                  ? Math.round(selectedTenantForAction.monthlyRentPaise / 100)
+                  : 8500);
+                const tModalTotal = tModalBill ? tModalBill.totalPayable : tModalBaseRent;
+                const tModalPaid = tModalBill
+                  ? tModalBill.paidAmount
+                  : Math.max(
+                      0,
+                      tModalBaseRent -
+                        (typeof selectedTenantForAction?.outstandingPaise === 'number'
+                          ? Math.round(selectedTenantForAction.outstandingPaise / 100)
+                          : selectedTenantForAction?.rentStatus === 'PAID'
+                            ? 0
+                            : tModalBaseRent)
+                    );
+                const tModalDue = Math.max(0, tModalTotal - tModalPaid);
+                const isSettled = tModalDue === 0;
 
-                <Text style={styles.label}>Amount Received (₹)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={manualPayAmount}
-                  onChangeText={setManualPayAmount}
-                  keyboardType="numeric"
-                  placeholder="8500"
-                />
-
-                <Text style={styles.label}>Payment Mode</Text>
-                <View style={styles.payModeRow}>
-                  {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
-                    <TouchableOpacity
-                      key={mode}
+                if (isSettled) {
+                  return (
+                    <View
                       style={[
-                        styles.payModeBtn,
-                        manualPayMode === mode && styles.payModeBtnActive,
+                        styles.actionSectionBox,
+                        { backgroundColor: '#ecfdf5', borderColor: '#a7f3d0', borderWidth: 1 },
                       ]}
-                      onPress={() => setManualPayMode(mode)}
                     >
-                      <Text
-                        style={[
-                          styles.payModeText,
-                          manualPayMode === mode && styles.payModeTextActive,
-                        ]}
-                      >
-                        {mode.replace('_', ' ')}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={[styles.actionSectionTitle, { color: '#065f46' }]}>
+                          ✓ Rent Settled (Read-Only)
+                        </Text>
+                        <View style={{ backgroundColor: '#dcfce7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#15803d' }}>LOCKED</Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 13, color: '#047857', fontWeight: '700', marginBottom: 10 }}>
+                        Paid Amount: ₹{tModalTotal.toLocaleString('en-IN')} • Status: Paid in Full
                       </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
+                      <TouchableOpacity
+                        style={[styles.recordPayBtn, { backgroundColor: '#059669' }]}
+                        onPress={() => {
+                          const target = selectedTenantForAction;
+                          setSelectedTenantForAction(null);
+                          if (target) setInvoiceTenant(target);
+                        }}
+                      >
+                        <Text style={styles.recordPayBtnText}>🧾 View / Share Receipt</Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                }
 
-                <TouchableOpacity
-                  style={[styles.recordPayBtn, recordingPayment && { opacity: 0.7 }]}
-                  onPress={handleRecordManualPayment}
-                  disabled={recordingPayment}
-                >
-                  {recordingPayment ? (
-                    <ActivityIndicator color="#ffffff" size="small" />
-                  ) : (
-                    <Text style={styles.recordPayBtnText}>
-                      ✓ Confirm Payment (₹{Number(manualPayAmount || 0).toLocaleString('en-IN')})
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+                return (
+                  <View style={styles.actionSectionBox}>
+                    <Text style={styles.actionSectionTitle}>💰 Record Rent Payment</Text>
+                    <Text style={styles.actionSectionSub}>Record money received from resident</Text>
+
+                    <Text style={styles.label}>Amount Received (₹)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={manualPayAmount}
+                      onChangeText={setManualPayAmount}
+                      keyboardType="numeric"
+                      placeholder="8500"
+                    />
+
+                    <Text style={styles.label}>Payment Mode</Text>
+                    <View style={styles.payModeRow}>
+                      {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
+                        <TouchableOpacity
+                          key={mode}
+                          style={[
+                            styles.payModeBtn,
+                            manualPayMode === mode && styles.payModeBtnActive,
+                          ]}
+                          onPress={() => setManualPayMode(mode)}
+                        >
+                          <Text
+                            style={[
+                              styles.payModeText,
+                              manualPayMode === mode && styles.payModeTextActive,
+                            ]}
+                          >
+                            {mode.replace('_', ' ')}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.recordPayBtn, recordingPayment && { opacity: 0.7 }]}
+                      onPress={handleRecordManualPayment}
+                      disabled={recordingPayment}
+                    >
+                      {recordingPayment ? (
+                        <ActivityIndicator color="#ffffff" size="small" />
+                      ) : (
+                        <Text style={styles.recordPayBtnText}>
+                          ✓ Confirm Payment (₹{Number(manualPayAmount || 0).toLocaleString('en-IN')})
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                );
+              })()}
 
               {/* ACTION SECTION 2: SEND RENT REMINDER */}
               <View style={styles.actionSectionBox}>

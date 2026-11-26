@@ -1005,40 +1005,44 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
 
                 return (
                   <View key={bill.id} style={styles.billRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, paddingRight: 8 }}>
-                      <View style={styles.billIconCircle}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, paddingRight: 8 }}>
+                      <View style={[styles.billIconCircle, { flexShrink: 0 }]}>
                         <Text style={{ fontSize: 16 }}>{bill.icon}</Text>
                       </View>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, minWidth: 0 }}>
                         <Text style={styles.billTitle} numberOfLines={2}>{bill.title}</Text>
                         <Text style={styles.billDueInfo}>Due: {bill.dueDate}</Text>
                       </View>
                     </View>
 
-                    <View style={{ width: 82, alignItems: 'flex-end', marginRight: 10 }}>
-                      <Text style={styles.billAmount}>₹{displayAmount.toLocaleString('en-IN')}</Text>
-                      <Text style={styles.billPerText}>{timeframeMode === 'MONTHLY' ? '/mo' : '/yr'}</Text>
-                    </View>
+                    <View style={{ flexShrink: 0, alignItems: 'flex-end', gap: 4 }}>
+                      <Text style={styles.billAmount} numberOfLines={1}>
+                        ₹{displayAmount.toLocaleString('en-IN')}
+                        <Text style={styles.billPerText}>
+                          {timeframeMode === 'MONTHLY' ? '/mo' : '/yr'}
+                        </Text>
+                      </Text>
 
-                    {/* Status Button (Paid / Pending) */}
-                    <TouchableOpacity
-                      style={[
-                        styles.billStatusPill,
-                        { width: 68, alignItems: 'center', justifyContent: 'center' },
-                        bill.isPaidThisMonth ? styles.billStatusPaid : styles.billStatusPending,
-                      ]}
-                      onPress={() => handleToggleBillStatus(bill.id)}
-                      activeOpacity={0.8}
-                    >
-                      <Text
+                      {/* Status Button (Paid / Pending) */}
+                      <TouchableOpacity
                         style={[
-                          styles.billStatusText,
+                          styles.billStatusPill,
+                          { minWidth: 68, alignItems: 'center', justifyContent: 'center' },
+                          bill.isPaidThisMonth ? styles.billStatusPaid : styles.billStatusPending,
+                        ]}
+                        onPress={() => handleToggleBillStatus(bill.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[
+                            styles.billStatusText,
                           bill.isPaidThisMonth ? { color: '#15803d' } : { color: '#b45309' },
                         ]}
                       >
                         {bill.isPaidThisMonth ? '✓ Paid' : '⏳ Due'}
                       </Text>
                     </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })}

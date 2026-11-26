@@ -11,6 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  SafeAreaView,
+  Modal,
+  StatusBar,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 
@@ -23,10 +26,14 @@ export const LoginScreen: React.FC = () => {
   // Phone + OTP State
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
-  const [lastOtp, setLastOtp] = useState<string | null>(null);
   const [step, setStep] = useState<'PHONE' | 'OTP'>('PHONE');
   const [timer, setTimer] = useState(30);
   const [timerActive, setTimerActive] = useState(false);
+
+  // Terms & Conditions State
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsError, setTermsError] = useState<string | null>(null);
+  const [legalModalType, setLegalModalType] = useState<'TERMS' | 'PRIVACY' | null>(null);
 
   // Email + Password Fallback State
   const [email, setEmail] = useState('owner@staynest.in');
@@ -48,34 +55,32 @@ export const LoginScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [timerActive, timer]);
 
-  // Handle Step 1: Send OTP
+  // Handle Step 1: Instant Optimistic Transition + Async OTP Dispatch
   const handleSendOtp = async () => {
+    if (!acceptedTerms) {
+      setTermsError('Please accept the Terms & Conditions to continue.');
+      return;
+    }
+    setTermsError(null);
+
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     if (cleanPhone.length !== 10) {
       Alert.alert('Invalid Number', 'Please enter a valid 10-digit Indian mobile number');
       return;
     }
 
-    setLoading(true);
-    setInfoMessage('Sending verification code...');
+    // Optimistically transition to OTP screen immediately (< 50ms)
+    setStep('OTP');
+    setOtp('');
+    setTimer(30);
+    setTimerActive(true);
+    setInfoMessage(`Sending verification code to +91 ${cleanPhone}...`);
+
     try {
       const res = await sendOtp(cleanPhone);
-      setStep('OTP');
-      setOtp('');
-      if (res.demoOtp) {
-        setLastOtp(res.demoOtp);
-      }
-      setTimer(30);
-      setTimerActive(true);
       setInfoMessage(res.message || `Verification code sent to +91 ${cleanPhone}`);
-    } catch (err: any) {
-      setStep('OTP');
-      setOtp('');
-      setTimer(30);
-      setTimerActive(true);
+    } catch {
       setInfoMessage(`Verification code sent to +91 ${cleanPhone}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -114,243 +119,321 @@ export const LoginScreen: React.FC = () => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
-    >
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-        <View style={styles.card}>
-          {/* Header */}
-          <View style={styles.header}>
-            <Image
-              source={require('../../assets/logo.png')}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-            <Text style={styles.loginTitle}>Login</Text>
-            <Text style={styles.subtitle}>
-              {authMode === 'PHONE_OTP'
-                ? step === 'PHONE'
-                  ? 'Enter your mobile number to sign in'
-                  : 'Enter the 6-digit verification code'
-                : 'Sign in with your email & password'}
-            </Text>
-          </View>
-
-          {/* Info Banner */}
-          {infoMessage && (
-            <View style={styles.infoBanner}>
-              <Text style={styles.infoBannerText}>✓ {infoMessage}</Text>
+    <SafeAreaView style={styles.safeArea}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        style={styles.container}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.card}>
+            {/* Header */}
+            <View style={styles.header}>
+              <Image
+                source={require('../../assets/logo.png')}
+                style={styles.logoImage}
+                resizeMode="contain"
+              />
+              <Text style={styles.loginTitle}>Owner Login</Text>
+              <Text style={styles.subtitle}>
+                {authMode === 'PHONE_OTP'
+                  ? step === 'PHONE'
+                    ? 'Enter your mobile number to sign in'
+                    : 'Enter the 6-digit verification code'
+                  : 'Sign in with your email & password'}
+              </Text>
             </View>
-          )}
 
-          {/* PHONE + OTP MODE */}
-          {authMode === 'PHONE_OTP' && (
-            <>
-              {step === 'PHONE' ? (
-                /* Step 1: Mobile Number Input */
-                <View style={styles.form}>
-                  <Text style={styles.label}>MOBILE NUMBER</Text>
-                  <View style={styles.phoneInputRow}>
-                    <View style={styles.countryCodeBadge}>
-                      <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+            {/* Info Banner */}
+            {infoMessage && (
+              <View style={styles.infoBanner}>
+                <Text style={styles.infoBannerText}>✓ {infoMessage}</Text>
+              </View>
+            )}
+
+            {/* PHONE + OTP MODE */}
+            {authMode === 'PHONE_OTP' && (
+              <>
+                {step === 'PHONE' ? (
+                  /* Step 1: Mobile Number Input */
+                  <View style={styles.form}>
+                    <Text style={styles.label}>MOBILE NUMBER</Text>
+                    <View style={styles.phoneInputRow}>
+                      <View style={styles.countryCodeBadge}>
+                        <Text style={styles.countryCodeText}>🇮🇳 +91</Text>
+                      </View>
+                      <TextInput
+                        style={styles.phoneInput}
+                        value={phone}
+                        onChangeText={(val) => setPhone(val.replace(/[^0-9]/g, ''))}
+                        keyboardType="number-pad"
+                        maxLength={10}
+                        placeholder="Enter 10-digit mobile number"
+                        placeholderTextColor="#94a3b8"
+                      />
                     </View>
-                    <TextInput
-                      style={styles.phoneInput}
-                      value={phone}
-                      onChangeText={(val) => setPhone(val.replace(/[^0-9]/g, ''))}
-                      keyboardType="number-pad"
-                      maxLength={10}
-                      placeholder="Enter your mobile number"
-                      placeholderTextColor="#94a3b8"
-                      autoFocus
-                    />
-                  </View>
 
-                  <TouchableOpacity
-                    style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                    onPress={handleSendOtp}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.buttonText}>Get Verification Code →</Text>
+                    {/* Mandatory Terms & Conditions Checkbox */}
+                    <TouchableOpacity
+                      style={styles.termsRow}
+                      onPress={() => {
+                        const next = !acceptedTerms;
+                        setAcceptedTerms(next);
+                        if (next) setTermsError(null);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <View style={[styles.checkboxBox, acceptedTerms && styles.checkboxBoxChecked]}>
+                        {acceptedTerms && <Text style={styles.checkboxTick}>✓</Text>}
+                      </View>
+                      <Text style={styles.termsText}>
+                        I agree to StayNest's{' '}
+                        <Text
+                          style={styles.termsLink}
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            setLegalModalType('TERMS');
+                          }}
+                        >
+                          Terms & Conditions
+                        </Text>{' '}
+                        and{' '}
+                        <Text
+                          style={styles.termsLink}
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            setLegalModalType('PRIVACY');
+                          }}
+                        >
+                          Privacy Policy
+                        </Text>
+                      </Text>
+                    </TouchableOpacity>
+
+                    {termsError && (
+                      <Text style={styles.termsErrorText}>⚠️ {termsError}</Text>
                     )}
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                /* Step 2: 6-Digit OTP Input */
-                <View style={styles.form}>
-                  <View style={styles.phoneEditRow}>
-                    <Text style={styles.otpSubtitle}>
-                      Code sent to <Text style={styles.boldText}>+91 {phone}</Text>
-                    </Text>
-                    <TouchableOpacity onPress={() => setStep('PHONE')}>
-                      <Text style={styles.editText}>Edit</Text>
+
+                    <TouchableOpacity
+                      style={[styles.primaryButton, (!acceptedTerms || loading) && styles.buttonMuted]}
+                      onPress={handleSendOtp}
+                      activeOpacity={0.85}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.buttonText}>Get OTP →</Text>
+                      )}
                     </TouchableOpacity>
                   </View>
-
-                  <Text style={styles.label}>ENTER 6-DIGIT OTP</Text>
-                  <TextInput
-                    style={styles.otpInput}
-                    value={otp}
-                    onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    placeholder="••••••"
-                    placeholderTextColor="#cbd5e1"
-                    autoFocus
-                  />
-
-                  {/* Clean delivery notice box (no exposed code) */}
-                  <View style={styles.deliveryNoticeBox}>
-                    <Text style={styles.deliveryNoticeText}>
-                      ✓ 6-digit verification code sent to your phone. Enter it above to login.
-                    </Text>
-                  </View>
-
-                  {/* Resend OTP Timer */}
-                  <View style={styles.resendRow}>
-                    {timerActive ? (
-                      <Text style={styles.timerText}>Resend code in {timer}s</Text>
-                    ) : (
-                      <TouchableOpacity onPress={handleSendOtp} disabled={loading}>
-                        <Text style={styles.resendLink}>Resend OTP Code</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-
-                  <TouchableOpacity
-                    style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                    onPress={handleVerifyOtp}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.buttonText}>Verify & Enter Dashboard</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              )}
-            </>
-          )}
-
-          {/* EMAIL + PASSWORD FALLBACK MODE */}
-          {authMode === 'PASSWORD' && (
-            <View style={styles.form}>
-              <Text style={styles.label}>OWNER EMAIL</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                placeholder="owner@staynest.in"
-                placeholderTextColor="#94a3b8"
-              />
-
-              <Text style={styles.label}>PASSWORD</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                placeholder="••••••••"
-                placeholderTextColor="#94a3b8"
-              />
-
-              <TouchableOpacity
-                style={[styles.primaryButton, loading && styles.buttonDisabled]}
-                onPress={handlePasswordLogin}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.buttonText}>Sign In with Password</Text>
+                  /* Step 2: 6-Digit OTP Input (with Android/iOS SMS Auto-Fill) */
+                  <View style={styles.form}>
+                    <View style={styles.phoneEditRow}>
+                      <Text style={styles.otpSubtitle}>
+                        Code sent to <Text style={styles.boldText}>+91 {phone}</Text>
+                      </Text>
+                      <TouchableOpacity onPress={() => setStep('PHONE')}>
+                        <Text style={styles.editText}>Edit</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={styles.label}>ENTER 6-DIGIT OTP</Text>
+                    <TextInput
+                      style={styles.otpInput}
+                      value={otp}
+                      onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, ''))}
+                      keyboardType="number-pad"
+                      maxLength={6}
+                      placeholder="••••••"
+                      placeholderTextColor="#cbd5e1"
+                      textContentType="oneTimeCode"
+                      autoComplete="sms-otp"
+                      autoFocus
+                    />
+
+                    <View style={styles.deliveryNoticeBox}>
+                      <Text style={styles.deliveryNoticeText}>
+                        ✓ 6-digit verification code sent via WhatsApp & SMS.
+                      </Text>
+                    </View>
+
+                    {/* Resend OTP Timer */}
+                    <View style={styles.resendRow}>
+                      {timerActive ? (
+                        <Text style={styles.timerText}>Resend OTP in {timer}s</Text>
+                      ) : (
+                        <TouchableOpacity onPress={handleSendOtp} disabled={loading}>
+                          <Text style={styles.resendLink}>Resend OTP Code</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={[styles.primaryButton, loading && styles.buttonMuted]}
+                      onPress={handleVerifyOtp}
+                      disabled={loading}
+                    >
+                      {loading ? (
+                        <ActivityIndicator color="#fff" />
+                      ) : (
+                        <Text style={styles.buttonText}>Verify & Enter Dashboard</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 )}
+              </>
+            )}
+
+            {/* EMAIL + PASSWORD FALLBACK MODE */}
+            {authMode === 'PASSWORD' && (
+              <View style={styles.form}>
+                <Text style={styles.label}>OWNER EMAIL</Text>
+                <TextInput
+                  style={styles.input}
+                  value={email}
+                  onChangeText={setEmail}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholder="owner@staynest.in"
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <Text style={styles.label}>PASSWORD</Text>
+                <TextInput
+                  style={styles.input}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  placeholder="••••••••"
+                  placeholderTextColor="#94a3b8"
+                />
+
+                <TouchableOpacity
+                  style={[styles.primaryButton, loading && styles.buttonMuted]}
+                  onPress={handlePasswordLogin}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.buttonText}>Sign In with Password</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Bottom Switcher */}
+            <View style={styles.bottomSwitcher}>
+              <TouchableOpacity
+                onPress={() => {
+                  setAuthMode(authMode === 'PHONE_OTP' ? 'PASSWORD' : 'PHONE_OTP');
+                  setStep('PHONE');
+                }}
+              >
+                <Text style={styles.switchModeText}>
+                  {authMode === 'PHONE_OTP'
+                    ? '🔑 Or sign in with Email & Password'
+                    : '📱 Or sign in with Mobile Number (OTP)'}
+                </Text>
               </TouchableOpacity>
             </View>
-          )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          {/* Bottom Switcher */}
-          <View style={styles.bottomSwitcher}>
-            <TouchableOpacity
-              onPress={() => {
-                setAuthMode(authMode === 'PHONE_OTP' ? 'PASSWORD' : 'PHONE_OTP');
-                setStep('PHONE');
-              }}
-            >
-              <Text style={styles.switchModeText}>
-                {authMode === 'PHONE_OTP'
-                  ? '🔑 Or sign in with Email & Password'
-                  : '📱 Or sign in with Mobile Number (OTP)'}
+      {/* Terms & Privacy Modal */}
+      <Modal
+        visible={!!legalModalType}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLegalModalType(null)}
+      >
+        <View style={styles.legalBackdrop}>
+          <View style={styles.legalCard}>
+            <Text style={styles.legalTitle}>
+              {legalModalType === 'TERMS' ? 'StayNest Terms & Conditions' : 'StayNest Privacy Policy'}
+            </Text>
+            <ScrollView style={{ maxHeight: 300 }}>
+              <Text style={styles.legalBody}>
+                {legalModalType === 'TERMS'
+                  ? 'By using the StayNest PG & Rental Property Owner App, you agree to maintain accurate property, room, and tenant KYC records in accordance with local housing regulations. Subscriptions renew monthly at ₹99/month after the 1-month free trial unless cancelled in Profile before the billing date.'
+                  : 'StayNest stores your property, tenant, and billing records securely. Phone numbers and Aadhaar details are used solely for owner authentication, KYC verification, and tenant rent reminders.'}
               </Text>
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.primaryButton, { marginTop: 14, height: 44 }]}
+              onPress={() => setLegalModalType(null)}
+            >
+              <Text style={styles.buttonText}>Close</Text>
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 0 : 0,
+  },
   container: {
     flex: 1,
-    backgroundColor: '#090d16',
+    backgroundColor: '#ffffff',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     padding: 20,
+    backgroundColor: '#ffffff',
   },
   card: {
     backgroundColor: '#ffffff',
-    borderRadius: 28,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 10,
+    borderRadius: 24,
+    padding: 20,
+    width: '100%',
+    maxWidth: 440,
+    alignSelf: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  badge: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#4f46e5',
-    backgroundColor: '#eef2ff',
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    letterSpacing: 1,
-  },
-  versionBadge: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748b',
-    backgroundColor: '#f1f5f9',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
+    marginBottom: 22,
   },
   loginTitle: {
     fontSize: 24,
     fontWeight: '900',
     color: '#0f172a',
     marginTop: 8,
-    marginBottom: 2,
+    marginBottom: 4,
     letterSpacing: -0.5,
+  },
+  subtitle: {
+    fontSize: 13.5,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  infoBanner: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#a7f3d0',
+    borderWidth: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  infoBannerText: {
+    color: '#065f46',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   deliveryNoticeBox: {
     backgroundColor: '#f0fdf4',
@@ -368,43 +451,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '900',
-    color: '#0f172a',
-    letterSpacing: -0.5,
-  },
-  brandTitle: {
-    color: '#4f46e5',
-  },
-  pgTag: {
-    color: '#f59e0b',
-    fontWeight: '900',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#64748b',
-    marginTop: 6,
-    textAlign: 'center',
-    lineHeight: 18,
-  },
-  infoBanner: {
-    backgroundColor: '#ecfdf5',
-    borderColor: '#a7f3d0',
-    borderWidth: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  infoBannerText: {
-    color: '#065f46',
-    fontSize: 12,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
   form: {
-    marginBottom: 12,
+    marginBottom: 10,
   },
   label: {
     fontSize: 11,
@@ -417,10 +465,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 14,
   },
   countryCodeBadge: {
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#faf8f6',
     borderWidth: 1.5,
     borderColor: '#e2e8f0',
     borderRadius: 14,
@@ -436,7 +484,7 @@ const styles = StyleSheet.create({
   },
   phoneInput: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#faf8f6',
     borderWidth: 1.5,
     borderColor: '#e2e8f0',
     borderRadius: 14,
@@ -445,12 +493,55 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: '#0f172a',
-    letterSpacing: 1.5,
+    letterSpacing: 1,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 10,
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    backgroundColor: '#ffffff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  checkboxBoxChecked: {
+    backgroundColor: '#ea580c',
+    borderColor: '#ea580c',
+  },
+  checkboxTick: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  termsText: {
+    flex: 1,
+    fontSize: 12.5,
+    color: '#475569',
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: '#ea580c',
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  termsErrorText: {
+    fontSize: 12,
+    color: '#dc2626',
+    fontWeight: '700',
+    marginBottom: 8,
   },
   otpInput: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#faf8f6',
     borderWidth: 2,
-    borderColor: '#4f46e5',
+    borderColor: '#ea580c',
     borderRadius: 14,
     paddingHorizontal: 16,
     height: 56,
@@ -462,7 +553,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#faf8f6',
     borderWidth: 1.5,
     borderColor: '#e2e8f0',
     borderRadius: 14,
@@ -471,21 +562,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#0f172a',
     marginBottom: 14,
-  },
-  quickFillPill: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    alignSelf: 'flex-start',
-  },
-  quickFillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#4f46e5',
   },
   phoneEditRow: {
     flexDirection: 'row',
@@ -504,7 +580,7 @@ const styles = StyleSheet.create({
   editText: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#4f46e5',
+    color: '#ea580c',
     textDecorationLine: 'underline',
   },
   resendRow: {
@@ -518,24 +594,24 @@ const styles = StyleSheet.create({
   },
   resendLink: {
     fontSize: 12,
-    color: '#4f46e5',
+    color: '#ea580c',
     fontWeight: '800',
   },
   primaryButton: {
-    backgroundColor: '#4f46e5',
-    borderRadius: 16,
+    backgroundColor: '#ea580c',
+    borderRadius: 14,
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#4f46e5',
-    shadowOpacity: 0.35,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.25,
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 10,
-    elevation: 4,
-    marginTop: 6,
+    shadowRadius: 8,
+    elevation: 3,
+    marginTop: 8,
   },
-  buttonDisabled: {
-    opacity: 0.6,
+  buttonMuted: {
+    opacity: 0.5,
   },
   buttonText: {
     color: '#ffffff',
@@ -556,9 +632,31 @@ const styles = StyleSheet.create({
     color: '#64748b',
   },
   logoImage: {
-    width: 220,
-    height: 100,
+    width: 200,
+    height: 90,
     alignSelf: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
+  },
+  legalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.5)',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  legalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 18,
+    padding: 20,
+  },
+  legalTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 10,
+  },
+  legalBody: {
+    fontSize: 13.5,
+    color: '#475569',
+    lineHeight: 20,
   },
 });
