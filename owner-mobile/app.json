@@ -15,7 +15,19 @@
       "supportsTablet": true,
       "bundleIdentifier": "in.staynest.owner",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "StayNest needs camera access to capture room, property, and profile photos.",
+        "NSPhotoLibraryUsageDescription": "StayNest needs photo library access to upload cover banners, profile photos, and room images.",
+        "NSPhotoLibraryAddUsageDescription": "StayNest needs permission to save rent receipts and invoices to your photo library.",
+        "NSLocationWhenInUseUsageDescription": "StayNest uses your location to auto-fill your PG or rental property address.",
+        "LSApplicationQueriesSchemes": [
+          "phonepe",
+          "tez",
+          "gpay",
+          "paytmmp",
+          "upi",
+          "whatsapp"
+        ]
       }
     },
     "android": {
