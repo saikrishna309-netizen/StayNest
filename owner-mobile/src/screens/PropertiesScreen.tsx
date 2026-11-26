@@ -1298,7 +1298,14 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         targetProp = combinedProps.find((p) => p.id === savedPropId) || null;
       }
       if (!targetProp) {
-        targetProp = combinedProps[0];
+        targetProp = combinedProps[0] || null;
+      }
+
+      if (!targetProp) {
+        setActiveProperty(null);
+        setTenants([]);
+        setFloors([]);
+        return;
       }
 
       setActiveProperty(targetProp);
@@ -1322,9 +1329,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         }
       } catch {}
 
-      // Filter tenants strictly for target property
+      // Filter tenants for target property (include unassigned propertyId on single/first property)
       const propTenants = loadedTenants.filter(
-        (t) => t.propertyId === targetProp.id || (!t.propertyId && targetProp.id === 'prop-pg-1')
+        (t) =>
+          t.propertyId === targetProp!.id ||
+          (!t.propertyId && (combinedProps.length <= 1 || targetProp!.id === combinedProps[0]?.id))
       );
       setTenants(propTenants);
 
@@ -1344,7 +1353,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         }
       });
 
-      // Check cached floors for this property (safeStorage works on Android/iOS APK + Web)
+      // Check cached floors for this property, and if empty load real rooms/beds from backend /owner/properties/{id}
       let targetFloors: FloorConfig[] | null = null;
       if (targetProp?.id) {
         try {
@@ -1364,6 +1373,37 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             targetFloors = JSON.parse(cached);
           } catch { }
         }
+      }
+
+      if ((!targetFloors || targetFloors.length === 0) && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetProp.id)) {
+        try {
+          const detail = await apiClient<Property>(`/owner/properties/${targetProp.id}`);
+          if (detail?.rooms && detail.rooms.length > 0) {
+            const byFloor = new Map<number, RoomConfig[]>();
+            detail.rooms.forEach((r) => {
+              const flNum = r.floorNumber || 1;
+              if (!byFloor.has(flNum)) byFloor.set(flNum, []);
+              byFloor.get(flNum)!.push({
+                id: r.id,
+                roomNumber: r.roomNumber,
+                floorNumber: flNum,
+                sharingType: (r.sharingType as any) || 'DOUBLE',
+                rentRupees: r.rentMonthlyPaise ? Math.round(r.rentMonthlyPaise / 100) : 8500,
+                depositRupees: r.depositPaise ? Math.round(r.depositPaise / 100) : 8500,
+                ac: Boolean((r as any).ac),
+                attachedBathroom: Boolean((r as any).attachedBathroom),
+                beds: (r.beds || []).map((b) => ({
+                  id: b.id,
+                  bedLabel: b.bedLabel,
+                  status: b.status || 'AVAILABLE',
+                })),
+              });
+            });
+            targetFloors = Array.from(byFloor.entries())
+              .sort((a, b) => a[0] - b[0])
+              .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
+          }
+        } catch {}
       }
 
       if (!targetFloors || targetFloors.length === 0) {

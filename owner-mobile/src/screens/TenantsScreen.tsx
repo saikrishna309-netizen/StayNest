@@ -385,7 +385,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
       // 2. Fallback to backend property rooms if nothing cached locally
       if (rooms.length === 0) {
         try {
-          const data = await apiClient<Property>(`/properties/${propId}`);
+          const data = await apiClient<Property>(`/owner/properties/${propId}`);
           rooms = data.rooms || [];
         } catch {
           rooms = [];
