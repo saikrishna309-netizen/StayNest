@@ -697,22 +697,27 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           }),
         });
 
-        if (activeProperty?.id && assigningBed.bedId) {
-          // 1. Allocate Stay with REQUIRED checkIn date
-          try {
-            await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
-              method: 'POST',
-              body: JSON.stringify({
+        if (activeProperty?.id && (assigningBed.bedId || assigningBed.roomId)) {
+          const isUuid = (v?: string) => Boolean(v && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v));
+          // 1. Allocate Stay with REQUIRED checkIn date (omit synthetic bedId so backend resolves/creates unit bed by roomId)
+          if (isUuid(activeProperty.id) && (isUuid(assigningBed.bedId) || isUuid(assigningBed.roomId))) {
+            try {
+              const stayBody: Record<string, any> = {
                 propertyId: activeProperty.id,
-                roomId: assigningBed.roomId,
-                bedId: assigningBed.bedId,
                 monthlyRentPaise: fixedRent * 100,
                 securityDepositPaise: depositPaying * 100,
                 checkIn: todayDate,
-              }),
-            });
-          } catch (stayErr: any) {
-            console.warn('Stay allocation warning:', stayErr.message);
+              };
+              if (isUuid(assigningBed.roomId)) stayBody.roomId = assigningBed.roomId;
+              if (isUuid(assigningBed.bedId)) stayBody.bedId = assigningBed.bedId;
+
+              await apiClient(`/owner/tenants/${newTenant.id}/stays`, {
+                method: 'POST',
+                body: JSON.stringify(stayBody),
+              });
+            } catch (stayErr: any) {
+              console.warn('Stay allocation warning:', stayErr.message);
+            }
           }
 
           // 2. Generate monthly rent invoice

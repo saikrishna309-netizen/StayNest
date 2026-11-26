@@ -589,22 +589,26 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         }
       }
 
-      // 2. Allocate Bed if selected with the fixed rent (only for real backend UUIDs)
-      if (selectedBedId && selectedPropId && isValidUuid(selectedPropId) && isValidUuid(tenantId)) {
-        try {
-          await apiClient(`/owner/tenants/${tenantId}/stays`, {
-            method: 'POST',
-            body: JSON.stringify({
-              propertyId: selectedPropId,
-              roomId: targetRoomId,
-              bedId: selectedBedId,
-              monthlyRentPaise: fixedRent * 100,
-              securityDepositPaise: depositPaying * 100,
-              checkIn: dateOfJoining || new Date().toISOString().split('T')[0],
-            }),
-          });
-        } catch (stayErr: any) {
-          console.log('Stay allocation notice:', stayErr.message);
+      // 2. Allocate Bed/Unit if selected with the fixed rent (only for real backend UUIDs)
+      if ((selectedBedId || targetRoomId) && selectedPropId && isValidUuid(selectedPropId) && isValidUuid(tenantId)) {
+        const stayPayload: Record<string, any> = {
+          propertyId: selectedPropId,
+          monthlyRentPaise: fixedRent * 100,
+          securityDepositPaise: depositPaying * 100,
+          checkIn: dateOfJoining || new Date().toISOString().split('T')[0],
+        };
+        if (targetRoomId && isValidUuid(targetRoomId)) stayPayload.roomId = targetRoomId;
+        if (selectedBedId && isValidUuid(selectedBedId)) stayPayload.bedId = selectedBedId;
+
+        if (stayPayload.bedId || stayPayload.roomId) {
+          try {
+            await apiClient(`/owner/tenants/${tenantId}/stays`, {
+              method: 'POST',
+              body: JSON.stringify(stayPayload),
+            });
+          } catch (stayErr: any) {
+            console.log('Stay allocation notice:', stayErr.message);
+          }
         }
 
         // 3. Create monthly rent invoice with fixed rent

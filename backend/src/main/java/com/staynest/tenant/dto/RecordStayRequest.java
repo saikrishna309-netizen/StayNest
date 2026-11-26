@@ -11,7 +11,6 @@ public class RecordStayRequest {
 
     private UUID roomId;
 
-    @NotNull(message = "Bed ID is required")
     private UUID bedId;
 
     @NotNull(message = "Check-in date is required")

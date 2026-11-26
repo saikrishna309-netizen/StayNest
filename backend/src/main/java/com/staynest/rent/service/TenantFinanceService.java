@@ -337,8 +337,26 @@ public class TenantFinanceService {
             throw new ForbiddenException("You do not own this property");
         }
 
-        Bed bed = bedRepository.findById(request.getBedId())
-                .orElseThrow(() -> new ResourceNotFoundException("Bed", request.getBedId()));
+        Bed bed;
+        if (request.getBedId() != null) {
+            bed = bedRepository.findById(request.getBedId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Bed", request.getBedId()));
+        } else if (request.getRoomId() != null) {
+            Room room = roomRepository.findById(request.getRoomId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Room", request.getRoomId()));
+            bed = bedRepository.findByRoomId(room.getId()).stream()
+                    .filter(b -> b.getStatus() != BedStatus.OCCUPIED)
+                    .findFirst()
+                    .orElseGet(() -> {
+                        Bed unitBed = new Bed();
+                        unitBed.setRoomId(room.getId());
+                        unitBed.setBedLabel("Unit");
+                        unitBed.setStatus(BedStatus.AVAILABLE);
+                        return bedRepository.save(unitBed);
+                    });
+        } else {
+            throw new BadRequestException("Either Bed ID or Room ID is required.");
+        }
 
         // Enforce 1 Person = 1 Bed: verify bed is not already occupied
         List<TenantStay> activeStays = tenantStayRepository.findByPropertyIdAndStatus(property.getId(), "ACTIVE");
