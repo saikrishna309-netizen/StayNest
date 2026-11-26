@@ -80,25 +80,44 @@ export const computeOccupancyMetrics = (
   activeTenants: Tenant[]
 ): OccupancyMetrics => {
   let totalBeds = 0;
+  let bedOccupiedCount = 0;
+
+  const activeAssignedTenants = activeTenants.filter(
+    (t) =>
+      t.active !== false &&
+      t.stayStatus !== 'TERMINATED' &&
+      Boolean(t.bedId || t.roomId || t.roomNumber)
+  );
+  const occupiedBedIds = new Set(
+    activeAssignedTenants.map((t) => t.bedId).filter(Boolean) as string[]
+  );
+
+  const countRoom = (r: any) => {
+    if (Array.isArray(r.beds) && r.beds.length > 0) {
+      totalBeds += r.beds.length;
+      bedOccupiedCount += r.beds.filter(
+        (b: any) => b.status === 'OCCUPIED' || occupiedBedIds.has(b.id)
+      ).length;
+    } else {
+      totalBeds += r.capacity || 0;
+    }
+  };
 
   roomsOrFloors.forEach((item: any) => {
     if (Array.isArray(item.rooms)) {
-      // FloorItem
-      item.rooms.forEach((r: any) => {
-        totalBeds += Array.isArray(r.beds) && r.beds.length > 0 ? r.beds.length : (r.capacity || 0);
-      });
+      item.rooms.forEach(countRoom);
     } else {
-      // Room
-      totalBeds += Array.isArray(item.beds) && item.beds.length > 0 ? item.beds.length : (item.capacity || 0);
+      countRoom(item);
     }
   });
 
-  const occupiedBeds = activeTenants.filter(
-    (t) => t.active !== false && t.stayStatus !== 'TERMINATED'
-  ).length;
-
+  const occupiedBeds =
+    totalBeds === 0
+      ? 0
+      : Math.min(totalBeds, Math.max(bedOccupiedCount, activeAssignedTenants.length));
   const emptyBeds = Math.max(0, totalBeds - occupiedBeds);
-  const occupancyRate = totalBeds === 0 ? 0 : Math.min(100, Math.round((occupiedBeds / totalBeds) * 100));
+  const occupancyRate =
+    totalBeds === 0 ? 0 : Math.min(100, Math.round((occupiedBeds / totalBeds) * 100));
 
   return {
     totalBeds,
