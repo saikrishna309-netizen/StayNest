@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,13 @@ import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  AppState,
 } from 'react-native';
 import {
   AutoPayApp,
   formatDisplayDate,
   startProTrialWithAutoPay,
+  verifyAndSyncSubscription,
   SubscriptionState,
 } from '../../services/subscriptionService';
 
@@ -31,10 +33,47 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
 }) => {
   const [selectedApp, setSelectedApp] = useState<AutoPayApp>('PHONEPE');
   const [submitting, setSubmitting] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [pendingSubscriptionId, setPendingSubscriptionId] = useState<string | null>(null);
 
   const nextMonthDate = formatDisplayDate(
     new Date(Date.now() + 30 * 86_400_000).toISOString().split('T')[0]
   );
+
+  const handleVerifyNow = async (subIdOverride?: string | null, silent = false) => {
+    const targetId = subIdOverride ?? pendingSubscriptionId;
+    if (!targetId) return;
+    setVerifying(true);
+    try {
+      const { verified, state } = await verifyAndSyncSubscription(targetId);
+      if (verified) {
+        setPendingSubscriptionId(null);
+        onActivated?.(state);
+        onClose();
+        Alert.alert(
+          '👑 Pro Trial Activated!',
+          `UPI AutoPay confirmed! Your 1-Month Free Trial is active (₹0 today, ₹99/mo starting ${formatDisplayDate(state.nextBillingDate)}).`
+        );
+      } else if (!silent) {
+        Alert.alert(
+          'Awaiting Confirmation',
+          'We have not received Razorpay/UPI AutoPay confirmation yet. Please complete the mandate approval in your payment app, then tap "Verify & Activate Pro".'
+        );
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!visible || !pendingSubscriptionId) return;
+    const sub = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        void handleVerifyNow(pendingSubscriptionId, true);
+      }
+    });
+    return () => sub.remove();
+  }, [visible, pendingSubscriptionId]);
 
   const reasonBannerText =
     reason === 'PROPERTY_LIMIT'
@@ -46,14 +85,18 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
   const handleStartTrial = async () => {
     setSubmitting(true);
     try {
-      const { state, launchedUpiApp } = await startProTrialWithAutoPay(selectedApp);
-      onActivated?.(state);
-      onClose();
+      const { state, launchedUpiApp, shortUrl } = await startProTrialWithAutoPay(selectedApp);
+      setPendingSubscriptionId(state.subscriptionId || null);
+      if (!launchedUpiApp && !shortUrl) {
+        Alert.alert(
+          'Complete UPI AutoPay',
+          'Could not open the payment app automatically. Please complete your Razorpay mandate and tap "Verify & Activate Pro".'
+        );
+      }
+    } catch (err: any) {
       Alert.alert(
-        '👑 Pro Trial Activated!',
-        launchedUpiApp
-          ? `UPI AutoPay mandate opened in your payment app (₹0 today, ₹99/mo starting ${formatDisplayDate(state.nextBillingDate)}).`
-          : `1-Month Free Trial active (₹0 today, ₹99/mo starting ${formatDisplayDate(state.nextBillingDate)}). Cancel anytime in Profile.`
+        'Could Not Start AutoPay',
+        err?.message || 'Unable to create Razorpay AutoPay mandate. Please try again.'
       );
     } finally {
       setSubmitting(false);
@@ -139,18 +182,38 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
               })}
             </View>
 
-            <TouchableOpacity
-              style={[styles.ctaBtn, submitting && { opacity: 0.65 }]}
-              onPress={handleStartTrial}
-              disabled={submitting}
-              activeOpacity={0.85}
-            >
-              {submitting ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={styles.ctaBtnText}>Start 1-Month Free Trial (₹0 Today)</Text>
-              )}
-            </TouchableOpacity>
+            {pendingSubscriptionId ? (
+              <View style={styles.reasonBox}>
+                <Text style={styles.reasonText}>
+                  ⏳ Waiting for Razorpay / UPI AutoPay confirmation for mandate {pendingSubscriptionId}. Once you approve in your UPI app, tap below to verify and unlock Pro.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.ctaBtn, { marginTop: 10 }, verifying && { opacity: 0.65 }]}
+                  onPress={() => handleVerifyNow(pendingSubscriptionId, false)}
+                  disabled={verifying}
+                  activeOpacity={0.85}
+                >
+                  {verifying ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <Text style={styles.ctaBtnText}>Verify & Activate Pro</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.ctaBtn, submitting && { opacity: 0.65 }]}
+                onPress={handleStartTrial}
+                disabled={submitting}
+                activeOpacity={0.85}
+              >
+                {submitting ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.ctaBtnText}>Start 1-Month Free Trial (₹0 Today)</Text>
+                )}
+              </TouchableOpacity>
+            )}
 
             <Text style={styles.footnote}>
               🔒 UPI AutoPay Mandate • Auto-debits ₹99/mo from {nextMonthDate}. Cancel anytime in Profile.

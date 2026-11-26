@@ -1,5 +1,7 @@
 package com.staynest.subscription.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.staynest.common.exception.ResourceNotFoundException;
 import com.staynest.subscription.dto.CreateOwnerSubscriptionRequest;
 import com.staynest.subscription.dto.OwnerSubscriptionResponse;
@@ -16,9 +18,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.Base64;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,20 +40,36 @@ import java.util.stream.Collectors;
 public class SubscriptionService {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
+    private static final String RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
 
     @Value("${staynest.subscription.merchant-upi-id:staynest.subscription@okaxis}")
     private String merchantUpiId;
+
+    @Value("${staynest.subscription.razorpay-key-id:}")
+    private String razorpayKeyId;
+
+    @Value("${staynest.subscription.razorpay-key-secret:}")
+    private String razorpayKeySecret;
+
+    @Value("${staynest.subscription.razorpay-plan-id:}")
+    private String razorpayPlanId;
 
     @Value("${staynest.subscription.razorpay-webhook-secret:}")
     private String razorpayWebhookSecret;
 
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final OwnerSubscriptionRepository ownerSubscriptionRepository;
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(10))
+            .build();
 
     public SubscriptionService(SubscriptionPlanRepository subscriptionPlanRepository,
-                               OwnerSubscriptionRepository ownerSubscriptionRepository) {
+                               OwnerSubscriptionRepository ownerSubscriptionRepository,
+                               ObjectMapper objectMapper) {
         this.subscriptionPlanRepository = subscriptionPlanRepository;
         this.ownerSubscriptionRepository = ownerSubscriptionRepository;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -83,12 +109,32 @@ public class SubscriptionService {
         return ownerSubscriptionRepository.findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
                 .map(sub -> {
                     String st = sub.getStatus();
+                    String tier = sub.getPlanTier();
                     boolean validStatus = "ACTIVE".equalsIgnoreCase(st)
-                            || "PRO_TRIAL".equalsIgnoreCase(st)
                             || "CANCEL_AT_PERIOD_END".equalsIgnoreCase(st);
-                    return validStatus && sub.getEndDate() != null && !sub.getEndDate().isBefore(LocalDate.now());
+                    boolean validTier = "PRO_TRIAL".equalsIgnoreCase(tier)
+                            || "PRO_ACTIVE".equalsIgnoreCase(tier);
+                    return validStatus && validTier && sub.getEndDate() != null && !sub.getEndDate().isBefore(LocalDate.now());
                 })
                 .orElse(false);
+    }
+
+    private boolean isRazorpayConfigured() {
+        return razorpayKeyId != null && !razorpayKeyId.isBlank()
+                && razorpayKeySecret != null && !razorpayKeySecret.isBlank()
+                && razorpayPlanId != null && !razorpayPlanId.isBlank();
+    }
+
+    private String razorpayAuthHeader() {
+        String creds = razorpayKeyId.trim() + ":" + razorpayKeySecret.trim();
+        return "Basic " + Base64.getEncoder().encodeToString(creds.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private String hmacSha256Hex(String data, String secret) throws Exception {
+        Mac sha256Hmac = Mac.getInstance("HmacSHA256");
+        sha256Hmac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+        byte[] hash = sha256Hmac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+        return HexFormat.of().formatHex(hash);
     }
 
     @Transactional
@@ -103,11 +149,57 @@ public class SubscriptionService {
         LocalDate today = LocalDate.now();
         LocalDate nextBilling = today.plusDays(30);
         String gatewaySubId = "sub_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14);
+        String shortUrl = null;
+        String gatewayMode = "SANDBOX_FALLBACK";
 
+        if (isRazorpayConfigured()) {
+            try {
+                long startAtEpoch = Instant.now().plus(30, ChronoUnit.DAYS).getEpochSecond();
+                Map<String, Object> reqBody = new LinkedHashMap<>();
+                reqBody.put("plan_id", razorpayPlanId.trim());
+                reqBody.put("total_count", 120);
+                reqBody.put("quantity", 1);
+                reqBody.put("customer_notify", 1);
+                reqBody.put("start_at", startAtEpoch);
+                reqBody.put("notes", Map.of(
+                        "owner_id", ownerId.toString(),
+                        "preferred_app", preferredApp != null ? preferredApp : "PHONEPE"
+                ));
+
+                String jsonBody = objectMapper.writeValueAsString(reqBody);
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(RAZORPAY_API_BASE + "/subscriptions"))
+                        .header("Authorization", razorpayAuthHeader())
+                        .header("Content-Type", "application/json")
+                        .timeout(Duration.ofSeconds(15))
+                        .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                    Map<String, Object> rzpResp = objectMapper.readValue(response.body(), new TypeReference<>() {});
+                    if (rzpResp.get("id") != null) {
+                        gatewaySubId = String.valueOf(rzpResp.get("id"));
+                    }
+                    if (rzpResp.get("short_url") != null) {
+                        shortUrl = String.valueOf(rzpResp.get("short_url"));
+                    }
+                    gatewayMode = "RAZORPAY";
+                } else {
+                    log.error("Razorpay create subscription failed ({}): {}", response.statusCode(), response.body());
+                    throw new IllegalStateException("Razorpay subscription creation failed: HTTP " + response.statusCode());
+                }
+            } catch (Exception ex) {
+                log.error("Failed to create Razorpay subscription for owner {}", ownerId, ex);
+                throw new IllegalStateException("Unable to initiate Razorpay AutoPay mandate: " + ex.getMessage(), ex);
+            }
+        }
+
+        // Always start in PENDING / FREE until verified by Razorpay callback or webhook
         OwnerSubscription sub = new OwnerSubscription(ownerId, proPlan.getId(), today, nextBilling);
-        sub.setStatus("ACTIVE");
-        sub.setPlanTier("PRO_TRIAL");
-        sub.setAutopayStatus("ACTIVE");
+        sub.setStatus("PENDING");
+        sub.setPlanTier("FREE");
+        sub.setAutopayStatus("PENDING");
         sub.setAutoRenew(true);
         sub.setGatewaySubscriptionId(gatewaySubId);
         ownerSubscriptionRepository.save(sub);
@@ -124,15 +216,94 @@ public class SubscriptionService {
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("subscriptionId", gatewaySubId);
-        resp.put("plan", "PRO_TRIAL");
-        resp.put("autopayStatus", "ACTIVE");
+        resp.put("plan", "FREE");
+        resp.put("status", "PENDING");
+        resp.put("autopayStatus", "PENDING");
         resp.put("trialAmountRupees", 0);
         resp.put("monthlyAmountRupees", 99);
         resp.put("totalCount", 120);
         resp.put("startAt", nextBilling.toString());
         resp.put("nextBillingDate", nextBilling.toString());
-        resp.put("mandateAuthUrl", mandateUrl);
-        resp.put("preferredApp", preferredApp != null ? preferredApp : "GPAY");
+        resp.put("shortUrl", shortUrl);
+        resp.put("mandateAuthUrl", shortUrl != null ? shortUrl : mandateUrl);
+        resp.put("gatewayMode", gatewayMode);
+        resp.put("razorpayKeyId", razorpayKeyId != null && !razorpayKeyId.isBlank() ? razorpayKeyId : null);
+        resp.put("preferredApp", preferredApp != null ? preferredApp : "PHONEPE");
+        return resp;
+    }
+
+    @Transactional
+    public Map<String, Object> verifyMandate(UUID ownerId, String subscriptionId, String paymentId, String signature) {
+        OwnerSubscription sub = (subscriptionId != null && !subscriptionId.isBlank())
+                ? ownerSubscriptionRepository.findByGatewaySubscriptionId(subscriptionId.trim())
+                    .orElseThrow(() -> new ResourceNotFoundException("Subscription not found: " + subscriptionId))
+                : ownerSubscriptionRepository.findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("No subscription found for owner: " + ownerId));
+
+        if (!sub.getOwnerId().equals(ownerId)) {
+            throw new IllegalArgumentException("Subscription does not belong to authenticated owner");
+        }
+
+        boolean verified = "ACTIVE".equalsIgnoreCase(sub.getStatus())
+                && ("PRO_TRIAL".equalsIgnoreCase(sub.getPlanTier()) || "PRO_ACTIVE".equalsIgnoreCase(sub.getPlanTier()));
+
+        // 1. Verify Razorpay SDK signature if provided
+        if (!verified && paymentId != null && !paymentId.isBlank() && signature != null && !signature.isBlank()
+                && razorpayKeySecret != null && !razorpayKeySecret.isBlank()) {
+            try {
+                String expected = hmacSha256Hex(paymentId.trim() + "|" + sub.getGatewaySubscriptionId(), razorpayKeySecret.trim());
+                if (expected.equalsIgnoreCase(signature.trim())) {
+                    sub.setPlanTier("PRO_TRIAL");
+                    sub.setAutopayStatus("ACTIVE");
+                    sub.setStatus("ACTIVE");
+                    sub.setEndDate(LocalDate.now().plusDays(30));
+                    ownerSubscriptionRepository.save(sub);
+                    verified = true;
+                } else {
+                    throw new IllegalArgumentException("Invalid Razorpay payment signature");
+                }
+            } catch (IllegalArgumentException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                log.error("Signature verification error for subscription {}", sub.getGatewaySubscriptionId(), ex);
+            }
+        }
+
+        // 2. Otherwise poll Razorpay Subscriptions API (for hosted short_url checkout)
+        if (!verified && isRazorpayConfigured() && sub.getGatewaySubscriptionId() != null) {
+            try {
+                HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(RAZORPAY_API_BASE + "/subscriptions/" + sub.getGatewaySubscriptionId()))
+                        .header("Authorization", razorpayAuthHeader())
+                        .timeout(Duration.ofSeconds(15))
+                        .GET()
+                        .build();
+
+                HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+                if (response.statusCode() >= 200 && response.statusCode() < 300) {
+                    Map<String, Object> rzpSub = objectMapper.readValue(response.body(), new TypeReference<>() {});
+                    String rzpStatus = String.valueOf(rzpSub.getOrDefault("status", "")).toLowerCase();
+                    if ("authenticated".equals(rzpStatus) || "active".equals(rzpStatus)) {
+                        sub.setPlanTier("active".equals(rzpStatus) ? "PRO_ACTIVE" : "PRO_TRIAL");
+                        sub.setAutopayStatus("ACTIVE");
+                        sub.setStatus("ACTIVE");
+                        sub.setEndDate(LocalDate.now().plusDays(30));
+                        ownerSubscriptionRepository.save(sub);
+                        verified = true;
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Could not poll Razorpay subscription {}: {}", sub.getGatewaySubscriptionId(), ex.getMessage());
+            }
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("verified", verified);
+        resp.put("subscriptionId", sub.getGatewaySubscriptionId());
+        resp.put("plan", verified ? sub.getPlanTier() : "FREE");
+        resp.put("status", sub.getStatus());
+        resp.put("autopayStatus", sub.getAutopayStatus());
+        resp.put("nextBillingDate", sub.getEndDate() != null ? sub.getEndDate().toString() : LocalDate.now().plusDays(30).toString());
         return resp;
     }
 
@@ -164,19 +335,28 @@ public class SubscriptionService {
     public void handleSubscriptionWebhook(String provider, String signature, String rawBody, Map<String, Object> payload) {
         log.info("Processing subscription webhook from provider: {}", provider);
 
-        if (razorpayWebhookSecret != null && !razorpayWebhookSecret.isBlank() && signature != null && rawBody != null) {
+        if (razorpayWebhookSecret != null && !razorpayWebhookSecret.isBlank()) {
+            if (signature == null || rawBody == null) {
+                throw new IllegalArgumentException("Missing webhook signature or payload");
+            }
             try {
-                Mac sha256Hmac = Mac.getInstance("HmacSHA256");
-                sha256Hmac.init(new SecretKeySpec(razorpayWebhookSecret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-                byte[] hash = sha256Hmac.doFinal(rawBody.getBytes(StandardCharsets.UTF_8));
-                String expected = HexFormat.of().formatHex(hash);
+                String expected = hmacSha256Hex(rawBody, razorpayWebhookSecret.trim());
                 if (!expected.equalsIgnoreCase(signature.trim())) {
                     throw new IllegalArgumentException("Invalid webhook signature");
                 }
             } catch (IllegalArgumentException ex) {
                 throw ex;
             } catch (Exception ex) {
-                log.warn("Webhook signature verification skipped/error: {}", ex.getMessage());
+                throw new IllegalStateException("Webhook signature verification failed", ex);
+            }
+        }
+
+        if (payload == null && rawBody != null && !rawBody.isBlank()) {
+            try {
+                payload = objectMapper.readValue(rawBody, new TypeReference<>() {});
+            } catch (Exception ex) {
+                log.warn("Failed to parse webhook JSON body: {}", ex.getMessage());
+                return;
             }
         }
 
@@ -197,6 +377,11 @@ public class SubscriptionService {
                 sub.setAutopayStatus("ACTIVE");
                 sub.setStatus("ACTIVE");
                 sub.setEndDate(LocalDate.now().plusDays(30));
+                ownerSubscriptionRepository.save(sub);
+            } else if ("subscription.halted".equalsIgnoreCase(event) || "payment.failed".equalsIgnoreCase(event)) {
+                sub.setPlanTier("FREE");
+                sub.setAutopayStatus("NONE");
+                sub.setStatus("PAST_DUE");
                 ownerSubscriptionRepository.save(sub);
             } else if ("subscription.cancelled".equalsIgnoreCase(event)) {
                 sub.setAutopayStatus("CANCELLED");

@@ -43,3 +43,8 @@ staynest:
     greenapi:
       id-instance: ${GREENAPI_ID_INSTANCE:}
       api-token-instance: ${GREENAPI_TOKEN_INSTANCE:}
+  subscription:
+    razorpay-key-id: ${RAZORPAY_KEY_ID:}
+    razorpay-key-secret: ${RAZORPAY_KEY_SECRET:}
+    razorpay-plan-id: ${RAZORPAY_PRO_PLAN_ID:}
+    razorpay-webhook-secret: ${RAZORPAY_WEBHOOK_SECRET:}

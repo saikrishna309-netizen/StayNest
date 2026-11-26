@@ -8,7 +8,7 @@ export type AutoPayApp = 'PHONEPE' | 'GPAY' | 'PAYTM' | 'UPI';
 
 export interface SubscriptionState {
   plan: PlanTier;
-  autopayStatus: 'NONE' | 'ACTIVE' | 'CANCELLED';
+  autopayStatus: 'NONE' | 'PENDING' | 'ACTIVE' | 'CANCELLED';
   nextBillingDate: string; // YYYY-MM-DD
   subscriptionId?: string;
   autoPayMethod?: AutoPayApp;
@@ -133,58 +133,69 @@ export const canSendWhatsAppReminder = async (
 };
 
 /**
- * Calls POST /subscriptions/create-mandate, launches PhonePe / GPay / Paytm
- * UPI AutoPay mandate intent on Android/iOS, and activates PRO_TRIAL (₹0 today, ₹99/mo after 30d).
+ * Calls POST /subscriptions/create-mandate, opens Razorpay hosted UPI AutoPay checkout (shortUrl)
+ * or UPI app intent, and keeps the subscription in PENDING state until verified by Razorpay.
  */
 export const startProTrialWithAutoPay = async (
   preferredApp: AutoPayApp
-): Promise<{ state: SubscriptionState; launchedUpiApp: boolean }> => {
+): Promise<{
+  state: SubscriptionState;
+  launchedUpiApp: boolean;
+  shortUrl?: string;
+  gatewayMode?: string;
+}> => {
   let subscriptionId = `sub_${Date.now()}`;
   let nextBillingDate = getFutureDateIso(30);
+  let shortUrl: string | undefined;
   let mandateAuthUrl = '';
+  let gatewayMode = 'SANDBOX_FALLBACK';
 
-  try {
-    const res = await apiClient<{
-      subscriptionId?: string;
-      nextBillingDate?: string;
-      mandateAuthUrl?: string;
-    }>('/subscriptions/create-mandate', {
-      method: 'POST',
-      body: JSON.stringify({ preferredApp }),
-    });
-    if (res?.subscriptionId) subscriptionId = res.subscriptionId;
-    if (res?.nextBillingDate) nextBillingDate = res.nextBillingDate;
-    if (res?.mandateAuthUrl) mandateAuthUrl = res.mandateAuthUrl;
-  } catch {
-    // Offline/local fallback
-  }
+  const res = await apiClient<{
+    subscriptionId?: string;
+    nextBillingDate?: string;
+    shortUrl?: string;
+    mandateAuthUrl?: string;
+    gatewayMode?: string;
+  }>('/subscriptions/create-mandate', {
+    method: 'POST',
+    body: JSON.stringify({ preferredApp }),
+  });
 
-  if (!mandateAuthUrl) {
-    const tn = encodeURIComponent('StayNest Pro AutoPay 99/mo');
-    const pn = encodeURIComponent('StayNest PG');
-    mandateAuthUrl = `upi://mandate?pa=${MERCHANT_UPI_ID}&pn=${pn}&am=99.00&cu=INR&recur=MONTHLY&tr=${subscriptionId}&tn=${tn}`;
-  }
-
-  let appSpecificUrl = mandateAuthUrl;
-  if (preferredApp === 'PHONEPE') {
-    appSpecificUrl = mandateAuthUrl.replace(/^upi:\/\//, 'phonepe://');
-  } else if (preferredApp === 'GPAY') {
-    appSpecificUrl = mandateAuthUrl.replace(/^upi:\/\//, 'tez://upi/');
-  } else if (preferredApp === 'PAYTM') {
-    appSpecificUrl = mandateAuthUrl.replace(/^upi:\/\//, 'paytmmp://');
-  }
+  if (res?.subscriptionId) subscriptionId = res.subscriptionId;
+  if (res?.nextBillingDate) nextBillingDate = res.nextBillingDate;
+  if (res?.shortUrl) shortUrl = res.shortUrl;
+  if (res?.mandateAuthUrl) mandateAuthUrl = res.mandateAuthUrl;
+  if (res?.gatewayMode) gatewayMode = res.gatewayMode;
 
   let launchedUpiApp = false;
-  if (Platform.OS !== 'web') {
+  const targetUrl = shortUrl || mandateAuthUrl;
+
+  if (shortUrl) {
+    try {
+      await Linking.openURL(shortUrl);
+      launchedUpiApp = true;
+    } catch {
+      launchedUpiApp = false;
+    }
+  } else if (Platform.OS !== 'web' && targetUrl) {
+    let appSpecificUrl = targetUrl;
+    if (preferredApp === 'PHONEPE') {
+      appSpecificUrl = targetUrl.replace(/^upi:\/\//, 'phonepe://');
+    } else if (preferredApp === 'GPAY') {
+      appSpecificUrl = targetUrl.replace(/^upi:\/\//, 'tez://upi/');
+    } else if (preferredApp === 'PAYTM') {
+      appSpecificUrl = targetUrl.replace(/^upi:\/\//, 'paytmmp://');
+    }
+
     try {
       const canOpenSpecific = await Linking.canOpenURL(appSpecificUrl);
       if (canOpenSpecific) {
         await Linking.openURL(appSpecificUrl);
         launchedUpiApp = true;
       } else {
-        const canOpenGeneric = await Linking.canOpenURL(mandateAuthUrl);
+        const canOpenGeneric = await Linking.canOpenURL(targetUrl);
         if (canOpenGeneric) {
-          await Linking.openURL(mandateAuthUrl);
+          await Linking.openURL(targetUrl);
           launchedUpiApp = true;
         }
       }
@@ -193,16 +204,94 @@ export const startProTrialWithAutoPay = async (
     }
   }
 
-  const nextState: SubscriptionState = {
-    plan: 'PRO_TRIAL',
-    autopayStatus: 'ACTIVE',
+  // Keep plan as FREE and autopayStatus as PENDING until Razorpay confirms the mandate
+  const pendingState: SubscriptionState = {
+    plan: 'FREE',
+    autopayStatus: 'PENDING',
     nextBillingDate,
     subscriptionId,
     autoPayMethod: preferredApp,
     updatedAt: new Date().toISOString(),
   };
-  await saveSubscriptionState(nextState);
-  return { state: nextState, launchedUpiApp };
+  await saveSubscriptionState(pendingState);
+  return { state: pendingState, launchedUpiApp, shortUrl, gatewayMode };
+};
+
+/**
+ * Verifies a pending Razorpay UPI AutoPay mandate on the backend (via /subscriptions/verify-mandate
+ * and/or webhook-updated /owner/subscription) before unlocking PRO_TRIAL.
+ */
+export const verifyAndSyncSubscription = async (
+  subscriptionId?: string,
+  razorpayPaymentId?: string,
+  razorpaySignature?: string
+): Promise<{ verified: boolean; state: SubscriptionState }> => {
+  const current = await getSubscriptionState();
+  const targetSubId = subscriptionId || current.subscriptionId;
+
+  try {
+    const verifyRes = await apiClient<{
+      verified?: boolean;
+      plan?: PlanTier;
+      status?: string;
+      autopayStatus?: 'NONE' | 'PENDING' | 'ACTIVE' | 'CANCELLED';
+      subscriptionId?: string;
+      nextBillingDate?: string;
+    }>('/subscriptions/verify-mandate', {
+      method: 'POST',
+      body: JSON.stringify({
+        subscriptionId: targetSubId,
+        razorpayPaymentId,
+        razorpaySignature,
+      }),
+    });
+
+    if (verifyRes?.verified) {
+      const activeState: SubscriptionState = {
+        plan: verifyRes.plan === 'PRO_ACTIVE' ? 'PRO_ACTIVE' : 'PRO_TRIAL',
+        autopayStatus: 'ACTIVE',
+        nextBillingDate: verifyRes.nextBillingDate || current.nextBillingDate,
+        subscriptionId: verifyRes.subscriptionId || targetSubId,
+        autoPayMethod: current.autoPayMethod,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveSubscriptionState(activeState);
+      return { verified: true, state: activeState };
+    }
+  } catch {
+    // Fall through to /owner/subscription check in case webhook already activated it
+  }
+
+  try {
+    const serverSub = await apiClient<{
+      status?: string;
+      planTier?: PlanTier;
+      autopayStatus?: 'NONE' | 'PENDING' | 'ACTIVE' | 'CANCELLED';
+      endDate?: string;
+      gatewaySubscriptionId?: string;
+    }>('/owner/subscription');
+
+    const isServerActive =
+      (serverSub?.status === 'ACTIVE' || serverSub?.status === 'CANCEL_AT_PERIOD_END') &&
+      (serverSub?.planTier === 'PRO_TRIAL' || serverSub?.planTier === 'PRO_ACTIVE');
+
+    if (isServerActive && serverSub.planTier) {
+      const syncedState: SubscriptionState = {
+        plan: serverSub.planTier,
+        autopayStatus: serverSub.autopayStatus || 'ACTIVE',
+        nextBillingDate: serverSub.endDate || current.nextBillingDate,
+        subscriptionId: serverSub.gatewaySubscriptionId || targetSubId,
+        autoPayMethod: current.autoPayMethod,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveSubscriptionState(syncedState);
+      return { verified: true, state: syncedState };
+    }
+  } catch {
+    // ignore
+  }
+
+  return { verified: false, state: current };
 };
 
 export const cancelProAutoPay = async (): Promise<SubscriptionState> => {

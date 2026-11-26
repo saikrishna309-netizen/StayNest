@@ -16,6 +16,9 @@ public class OwnerSubscriptionResponse {
     private LocalDate startDate;
     private LocalDate endDate;
     private boolean autoRenew;
+    private String planTier;
+    private String autopayStatus;
+    private String gatewaySubscriptionId;
 
     public OwnerSubscriptionResponse() {
     }
@@ -33,6 +36,9 @@ public class OwnerSubscriptionResponse {
         res.setStartDate(sub.getStartDate());
         res.setEndDate(sub.getEndDate());
         res.setAutoRenew(sub.isAutoRenew());
+        res.setPlanTier(sub.getPlanTier());
+        res.setAutopayStatus(sub.getAutopayStatus());
+        res.setGatewaySubscriptionId(sub.getGatewaySubscriptionId());
         return res;
     }
 
@@ -106,6 +112,30 @@ public class OwnerSubscriptionResponse {
 
     public void setAutoRenew(boolean autoRenew) {
         this.autoRenew = autoRenew;
+    }
+
+    public String getPlanTier() {
+        return planTier;
+    }
+
+    public void setPlanTier(String planTier) {
+        this.planTier = planTier;
+    }
+
+    public String getAutopayStatus() {
+        return autopayStatus;
+    }
+
+    public void setAutopayStatus(String autopayStatus) {
+        this.autopayStatus = autopayStatus;
+    }
+
+    public String getGatewaySubscriptionId() {
+        return gatewaySubscriptionId;
+    }
+
+    public void setGatewaySubscriptionId(String gatewaySubscriptionId) {
+        this.gatewaySubscriptionId = gatewaySubscriptionId;
     }
 }
 
