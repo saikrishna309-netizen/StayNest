@@ -19,6 +19,9 @@ public class OwnerSubscriptionResponse {
     private String planTier;
     private String autopayStatus;
     private String gatewaySubscriptionId;
+    private long trialDaysLeft;
+    private boolean trialExpired;
+    private boolean hasFullAccess;
 
     public OwnerSubscriptionResponse() {
     }
@@ -136,6 +139,30 @@ public class OwnerSubscriptionResponse {
 
     public void setGatewaySubscriptionId(String gatewaySubscriptionId) {
         this.gatewaySubscriptionId = gatewaySubscriptionId;
+    }
+
+    public long getTrialDaysLeft() {
+        return trialDaysLeft;
+    }
+
+    public void setTrialDaysLeft(long trialDaysLeft) {
+        this.trialDaysLeft = trialDaysLeft;
+    }
+
+    public boolean isTrialExpired() {
+        return trialExpired;
+    }
+
+    public void setTrialExpired(boolean trialExpired) {
+        this.trialExpired = trialExpired;
+    }
+
+    public boolean isHasFullAccess() {
+        return hasFullAccess;
+    }
+
+    public void setHasFullAccess(boolean hasFullAccess) {
+        this.hasFullAccess = hasFullAccess;
     }
 }
 

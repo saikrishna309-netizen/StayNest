@@ -10,6 +10,8 @@ import com.staynest.subscription.entity.OwnerSubscription;
 import com.staynest.subscription.entity.SubscriptionPlan;
 import com.staynest.subscription.repository.OwnerSubscriptionRepository;
 import com.staynest.subscription.repository.SubscriptionPlanRepository;
+import com.staynest.user.entity.User;
+import com.staynest.user.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.HexFormat;
@@ -59,6 +62,7 @@ public class SubscriptionService {
 
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final OwnerSubscriptionRepository ownerSubscriptionRepository;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(10))
@@ -66,9 +70,11 @@ public class SubscriptionService {
 
     public SubscriptionService(SubscriptionPlanRepository subscriptionPlanRepository,
                                OwnerSubscriptionRepository ownerSubscriptionRepository,
+                               UserRepository userRepository,
                                ObjectMapper objectMapper) {
         this.subscriptionPlanRepository = subscriptionPlanRepository;
         this.ownerSubscriptionRepository = ownerSubscriptionRepository;
+        this.userRepository = userRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -95,28 +101,71 @@ public class SubscriptionService {
         return OwnerSubscriptionResponse.from(sub, plan);
     }
 
+    private LocalDate resolveAccountCreatedDate(UUID ownerId) {
+        return userRepository.findById(ownerId)
+                .map(User::getCreatedAt)
+                .map(inst -> inst.atZone(ZoneId.systemDefault()).toLocalDate())
+                .orElse(LocalDate.now());
+    }
+
     @Transactional(readOnly = true)
     public OwnerSubscriptionResponse getCurrentSubscription(UUID ownerId) {
-        OwnerSubscription sub = ownerSubscriptionRepository.findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
-                .orElseThrow(() -> new ResourceNotFoundException("No active subscription found for owner: " + ownerId));
+        LocalDate today = LocalDate.now();
+        LocalDate trialStart = resolveAccountCreatedDate(ownerId);
+        LocalDate trialEnd = trialStart.plusDays(30);
 
-        SubscriptionPlan plan = subscriptionPlanRepository.findById(sub.getPlanId()).orElse(null);
-        return OwnerSubscriptionResponse.from(sub, plan);
+        OwnerSubscription sub = ownerSubscriptionRepository.findTopByOwnerIdOrderByCreatedAtDesc(ownerId).orElse(null);
+        if (sub != null) {
+            String st = sub.getStatus();
+            String tier = sub.getPlanTier();
+            boolean isPaidOrVerified = ("ACTIVE".equalsIgnoreCase(st) || "CANCEL_AT_PERIOD_END".equalsIgnoreCase(st))
+                    && ("PRO_TRIAL".equalsIgnoreCase(tier) || "PRO_ACTIVE".equalsIgnoreCase(tier))
+                    && sub.getEndDate() != null
+                    && !sub.getEndDate().isBefore(today);
+
+            if (isPaidOrVerified) {
+                SubscriptionPlan plan = subscriptionPlanRepository.findById(sub.getPlanId()).orElse(null);
+                OwnerSubscriptionResponse res = OwnerSubscriptionResponse.from(sub, plan);
+                res.setHasFullAccess(true);
+                res.setTrialExpired(false);
+                res.setTrialDaysLeft(Math.max(0L, ChronoUnit.DAYS.between(today, sub.getEndDate())));
+                return res;
+            }
+        }
+
+        // Fallback to 30-day account-creation free trial
+        boolean inAccountTrial = !today.isAfter(trialEnd);
+        long daysLeft = inAccountTrial ? Math.max(1L, ChronoUnit.DAYS.between(today, trialEnd)) : 0L;
+
+        OwnerSubscriptionResponse res = new OwnerSubscriptionResponse();
+        res.setOwnerId(ownerId);
+        res.setPlanName("StayNest Pro");
+        res.setPlanCode("PRO_149");
+        res.setStartDate(trialStart);
+        res.setEndDate(trialEnd);
+        res.setAutoRenew(sub != null && sub.isAutoRenew());
+        res.setAutopayStatus(sub != null && sub.getAutopayStatus() != null ? sub.getAutopayStatus() : "NONE");
+        res.setGatewaySubscriptionId(sub != null ? sub.getGatewaySubscriptionId() : null);
+
+        if (inAccountTrial) {
+            res.setStatus("ACTIVE");
+            res.setPlanTier("PRO_TRIAL");
+            res.setHasFullAccess(true);
+            res.setTrialExpired(false);
+            res.setTrialDaysLeft(daysLeft);
+        } else {
+            res.setStatus("TRIAL_EXPIRED");
+            res.setPlanTier("FREE");
+            res.setHasFullAccess(false);
+            res.setTrialExpired(true);
+            res.setTrialDaysLeft(0L);
+        }
+        return res;
     }
 
     @Transactional(readOnly = true)
     public boolean hasActiveProSubscription(UUID ownerId) {
-        return ownerSubscriptionRepository.findTopByOwnerIdOrderByCreatedAtDesc(ownerId)
-                .map(sub -> {
-                    String st = sub.getStatus();
-                    String tier = sub.getPlanTier();
-                    boolean validStatus = "ACTIVE".equalsIgnoreCase(st)
-                            || "CANCEL_AT_PERIOD_END".equalsIgnoreCase(st);
-                    boolean validTier = "PRO_TRIAL".equalsIgnoreCase(tier)
-                            || "PRO_ACTIVE".equalsIgnoreCase(tier);
-                    return validStatus && validTier && sub.getEndDate() != null && !sub.getEndDate().isBefore(LocalDate.now());
-                })
-                .orElse(false);
+        return getCurrentSubscription(ownerId).isHasFullAccess();
     }
 
     private boolean isRazorpayConfigured() {
@@ -147,20 +196,25 @@ public class SubscriptionService {
                 ));
 
         LocalDate today = LocalDate.now();
-        LocalDate nextBilling = today.plusDays(30);
+        LocalDate trialEnd = resolveAccountCreatedDate(ownerId).plusDays(30);
+        boolean hasRemainingTrial = trialEnd.isAfter(today);
+        LocalDate nextBilling = hasRemainingTrial ? trialEnd : today.plusDays(30);
         String gatewaySubId = "sub_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14);
         String shortUrl = null;
         String gatewayMode = "SANDBOX_FALLBACK";
 
         if (isRazorpayConfigured()) {
             try {
-                long startAtEpoch = Instant.now().plus(30, ChronoUnit.DAYS).getEpochSecond();
                 Map<String, Object> reqBody = new LinkedHashMap<>();
                 reqBody.put("plan_id", razorpayPlanId.trim());
                 reqBody.put("total_count", 120);
                 reqBody.put("quantity", 1);
                 reqBody.put("customer_notify", 1);
-                reqBody.put("start_at", startAtEpoch);
+                // Only defer first charge if the user still has remaining days in their 30-day account trial
+                if (hasRemainingTrial) {
+                    long remainingDays = ChronoUnit.DAYS.between(today, trialEnd);
+                    reqBody.put("start_at", Instant.now().plus(remainingDays, ChronoUnit.DAYS).getEpochSecond());
+                }
                 reqBody.put("notes", Map.of(
                         "owner_id", ownerId.toString(),
                         "preferred_app", preferredApp != null ? preferredApp : "PHONEPE"

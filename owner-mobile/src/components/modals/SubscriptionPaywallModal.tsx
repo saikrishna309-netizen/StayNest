@@ -20,7 +20,8 @@ import {
 
 interface SubscriptionPaywallModalProps {
   visible: boolean;
-  reason?: 'PROPERTY_LIMIT' | 'WHATSAPP_LIMIT' | 'UPGRADE';
+  reason?: 'PROPERTY_LIMIT' | 'WHATSAPP_LIMIT' | 'UPGRADE' | 'TRIAL_EXPIRED';
+  trialExpired?: boolean;
   onClose: () => void;
   onActivated?: (state: SubscriptionState) => void;
 }
@@ -28,6 +29,7 @@ interface SubscriptionPaywallModalProps {
 export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> = ({
   visible,
   reason = 'UPGRADE',
+  trialExpired = false,
   onClose,
   onActivated,
 }) => {
@@ -75,8 +77,12 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
     return () => sub.remove();
   }, [visible, pendingSubscriptionId]);
 
+  const isExpired = trialExpired || reason === 'TRIAL_EXPIRED';
+
   const reasonBannerText =
-    reason === 'PROPERTY_LIMIT'
+    isExpired
+      ? 'Your 30-day free trial has ended. Your rooms, tenants & rent records are safely saved — activate StayNest Pro (₹149/mo) to unlock the full app.'
+      : reason === 'PROPERTY_LIMIT'
       ? 'Free plan includes 1 property. Start your 1-Month Free Trial (₹0 today, ₹149/mo after) to manage unlimited properties.'
       : reason === 'WHATSAPP_LIMIT'
       ? "You've reached 5/5 free WhatsApp reminders this month. Upgrade to Pro for unlimited reminders."
@@ -127,11 +133,19 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
             {/* Price Hero */}
             <View style={styles.priceCard}>
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                <Text style={styles.priceZero}>₹0</Text>
-                <Text style={styles.priceToday}>Today</Text>
+                <Text style={styles.priceZero}>{isExpired ? '₹149' : '₹0'}</Text>
+                <Text style={styles.priceToday}>{isExpired ? '/month' : 'Today'}</Text>
               </View>
               <Text style={styles.priceSub}>
-                Then <Text style={{ fontWeight: '800', color: '#0f172a' }}>₹149/month</Text> starting {nextMonthDate} • Cancel anytime in 1 tap
+                {isExpired ? (
+                  <>
+                    Instant full access via <Text style={{ fontWeight: '800', color: '#0f172a' }}>Razorpay UPI AutoPay</Text> • Cancel anytime in 1 tap
+                  </>
+                ) : (
+                  <>
+                    Then <Text style={{ fontWeight: '800', color: '#0f172a' }}>₹149/month</Text> starting {nextMonthDate} • Cancel anytime in 1 tap
+                  </>
+                )}
               </Text>
             </View>
 
@@ -210,7 +224,9 @@ export const SubscriptionPaywallModal: React.FC<SubscriptionPaywallModalProps> =
                 {submitting ? (
                   <ActivityIndicator color="#ffffff" />
                 ) : (
-                  <Text style={styles.ctaBtnText}>Start 1-Month Free Trial (₹0 Today)</Text>
+                  <Text style={styles.ctaBtnText}>
+                    {isExpired ? 'Activate Pro Now (₹149/mo)' : 'Start 1-Month Free Trial (₹0 Today)'}
+                  </Text>
                 )}
               </TouchableOpacity>
             )}

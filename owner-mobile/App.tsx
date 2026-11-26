@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -10,6 +10,13 @@ import { PropertiesScreen } from './src/screens/PropertiesScreen';
 import { TenantsScreen } from './src/screens/TenantsScreen';
 import { ManagementScreen } from './src/screens/ManagementScreen';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { SubscriptionPaywallModal } from './src/components/modals/SubscriptionPaywallModal';
+import {
+  getSubscriptionState,
+  isProActive,
+  SubscriptionState,
+  syncSubscriptionFromServer,
+} from './src/services/subscriptionService';
 import { Property } from './src/types';
 import { safeStorage } from './src/utils/safeStorage';
 
@@ -84,6 +91,34 @@ const MainNavigator: React.FC = () => {
   const [registrationSkipped, setRegistrationSkipped] = useState(false);
   const [webDeviceMode, setWebDeviceMode] = useState<'MOBILE' | 'DESKTOP'>('DESKTOP');
   const [dashboardResetTrigger, setDashboardResetTrigger] = useState(0);
+  const [subState, setSubState] = useState<SubscriptionState | null>(null);
+  const [showTrialPaywall, setShowTrialPaywall] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    let active = true;
+    const refreshSub = async () => {
+      const local = await getSubscriptionState();
+      if (active) setSubState(local);
+      const synced = await syncSubscriptionFromServer();
+      if (active) setSubState(synced);
+    };
+    void refreshSub();
+
+    const appSub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        void syncSubscriptionFromServer().then((s) => {
+          if (active) setSubState(s);
+        });
+      }
+    });
+    return () => {
+      active = false;
+      appSub.remove();
+    };
+  }, [isAuthenticated]);
+
+  const isTrialExpired = Boolean(subState && subState.trialExpired === true && !isProActive(subState));
 
   // 1. If not authenticated -> Login Screen (Mobile + OTP)
   if (!isAuthenticated) {
@@ -182,7 +217,25 @@ const MainNavigator: React.FC = () => {
             Platform.OS === 'web' && webDeviceMode === 'DESKTOP' && styles.desktopFrameWeb,
           ]}
         >
-          {/* Tab 1: Dashboard (Fast Persistent Pane) */}
+          {/* Trial Countdown / Expired Banner on Home */}
+          {currentTab === 'dashboard' && (isTrialExpired || (typeof subState?.trialDaysLeft === 'number' && subState.trialDaysLeft <= 5 && subState.autopayStatus !== 'ACTIVE')) && (
+            <TouchableOpacity
+              style={[styles.trialBanner, isTrialExpired ? styles.trialBannerExpired : styles.trialBannerWarning]}
+              onPress={() => setShowTrialPaywall(true)}
+              activeOpacity={0.88}
+            >
+              <Text style={styles.trialBannerText} numberOfLines={2}>
+                {isTrialExpired
+                  ? '🔒 30-Day Free Trial Ended • Rooms, Tenants & Wallet locked'
+                  : `⏳ Free Trial ends in ${subState?.trialDaysLeft} day${subState?.trialDaysLeft === 1 ? '' : 's'} • Activate ₹149/mo AutoPay`}
+              </Text>
+              <View style={styles.trialBannerBtn}>
+                <Text style={styles.trialBannerBtnText}>{isTrialExpired ? 'Unlock ₹149/mo' : 'Activate'}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Tab 1: Dashboard (Fast Persistent Pane — Always Available) */}
           <View style={[styles.tabPane, currentTab === 'dashboard' ? styles.tabPaneActive : styles.tabPaneHidden]}>
             <DashboardScreen
               resetTrigger={dashboardResetTrigger}
@@ -198,32 +251,86 @@ const MainNavigator: React.FC = () => {
             />
           </View>
 
-          {/* Tab 2: Properties (Combined Property, Floors, Rooms & Beds) */}
+          {/* Tab 2: Properties (Locked after 30-day trial expiry until Pro ₹149/mo active) */}
           <View style={[styles.tabPane, currentTab === 'properties' ? styles.tabPaneActive : styles.tabPaneHidden]}>
-            <PropertiesScreen
-              initialProperty={selectedProperty}
-              onActivePropertyChange={handleActivePropertyChange}
-              onBackToDashboard={() => setCurrentTab('dashboard')}
-            />
+            {isTrialExpired ? (
+              <View style={styles.trialLockScreen}>
+                <View style={styles.trialLockIconCircle}>
+                  <Text style={{ fontSize: 32 }}>🔒</Text>
+                </View>
+                <Text style={styles.trialLockTitle}>Rooms & Flats Locked</Text>
+                <Text style={styles.trialLockSub}>
+                  Your 30-day free trial has ended. Your properties, rooms & beds are safely saved — activate StayNest Pro (₹149/mo) to unlock full access.
+                </Text>
+                <TouchableOpacity style={styles.trialLockCta} onPress={() => setShowTrialPaywall(true)} activeOpacity={0.85}>
+                  <Text style={styles.trialLockCtaText}>Unlock Full App — ₹149/mo →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.trialLockBackBtn} onPress={() => setCurrentTab('dashboard')}>
+                  <Text style={styles.trialLockBackText}>← Back to Home</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <PropertiesScreen
+                initialProperty={selectedProperty}
+                onActivePropertyChange={handleActivePropertyChange}
+                onBackToDashboard={() => setCurrentTab('dashboard')}
+              />
+            )}
           </View>
 
-          {/* Tab 3: Tenants (Dedicated Standalone Screen for all Resident actions) */}
+          {/* Tab 3: Tenants (Locked after 30-day trial expiry until Pro ₹149/mo active) */}
           <View style={[styles.tabPane, currentTab === 'tenants' ? styles.tabPaneActive : styles.tabPaneHidden]}>
-            <TenantsScreen
-              selectedPropertyId={selectedProperty?.id}
-              onActivePropertyChange={handleActivePropertyChange}
-              onNavigateToProfile={() => setCurrentTab('profile')}
-              onBack={() => setCurrentTab('dashboard')}
-            />
+            {isTrialExpired ? (
+              <View style={styles.trialLockScreen}>
+                <View style={styles.trialLockIconCircle}>
+                  <Text style={{ fontSize: 32 }}>🔒</Text>
+                </View>
+                <Text style={styles.trialLockTitle}>Tenant List & Reminders Locked</Text>
+                <Text style={styles.trialLockSub}>
+                  Your 30-day free trial has ended. All your tenant records & rent history are safely saved — activate StayNest Pro (₹149/mo) to view tenants & send WhatsApp reminders.
+                </Text>
+                <TouchableOpacity style={styles.trialLockCta} onPress={() => setShowTrialPaywall(true)} activeOpacity={0.85}>
+                  <Text style={styles.trialLockCtaText}>Unlock Full App — ₹149/mo →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.trialLockBackBtn} onPress={() => setCurrentTab('dashboard')}>
+                  <Text style={styles.trialLockBackText}>← Back to Home</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TenantsScreen
+                selectedPropertyId={selectedProperty?.id}
+                onActivePropertyChange={handleActivePropertyChange}
+                onNavigateToProfile={() => setCurrentTab('profile')}
+                onBack={() => setCurrentTab('dashboard')}
+              />
+            )}
           </View>
 
-          {/* Tab 4: Management (Expenses, Finance & Reports) */}
+          {/* Tab 4: Management (Locked after 30-day trial expiry until Pro ₹149/mo active) */}
           <View style={[styles.tabPane, currentTab === 'management' ? styles.tabPaneActive : styles.tabPaneHidden]}>
-            <ManagementScreen
-              selectedPropertyId={selectedProperty?.id}
-              onActivePropertyChange={handleActivePropertyChange}
-              onBackToDashboard={() => setCurrentTab('dashboard')}
-            />
+            {isTrialExpired ? (
+              <View style={styles.trialLockScreen}>
+                <View style={styles.trialLockIconCircle}>
+                  <Text style={{ fontSize: 32 }}>🔒</Text>
+                </View>
+                <Text style={styles.trialLockTitle}>Wallet & Finance Locked</Text>
+                <Text style={styles.trialLockSub}>
+                  Your 30-day free trial has ended. Activate StayNest Pro (₹149/mo) to unlock expenses, P&L reports & rent ledger.
+                </Text>
+                <TouchableOpacity style={styles.trialLockCta} onPress={() => setShowTrialPaywall(true)} activeOpacity={0.85}>
+                  <Text style={styles.trialLockCtaText}>Unlock Full App — ₹149/mo →</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.trialLockBackBtn} onPress={() => setCurrentTab('dashboard')}>
+                  <Text style={styles.trialLockBackText}>← Back to Home</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <ManagementScreen
+                selectedPropertyId={selectedProperty?.id}
+                onActivePropertyChange={handleActivePropertyChange}
+                onBackToDashboard={() => setCurrentTab('dashboard')}
+              />
+            )}
           </View>
 
           {/* Tab 5: Profile (PG Owner Account & Settings) */}
@@ -267,7 +374,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'properties' && <View style={styles.navActiveTopLine} />}
                 <NavGridIcon color={currentTab === 'properties' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'properties' && styles.bottomNavLabelActive]}>
-                  Rooms
+                  {isTrialExpired ? '🔒 Rooms' : 'Rooms'}
                 </Text>
               </TouchableOpacity>
 
@@ -280,7 +387,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'tenants' && <View style={styles.navActiveTopLine} />}
                 <NavTenantsIcon color={currentTab === 'tenants' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'tenants' && styles.bottomNavLabelActive]}>
-                  Tenants
+                  {isTrialExpired ? '🔒 Tenants' : 'Tenants'}
                 </Text>
               </TouchableOpacity>
 
@@ -293,7 +400,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'management' && <View style={styles.navActiveTopLine} />}
                 <NavWalletIcon color={currentTab === 'management' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'management' && styles.bottomNavLabelActive]}>
-                  Wallet
+                  {isTrialExpired ? '🔒 Wallet' : 'Wallet'}
                 </Text>
               </TouchableOpacity>
 
@@ -313,6 +420,16 @@ const MainNavigator: React.FC = () => {
           </View>
         </View>
       </View>
+      <SubscriptionPaywallModal
+        visible={showTrialPaywall}
+        reason={isTrialExpired ? 'TRIAL_EXPIRED' : 'UPGRADE'}
+        trialExpired={isTrialExpired}
+        onClose={() => setShowTrialPaywall(false)}
+        onActivated={(nextState) => {
+          setSubState({ ...nextState, hasFullAccess: true, trialExpired: false });
+          setShowTrialPaywall(false);
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -545,5 +662,98 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#ff7337',
     marginTop: 3,
+  },
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  trialBannerWarning: {
+    backgroundColor: '#fff7ed',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fed7aa',
+  },
+  trialBannerExpired: {
+    backgroundColor: '#fef2f2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#fecaca',
+  },
+  trialBannerText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#9a3412',
+  },
+  trialBannerBtn: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99,
+  },
+  trialBannerBtnText: {
+    color: '#ffffff',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  trialLockScreen: {
+    flex: 1,
+    backgroundColor: '#faf8f6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 28,
+  },
+  trialLockIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: '#fff7ed',
+    borderWidth: 1.5,
+    borderColor: '#fdba74',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  trialLockTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#0f172a',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  trialLockSub: {
+    fontSize: 13.5,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 22,
+  },
+  trialLockCta: {
+    backgroundColor: '#ea580c',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.22,
+    shadowRadius: 8,
+    elevation: 4,
+    marginBottom: 12,
+  },
+  trialLockCtaText: {
+    color: '#ffffff',
+    fontSize: 14.5,
+    fontWeight: '800',
+  },
+  trialLockBackBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
+  trialLockBackText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

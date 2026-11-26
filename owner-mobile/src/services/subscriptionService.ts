@@ -12,6 +12,9 @@ export interface SubscriptionState {
   nextBillingDate: string; // YYYY-MM-DD
   subscriptionId?: string;
   autoPayMethod?: AutoPayApp;
+  trialDaysLeft?: number;
+  trialExpired?: boolean;
+  hasFullAccess?: boolean;
   updatedAt: string;
 }
 
@@ -37,7 +40,48 @@ export const formatDisplayDate = (isoDate: string): string => {
 };
 
 export const isProActive = (state: SubscriptionState): boolean => {
+  if (state.hasFullAccess === true) return true;
+  if (state.trialExpired === true) return false;
   return state.plan === 'PRO_TRIAL' || state.plan === 'PRO_ACTIVE';
+};
+
+/**
+ * Fetches the authoritative 30-day account-creation trial / Razorpay subscription state
+ * from GET /owner/subscription and caches it locally.
+ */
+export const syncSubscriptionFromServer = async (): Promise<SubscriptionState> => {
+  const current = await getSubscriptionState();
+  try {
+    const serverSub = await apiClient<{
+      status?: string;
+      planTier?: PlanTier;
+      autopayStatus?: 'NONE' | 'PENDING' | 'ACTIVE' | 'CANCELLED';
+      endDate?: string;
+      gatewaySubscriptionId?: string;
+      trialDaysLeft?: number;
+      trialExpired?: boolean;
+      hasFullAccess?: boolean;
+    }>('/owner/subscription');
+
+    if (serverSub) {
+      const nextState: SubscriptionState = {
+        plan: serverSub.planTier || (serverSub.hasFullAccess ? 'PRO_TRIAL' : 'FREE'),
+        autopayStatus: serverSub.autopayStatus || current.autopayStatus || 'NONE',
+        nextBillingDate: serverSub.endDate || current.nextBillingDate,
+        subscriptionId: serverSub.gatewaySubscriptionId || current.subscriptionId,
+        autoPayMethod: current.autoPayMethod,
+        trialDaysLeft: serverSub.trialDaysLeft,
+        trialExpired: serverSub.trialExpired,
+        hasFullAccess: serverSub.hasFullAccess,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveSubscriptionState(nextState);
+      return nextState;
+    }
+  } catch {
+    // Offline fallback: return local cached state
+  }
+  return current;
 };
 
 export const getSubscriptionState = async (): Promise<SubscriptionState> => {
