@@ -19,6 +19,10 @@ import { validateVerhoeffAadhaar } from '../../utils/aadhaar';
 import { logActivity } from '../../services/activityLogService';
 import { emitDataChanged } from '../../utils/appEvents';
 import { useLanguage } from '../../context/LanguageContext';
+import { fastDataCache } from '../../services/dataCache';
+import { GlassBackground } from '../glass/GlassBackground';
+import { GLASS_TOKENS } from '../glass/GlassCard';
+import { showGlassSuccess } from '../glass/GlassSuccessModal';
 
 export interface OnboardResidentModalProps {
   visible: boolean;
@@ -66,6 +70,11 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
   const [payMode, setPayMode] = useState<'UPI' | 'CASH' | 'BANK_TRANSFER'>('UPI');
   const [startingMeterReading, setStartingMeterReading] = useState('0');
   const [submitting, setSubmitting] = useState(false);
+  const [liveTenants, setLiveTenants] = useState<Tenant[]>(tenants);
+
+  useEffect(() => {
+    setLiveTenants(tenants);
+  }, [tenants]);
 
   const formScrollRef = useRef<any>(null);
   const fieldPositions = useRef<Record<string, number>>({});
@@ -111,6 +120,99 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
 
     try {
       let rooms: Room[] = [];
+
+      // Load local custom tenants so locally-assigned beds/rooms are never dropped
+      let customTenants: Tenant[] = [];
+      try {
+        const customRaw = await safeStorage.getItem('@staynest_custom_tenants');
+        if (customRaw) {
+          const parsed = JSON.parse(customRaw);
+          if (Array.isArray(parsed)) customTenants = parsed;
+        }
+      } catch {
+        // ignore
+      }
+
+      const mergeTenantLists = (backendList: Tenant[], localLists: Tenant[][]): Tenant[] => {
+        const byId = new Map<string, Tenant>();
+        const byPhone = new Map<string, string>();
+        const normPhone = (p?: string) => (p || '').replace(/\D/g, '').slice(-10);
+
+        backendList.forEach((t) => {
+          byId.set(t.id, t);
+          const ph = normPhone(t.phone);
+          if (ph) byPhone.set(ph, t.id);
+        });
+
+        localLists.flat().forEach((lt) => {
+          const ph = normPhone(lt.phone);
+          const existingId = byId.has(lt.id) ? lt.id : ph ? byPhone.get(ph) : undefined;
+          if (existingId) {
+            const existing = byId.get(existingId)!;
+            // If backend stay was not linked yet, preserve local room/bed info unless terminated
+            if (existing.stayStatus !== 'TERMINATED' && existing.active !== false && !existing.bedId && !existing.roomNumber && (lt.bedId || lt.roomNumber)) {
+              byId.set(existingId, {
+                ...existing,
+                propertyId: existing.propertyId || lt.propertyId,
+                roomId: existing.roomId || lt.roomId,
+                roomNumber: existing.roomNumber || lt.roomNumber,
+                bedId: existing.bedId || lt.bedId,
+                bedLabel: existing.bedLabel || lt.bedLabel,
+              });
+            }
+          } else {
+            byId.set(lt.id, lt);
+            if (ph) byPhone.set(ph, lt.id);
+          }
+        });
+
+        return Array.from(byId.values());
+      };
+
+      let currentTenants = mergeTenantLists([], [tenants, customTenants]);
+
+      // Always fetch fresh backend rooms & tenants first for UUID properties so occupied beds are never shown
+      if (isValidUuid(propId)) {
+        try {
+          const [propDetail, tenantRes] = await Promise.all([
+            apiClient<Property>(`/owner/properties/${propId}`),
+            apiClient<{ content: Tenant[] }>('/owner/tenants?size=500').catch(() => null),
+          ]);
+          if (tenantRes?.content) {
+            currentTenants = mergeTenantLists(tenantRes.content, [tenants, customTenants]);
+          }
+          setLiveTenants(currentTenants);
+          if (propDetail?.rooms && propDetail.rooms.length > 0) {
+            const dedupedMap = new Map<string, Room>();
+            propDetail.rooms.forEach((r) => {
+              const key = (r.roomNumber || r.id || '').trim().toLowerCase();
+              const prev = dedupedMap.get(key);
+              const rOcc = (r.beds || []).some((b) => b.status === 'OCCUPIED');
+              const prevOcc = prev ? (prev.beds || []).some((b) => b.status === 'OCCUPIED') : false;
+              if (!prev || (rOcc && !prevOcc)) {
+                const seenLabels = new Set<string>();
+                dedupedMap.set(key, {
+                  ...r,
+                  beds: (r.beds || []).filter((b) => {
+                    const lbl = (b.bedLabel || '').trim().toLowerCase();
+                    if (!lbl || seenLabels.has(lbl)) return false;
+                    seenLabels.add(lbl);
+                    return true;
+                  }),
+                });
+              }
+            });
+            rooms = Array.from(dedupedMap.values());
+          }
+        } catch {
+          rooms = [];
+          setLiveTenants(currentTenants);
+        }
+      } else {
+        setLiveTenants(currentTenants);
+      }
+
+      // Check locally cached floor/bed occupancy so beds occupied via Rooms screen are always respected
       let cached: string | null = await safeStorage.getItem(`@staynest_floors_${propId}`).catch(() => null);
       if (!cached && typeof window !== 'undefined' && window.localStorage) {
         cached = window.localStorage.getItem(`staynest_floors_${propId}`);
@@ -119,48 +221,68 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
         try {
           const floors = JSON.parse(cached);
           if (Array.isArray(floors)) {
-            floors.forEach((f: any) => {
-              (f.rooms || []).forEach((r: any) => {
-                const rawBeds =
-                  Array.isArray(r.beds) && r.beds.length > 0
-                    ? r.beds
-                    : [{ id: `unit-${r.id}`, bedLabel: 'Unit', status: 'AVAILABLE' }];
-                rooms.push({
-                  id: r.id,
-                  propertyId: propId,
-                  roomNumber: r.roomNumber,
-                  sharingType: r.sharingType || 'DOUBLE',
-                  capacity: rawBeds.length,
-                  floorNumber: f.floorNumber,
-                  rentMonthlyPaise: (r.rentRupees || 8500) * 100,
-                  depositPaise: (r.depositRupees || r.rentRupees || 8500) * 100,
-                  status: 'AVAILABLE',
-                  beds: rawBeds.map((b: any) => ({
-                    id: b.id,
-                    roomId: r.id,
+            if (rooms.length === 0) {
+              floors.forEach((f: any) => {
+                (f.rooms || []).forEach((r: any) => {
+                  const rawBeds =
+                    Array.isArray(r.beds) && r.beds.length > 0
+                      ? r.beds
+                      : [{ id: `unit-${r.id}`, bedLabel: 'Unit', status: 'AVAILABLE' }];
+                  rooms.push({
+                    id: r.id,
                     propertyId: propId,
-                    bedLabel: b.bedLabel,
-                    status: b.status || 'AVAILABLE',
-                  })),
+                    roomNumber: r.roomNumber,
+                    sharingType: r.sharingType || 'DOUBLE',
+                    capacity: rawBeds.length,
+                    floorNumber: f.floorNumber,
+                    rentMonthlyPaise: (r.rentRupees || 8500) * 100,
+                    depositPaise: (r.depositRupees || r.rentRupees || 8500) * 100,
+                    status: 'AVAILABLE',
+                    beds: rawBeds.map((b: any) => ({
+                      id: b.id,
+                      roomId: r.id,
+                      propertyId: propId,
+                      bedLabel: b.bedLabel,
+                      status: b.status || 'AVAILABLE',
+                    })),
+                  });
                 });
               });
-            });
+            } else {
+              const localOccupiedBedIds = new Set<string>();
+              const localOccupiedKeys = new Set<string>();
+              floors.forEach((f: any) => {
+                (f.rooms || []).forEach((r: any) => {
+                  (r.beds || []).forEach((b: any) => {
+                    if (b.status === 'OCCUPIED') {
+                      if (b.id) localOccupiedBedIds.add(b.id);
+                      if (r.roomNumber && b.bedLabel) {
+                        localOccupiedKeys.add(`${String(r.roomNumber).trim()}-${String(b.bedLabel).trim().toLowerCase()}`);
+                      }
+                    }
+                  });
+                });
+              });
+              if (localOccupiedBedIds.size > 0 || localOccupiedKeys.size > 0) {
+                rooms = rooms.map((r) => ({
+                  ...r,
+                  beds: (r.beds || []).map((b) => {
+                    const key = `${String(r.roomNumber || '').trim()}-${String(b.bedLabel || '').trim().toLowerCase()}`;
+                    if (localOccupiedBedIds.has(b.id) || localOccupiedKeys.has(key)) {
+                      return { ...b, status: 'OCCUPIED' };
+                    }
+                    return b;
+                  }),
+                }));
+              }
+            }
           }
         } catch {
           // ignore
         }
       }
 
-      if (rooms.length === 0) {
-        try {
-          const data = await apiClient<Property>(`/owner/properties/${propId}`);
-          rooms = data.rooms || [];
-        } catch {
-          rooms = [];
-        }
-      }
-
-      if (rooms.length === 0) {
+      if (rooms.length === 0 && !isValidUuid(propId)) {
         const fallbackFloors = getInitialFloorsForProperty(propId);
         fallbackFloors.forEach((f: any) => {
           (f.rooms || []).forEach((r: any) => {
@@ -208,13 +330,22 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
       }
 
       const occupiedIds = new Set(
-        tenants
-          .filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED' && t.propertyId === propId)
+        currentTenants
+          .filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED' && (!t.propertyId || t.propertyId === propId))
           .map((t) => t.bedId)
+      );
+      const occupiedRoomBedKeys = new Set(
+        currentTenants
+          .filter((t) => t.active !== false && t.stayStatus !== 'TERMINATED' && (!t.propertyId || t.propertyId === propId) && t.roomNumber && t.bedLabel)
+          .map((t) => `${String(t.roomNumber).trim()}-${String(t.bedLabel).trim().toLowerCase()}`)
       );
       let foundAvail = false;
       for (const r of rooms) {
-        const avail = (r.beds || []).find((b) => b.status === 'AVAILABLE' && !occupiedIds.has(b.id));
+        const avail = (r.beds || []).find((b) => {
+          if (b.status === 'OCCUPIED' || occupiedIds.has(b.id)) return false;
+          const key = `${String(r.roomNumber || '').trim()}-${String(b.bedLabel || '').trim().toLowerCase()}`;
+          return !occupiedRoomBedKeys.has(key);
+        });
         if (avail) {
           setSelectedBedId(avail.id);
           setSelectedRoomId(r.id);
@@ -280,14 +411,18 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
 
   const activeOccupiedBedIds = new Set<string>();
   const activeOccupiedRoomNumbers = new Set<string>();
-  tenants.forEach((t) => {
+  const activeOccupiedRoomBedKeys = new Set<string>();
+  liveTenants.forEach((t) => {
     if (
       t.active !== false &&
       t.stayStatus !== 'TERMINATED' &&
-      (!selectedPropId || t.propertyId === selectedPropId)
+      (!selectedPropId || !t.propertyId || t.propertyId === selectedPropId)
     ) {
       if (t.bedId) activeOccupiedBedIds.add(t.bedId);
-      if (t.roomNumber) activeOccupiedRoomNumbers.add(t.roomNumber);
+      if (t.roomNumber) activeOccupiedRoomNumbers.add(String(t.roomNumber).trim());
+      if (t.roomNumber && t.bedLabel) {
+        activeOccupiedRoomBedKeys.add(`${String(t.roomNumber).trim()}-${String(t.bedLabel).trim().toLowerCase()}`);
+      }
     }
   });
 
@@ -304,7 +439,7 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
       const anyBedOccupied = (r.beds || []).some(
         (b) => b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id)
       );
-      const isFlatOccupied = activeOccupiedRoomNumbers.has(r.roomNumber) || anyBedOccupied;
+      const isFlatOccupied = activeOccupiedRoomNumbers.has(String(r.roomNumber).trim()) || anyBedOccupied;
       if (!isFlatOccupied) {
         const unitBed: Bed = (r.beds && r.beds[0]) || {
           id: `unit-${r.id}`,
@@ -324,7 +459,11 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
       }
     } else {
       (r.beds || []).forEach((b) => {
-        const isOccupied = b.status === 'OCCUPIED' || activeOccupiedBedIds.has(b.id);
+        const key = `${String(r.roomNumber || '').trim()}-${String(b.bedLabel || '').trim().toLowerCase()}`;
+        const isOccupied =
+          b.status === 'OCCUPIED' ||
+          activeOccupiedBedIds.has(b.id) ||
+          activeOccupiedRoomBedKeys.has(key);
         if (!isOccupied) {
           availableBeds.push({
             bed: b,
@@ -477,6 +616,12 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
             console.log('Stay allocation notice:', stayErr.message);
           }
         }
+        if (selectedBedId && isValidUuid(selectedBedId)) {
+          await apiClient(`/owner/beds/${selectedBedId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ status: 'OCCUPIED' }),
+          }).catch(() => {});
+        }
 
         const currentMonth = new Date().toISOString().slice(0, 7);
         const todayDate = new Date().toISOString().split('T')[0];
@@ -579,12 +724,21 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
                 const updatedFloors = parsedFloors.map((f: any) => ({
                   ...f,
                   rooms: (f.rooms || []).map((r: any) => {
-                    if (r.id !== targetRoomId) return r;
+                    const sameRoom =
+                      r.id === targetRoomId ||
+                      (newTenantRecord.roomNumber &&
+                        String(r.roomNumber || '').trim() === String(newTenantRecord.roomNumber).trim());
+                    if (!sameRoom) return r;
                     return {
                       ...r,
-                      beds: (r.beds || []).map((b: any) =>
-                        b.id === selectedBedId ? { ...b, status: 'OCCUPIED' } : b
-                      ),
+                      beds: (r.beds || []).map((b: any) => {
+                        const sameBed =
+                          b.id === selectedBedId ||
+                          (newTenantRecord.bedLabel &&
+                            String(b.bedLabel || '').trim().toLowerCase() ===
+                              String(newTenantRecord.bedLabel).trim().toLowerCase());
+                        return sameBed ? { ...b, status: 'OCCUPIED' } : b;
+                      }),
                     };
                   }),
                 }));
@@ -607,6 +761,7 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
           amountRupees: payingNow > 0 ? payingNow : undefined,
         });
 
+        fastDataCache.invalidateAll();
         emitDataChanged();
 
         if (isKycVerified) {
@@ -634,11 +789,11 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
           ? `${fullName} onboarded! Rent received ₹${payingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
           : `${fullName} successfully onboarded as a resident!`;
 
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(`✓ ${alertMsg}`);
-      } else {
-        Alert.alert('✓ Success', alertMsg);
-      }
+      showGlassSuccess({
+        title: 'Tenant Created',
+        message: alertMsg,
+        buttonText: 'Done',
+      });
 
       onSuccess?.(newTenantRecord);
       handleClose();
@@ -651,6 +806,7 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
+      <GlassBackground>
       <SafeAreaView style={styles.separatePageContainer}>
         {/* Top Header with Small Back Button & Centered Title */}
         <View style={styles.separatePageHeader}>
@@ -1171,6 +1327,7 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
           </View>
         </ScrollView>
       </SafeAreaView>
+      </GlassBackground>
     </Modal>
   );
 };
@@ -1178,10 +1335,10 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
 const styles = StyleSheet.create({
   separatePageContainer: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'transparent',
   },
   separatePageHeader: {
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.dockBg,
     paddingTop: Platform.OS === 'android' ? 14 : 10,
     paddingBottom: 14,
     paddingHorizontal: 16,
@@ -1189,15 +1346,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: GLASS_TOKENS.cardBorder,
+    ...GLASS_TOKENS.webBlur16,
   },
   separatePageBackBtn: {
     width: 34,
     height: 34,
-    backgroundColor: '#fff7ed',
-    borderRadius: 8,
+    backgroundColor: GLASS_TOKENS.apricotBg,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#fed7aa',
+    borderColor: '#fdba74',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1223,7 +1381,7 @@ const styles = StyleSheet.create({
   },
   separatePageHeaderSub: {
     fontSize: 11,
-    color: '#64748b',
+    color: '#475569',
     fontWeight: '600',
     textAlign: 'center',
   },
@@ -1232,30 +1390,36 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 11,
-    fontWeight: '900',
+    fontWeight: '800',
     color: '#0f172a',
-    letterSpacing: 0.5,
+    letterSpacing: 0.2,
     marginBottom: 6,
   },
   input: {
-    backgroundColor: '#f8fafc',
+    backgroundColor: GLASS_TOKENS.cardBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 10,
-    fontSize: 13,
+    borderColor: GLASS_TOKENS.cardBorder,
+    borderRadius: 14,
+    padding: 12,
+    fontSize: 14,
     fontWeight: '600',
+    color: '#0f172a',
+    letterSpacing: 0,
     marginBottom: 10,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   currencyInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: GLASS_TOKENS.cardBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    paddingHorizontal: 10,
+    borderColor: GLASS_TOKENS.cardBorder,
+    borderRadius: 14,
+    paddingHorizontal: 12,
     marginBottom: 10,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   currencyInrLight: {
     fontSize: 14,

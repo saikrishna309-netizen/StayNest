@@ -16,6 +16,7 @@ import com.staynest.income.dto.IncomeResponse;
 import com.staynest.income.entity.IncomeRecord;
 import com.staynest.income.repository.IncomeRecordRepository;
 import com.staynest.property.entity.Property;
+import com.staynest.property.entity.PropertyType;
 import com.staynest.property.repository.PropertyRepository;
 import com.staynest.rent.dto.*;
 import com.staynest.rent.entity.RentInvoice;
@@ -24,6 +25,8 @@ import com.staynest.rent.repository.RentInvoiceRepository;
 import com.staynest.rent.repository.RentPaymentRepository;
 import com.staynest.room.entity.Room;
 import com.staynest.room.repository.RoomRepository;
+import com.staynest.tenant.dto.BulkTenantImportRequest;
+import com.staynest.tenant.dto.BulkTenantImportResponse;
 import com.staynest.tenant.dto.CreateTenantRequest;
 import com.staynest.tenant.dto.RecordStayRequest;
 import com.staynest.tenant.dto.TenantResponse;
@@ -173,6 +176,205 @@ public class TenantFinanceService {
 
         tenant = tenantRepository.save(tenant);
         return enrichTenantResponse(tenant);
+    }
+
+    @Transactional
+    public BulkTenantImportResponse bulkImportTenants(UUID ownerId, BulkTenantImportRequest request) {
+        Property property = propertyRepository.findById(request.getPropertyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Property", request.getPropertyId()));
+
+        if (!property.getOwnerId().equals(ownerId)) {
+            throw new ForbiddenException("You do not own this property");
+        }
+
+        boolean isRentalBuilding = property.getPropertyType() == PropertyType.RENTAL_BUILDING;
+        List<Room> propertyRooms = roomRepository.findByPropertyId(property.getId());
+        Map<String, Room> roomByNormNumber = new HashMap<>();
+        for (Room r : propertyRooms) {
+            if (r.getRoomNumber() != null) {
+                roomByNormNumber.putIfAbsent(r.getRoomNumber().trim().toLowerCase(), r);
+            }
+        }
+
+        List<TenantStay> activeStays = tenantStayRepository.findByPropertyIdAndStatus(property.getId(), "ACTIVE");
+        Set<UUID> occupiedBedIds = activeStays.stream()
+                .map(TenantStay::getBedId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Set<UUID> occupiedRoomIds = activeStays.stream()
+                .map(TenantStay::getRoomId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Set<String> batchPhones = new HashSet<>();
+        List<TenantResponse> imported = new ArrayList<>();
+        List<BulkTenantImportResponse.RowError> errors = new ArrayList<>();
+
+        int idx = 0;
+        for (BulkTenantImportRequest.Row row : request.getRows()) {
+            idx++;
+            int rowNum = row.getRowNumber() != null ? row.getRowNumber() : idx;
+            String rawName = row.getFullName() != null ? row.getFullName().trim() : "";
+            String rawRoom = row.getRoomNumber() != null ? row.getRoomNumber().trim() : "";
+            String rawBed = row.getBedLabel() != null ? row.getBedLabel().trim() : "";
+            String identifier = !rawName.isEmpty() ? rawName : (!rawRoom.isEmpty() ? "Room " + rawRoom : "Row " + rowNum);
+
+            if (rawName.isEmpty()) {
+                errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Tenant full name is required."));
+                continue;
+            }
+
+            String digits = row.getPhone() != null ? row.getPhone().replaceAll("[^0-9]", "") : "";
+            String cleanPhone = digits.length() > 10 ? digits.substring(digits.length() - 10) : digits;
+            if (!cleanPhone.matches("^[6-9][0-9]{9}$")) {
+                errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Invalid 10-digit Indian mobile number."));
+                continue;
+            }
+            if (!batchPhones.add(cleanPhone)) {
+                errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Duplicate mobile +91 " + cleanPhone + " in upload sheet."));
+                continue;
+            }
+            if (tenantRepository.existsByOwnerIdAndPhoneAndActiveTrue(ownerId, cleanPhone)) {
+                errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Active tenant with +91 " + cleanPhone + " already exists."));
+                continue;
+            }
+
+            if (rawRoom.isEmpty()) {
+                errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, isRentalBuilding ? "Flat / Unit number is required." : "Room number is required."));
+                continue;
+            }
+
+            Room room = roomByNormNumber.get(rawRoom.toLowerCase());
+            if (room == null) {
+                errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, (isRentalBuilding ? "Flat " : "Room ") + rawRoom + " not found in " + property.getName() + "."));
+                continue;
+            }
+
+            List<Bed> roomBeds = bedRepository.findByRoomId(room.getId());
+            Bed targetBed = null;
+
+            if (isRentalBuilding) {
+                boolean anyOccupied = occupiedRoomIds.contains(room.getId()) ||
+                        roomBeds.stream().anyMatch(b -> b.getStatus() == BedStatus.OCCUPIED || occupiedBedIds.contains(b.getId()));
+                if (anyOccupied) {
+                    errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Flat " + rawRoom + " is already occupied."));
+                    continue;
+                }
+                if (!roomBeds.isEmpty()) {
+                    targetBed = roomBeds.get(0);
+                } else {
+                    Bed unitBed = new Bed();
+                    unitBed.setRoomId(room.getId());
+                    unitBed.setPropertyId(property.getId());
+                    unitBed.setBedLabel("Unit");
+                    unitBed.setStatus(BedStatus.AVAILABLE);
+                    targetBed = bedRepository.save(unitBed);
+                }
+            } else {
+                if (!rawBed.isEmpty()) {
+                    targetBed = roomBeds.stream()
+                            .filter(b -> b.getBedLabel() != null && b.getBedLabel().trim().equalsIgnoreCase(rawBed))
+                            .findFirst()
+                            .orElse(null);
+                    if (targetBed == null) {
+                        errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Bed '" + rawBed + "' not found in Room " + rawRoom + "."));
+                        continue;
+                    }
+                    if (targetBed.getStatus() == BedStatus.OCCUPIED || occupiedBedIds.contains(targetBed.getId())) {
+                        errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "Room " + rawRoom + " • " + targetBed.getBedLabel() + " is already occupied."));
+                        continue;
+                    }
+                } else {
+                    targetBed = roomBeds.stream()
+                            .filter(b -> b.getStatus() != BedStatus.OCCUPIED && !occupiedBedIds.contains(b.getId()))
+                            .findFirst()
+                            .orElse(null);
+                    if (targetBed == null) {
+                        errors.add(new BulkTenantImportResponse.RowError(rowNum, identifier, "No free beds left in Room " + rawRoom + "."));
+                        continue;
+                    }
+                }
+            }
+
+            String idType = (row.getIdProofType() != null && !row.getIdProofType().isBlank())
+                    ? row.getIdProofType().trim().toUpperCase()
+                    : "AADHAAR";
+            String idNumber = (row.getIdProofNumber() != null && !row.getIdProofNumber().isBlank())
+                    ? row.getIdProofNumber().trim()
+                    : "NOT_PROVIDED";
+
+            Tenant tenant = new Tenant(ownerId, rawName, cleanPhone,
+                    (row.getEmail() != null && !row.getEmail().isBlank()) ? row.getEmail().trim() : null);
+            tenant.setIdProofType(idType);
+            tenant.setIdProofNumber(idNumber);
+            tenant = tenantRepository.save(tenant);
+
+            long rentPaise = (row.getMonthlyRentPaise() != null && row.getMonthlyRentPaise() > 0)
+                    ? row.getMonthlyRentPaise()
+                    : (room.getRentMonthlyPaise() > 0 ? room.getRentMonthlyPaise() : 850000L);
+            long depositPaise = (row.getSecurityDepositPaise() != null && row.getSecurityDepositPaise() >= 0)
+                    ? row.getSecurityDepositPaise()
+                    : (room.getDepositPaise() != null && room.getDepositPaise() > 0 ? room.getDepositPaise() : rentPaise);
+            LocalDate checkInDate = row.getCheckIn() != null ? row.getCheckIn() : LocalDate.now();
+
+            TenantStay stay = new TenantStay();
+            stay.setTenantId(tenant.getId());
+            stay.setPropertyId(property.getId());
+            stay.setRoomId(room.getId());
+            stay.setBedId(targetBed.getId());
+            stay.setCheckIn(checkInDate);
+            stay.setMonthlyRentPaise(rentPaise);
+            stay.setSecurityDepositPaise(depositPaise);
+            stay.setStatus("ACTIVE");
+            tenantStayRepository.save(stay);
+
+            targetBed.setStatus(BedStatus.OCCUPIED);
+            bedRepository.save(targetBed);
+            occupiedBedIds.add(targetBed.getId());
+            occupiedRoomIds.add(room.getId());
+
+            String billingMonth = YearMonth.now().toString();
+            RentInvoice invoice = new RentInvoice();
+            invoice.setTenantId(tenant.getId());
+            invoice.setPropertyId(property.getId());
+            invoice.setInvoiceNumber("INV-" + billingMonth + "-" + (1000 + new Random().nextInt(9000)));
+            invoice.setBillingMonth(billingMonth);
+            invoice.setRentAmountPaise(rentPaise);
+            invoice.setUtilityAmountPaise(0L);
+            invoice.setOtherChargesPaise(0L);
+            invoice.setTotalAmountPaise(rentPaise);
+            long paidPaise = row.getRentPaidNowPaise() != null && row.getRentPaidNowPaise() > 0
+                    ? Math.min(row.getRentPaidNowPaise(), rentPaise)
+                    : 0L;
+            invoice.setPaidAmountPaise(paidPaise);
+            invoice.setDueDate(checkInDate);
+            invoice.setStatus(paidPaise >= rentPaise ? "PAID" : (paidPaise > 0 ? "PARTIALLY_PAID" : "DUE"));
+            invoice = rentInvoiceRepository.save(invoice);
+
+            if (paidPaise > 0) {
+                RentPayment payment = new RentPayment();
+                payment.setInvoiceId(invoice.getId());
+                payment.setTenantId(tenant.getId());
+                payment.setAmountPaidPaise(paidPaise);
+                payment.setPaymentDate(checkInDate);
+                payment.setPaymentMethod((row.getPaymentMethod() != null && !row.getPaymentMethod().isBlank())
+                        ? row.getPaymentMethod().trim().toUpperCase()
+                        : "UPI");
+                payment.setNotes("Initial rent recorded during bulk upload.");
+                payment.setRecordedBy(ownerId);
+                rentPaymentRepository.save(payment);
+            }
+
+            imported.add(enrichTenantResponse(tenant));
+        }
+
+        BulkTenantImportResponse res = new BulkTenantImportResponse();
+        res.setTotalRows(request.getRows().size());
+        res.setImportedCount(imported.size());
+        res.setSkippedCount(errors.size());
+        res.setImportedTenants(imported);
+        res.setErrors(errors);
+        return res;
     }
 
     @Transactional(readOnly = true)

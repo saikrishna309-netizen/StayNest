@@ -29,6 +29,9 @@ import { FoodMenuModal } from '../components/modals/FoodMenuModal';
 import { SubscriptionPaywallModal } from '../components/modals/SubscriptionPaywallModal';
 import { OnboardResidentModal } from '../components/modals/OnboardResidentModal';
 import { LocationPickerModal } from '../components/modals/LocationPickerModal';
+import { DashboardSkeleton } from '../components/SkeletonLoader';
+import { showGlassSuccess } from '../components/glass/GlassSuccessModal';
+import { RentDueSection } from '../components/RentDueSection';
 import {
   canAddProperty,
   getSubscriptionState,
@@ -852,13 +855,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       setNewPgPhotos([]);
 
       const successMsg = isRentalMode
-        ? `✓ ${created.name} created with ${matrixFloors.length} floors and ${totalUnitsCreated} rentable units/flats (Room-wise billing)!`
-        : `✓ ${created.name} created with ${matrixFloors.length} floors, ${totalUnitsCreated} rooms & ${totalBedsCreated} beds!`;
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(successMsg);
-      } else {
-        Alert.alert('🎉 Property Created!', successMsg);
-      }
+        ? `${created.name} created with ${matrixFloors.length} floors and ${totalUnitsCreated} rentable units/flats (Room-wise billing)!`
+        : `${created.name} created with ${matrixFloors.length} floors, ${totalUnitsCreated} rooms & ${totalBedsCreated} beds!`;
+      showGlassSuccess({
+        title: 'Property Created',
+        message: successMsg,
+        buttonText: 'Done',
+      });
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to create property.');
     } finally {
@@ -1773,7 +1776,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           bedId: tenant.bedId,
           propertyId: tenant.propertyId,
         });
-        Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
+        showGlassSuccess({
+          title: 'Checked Out',
+          message: `${tenant.fullName} has been checked out successfully.`,
+          buttonText: 'Done',
+        });
         setSelectedTenantForAction(null);
         loadData();
       } catch (err: any) {
@@ -1822,7 +1829,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           monthlyRentPaise: editMonthlyRent ? Number(editMonthlyRent) * 100 : undefined,
         }),
       });
-      Alert.alert('✓ Saved', 'Resident profile and rent updated successfully!');
+      showGlassSuccess({
+        title: 'Saved',
+        message: 'Resident profile and rent updated successfully!',
+        buttonText: 'Done',
+      });
       setIsEditingTenant(false);
       setSelectedTenantForAction(null);
       loadData();
@@ -2044,11 +2055,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         ? `${onboardFullName} onboarded! Rent received: ₹${rentPayingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
         : `${onboardFullName} successfully onboarded with full rent paid!`;
 
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(`✓ ${alertMsg}`);
-      } else {
-        Alert.alert('✓ Success', alertMsg);
-      }
+      showGlassSuccess({
+        title: 'Tenant Created',
+        message: alertMsg,
+        buttonText: 'Done',
+      });
 
       if (onboardAadhaarVerified || validateVerhoeffAadhaar(onboardIdProof).isValid) {
         if (typeof window !== 'undefined' && window.localStorage) {
@@ -2442,6 +2453,14 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             </View>
           </View>
         </ScrollView>
+      </View>
+    );
+  }
+
+  if (loading && properties.length === 0) {
+    return (
+      <View style={styles.container}>
+        <DashboardSkeleton />
       </View>
     );
   }
@@ -2993,110 +3012,13 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           </View>
         </View>
 
-        {/* ─── 4. RENT DUE SECTION (ONLY DUE TENANTS, REQUIREMENT 3) ─── */}
-        <View style={styles.rentDueHeaderRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={styles.sectionHeadingNavy}>Rent Due</Text>
-            <View style={styles.dueCountBadgePill}>
-              <Text style={styles.dueCountBadgeText}>{dueTenants.length}</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity onPress={() => onNavigateTab ? onNavigateTab('tenants') : null}>
-            <Text style={styles.viewAllDueText}>View all ›</Text>
-          </TouchableOpacity>
-        </View>
-
-        {dueTenants.length === 0 ? (
-          <View style={styles.allClearCard}>
-            <Text style={{ fontSize: 28, marginBottom: 6 }}>🎉</Text>
-            <Text style={styles.allClearTitle}>No Rent Due Pending</Text>
-            <Text style={styles.allClearSub}>All active residents have cleared their payments!</Text>
-          </View>
-        ) : (
-          <View style={styles.dueListCol}>
-            {dueTenants.map((t) => {
-              const totalRent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 8500;
-              const dueAmount = typeof t.outstandingPaise === 'number'
-                ? Math.round(t.outstandingPaise / 100)
-                : (t.rentStatus === 'PAID' ? 0 : totalRent);
-              const paidAmount = Math.max(0, totalRent - dueAmount);
-              const isPartial = dueAmount > 0 && paidAmount > 0;
-
-              const rawDate = t.checkIn || t.rentDueDate || t.createdAt;
-              const joinedDate = rawDate
-                ? new Date(rawDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-                : '12 Jan, 2024';
-
-              return (
-                <View key={t.id} style={styles.dueTenantCard}>
-                  {/* Top Row: Name & Date */}
-                  <View style={styles.dueCardTopRow}>
-                    <Text style={styles.dueTenantName}>{t.fullName}</Text>
-                    <Text style={styles.dueTenantDate}>{joinedDate}</Text>
-                  </View>
-
-                  {/* Room Number & Partial Paid info */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <Text style={styles.dueTenantRoom}>
-                      Room no. - {t.roomNumber || '205'}
-                      {isPartial ? ` • Paid ₹${paidAmount.toLocaleString('en-IN')}` : ''}
-                    </Text>
-                    {isPartial && (
-                      <View style={{ backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                        <Text style={{ fontSize: 9, fontWeight: '800', color: '#b45309' }}>PARTIAL</Text>
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Bottom Row: Amount & Action Buttons */}
-                  <View style={styles.dueCardBottomRow}>
-                    <Text style={[styles.dueTenantAmount, { flexShrink: 1, marginRight: 8 }]} numberOfLines={1}>
-                      ₹{dueAmount.toLocaleString('en-IN')} <Text style={{ fontSize: 11, color: '#ef4444' }}>Due</Text>
-                    </Text>
-
-                    <View style={[styles.dueActionBtnGroup, { flexShrink: 0, gap: 6 }]}>
-                      {/* Direct 1-Click Round WhatsApp Button */}
-                      <TouchableOpacity
-                        style={styles.dueWhatsAppCircleBtn}
-                        onPress={() => handleDirectWhatsAppReminder(t)}
-                        activeOpacity={0.8}
-                      >
-                        <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
-                          <Path
-                            d="M12 2C6.48 2 2 6.48 2 12c0 1.85.5 3.58 1.38 5.07L2 22l5.08-1.33C8.53 21.52 10.21 22 12 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm5.47 14.21c-.23.65-1.34 1.24-1.85 1.32-.47.07-1.08.1-1.74-.11-.4-.13-.92-.3-1.58-.59-2.78-1.2-4.6-4.01-4.74-4.2-.14-.19-1.13-1.5-1.13-2.86 0-1.36.71-2.03.97-2.31.26-.28.56-.35.75-.35.19 0 .37 0 .54.01.17.01.4-.07.63.48.23.56.79 1.93.86 2.07.07.14.12.31.02.5-.09.19-.14.31-.28.48-.14.17-.29.38-.42.51-.14.14-.28.29-.12.57.16.28.72 1.19 1.55 1.93 1.07.95 1.97 1.25 2.25 1.39.28.14.44.12.6-.07.16-.19.69-.8.88-1.08.19-.28.37-.23.63-.14.26.09 1.63.77 1.91.91.28.14.47.21.54.33.07.12.07.69-.16 1.34z"
-                            fill="#ffffff"
-                          />
-                        </Svg>
-                      </TouchableOpacity>
-
-                      {/* Call button */}
-                      <TouchableOpacity
-                        style={styles.duePhoneBtn}
-                        onPress={() => {
-                          const clean = t.phone.replace(/[^0-9]/g, '');
-                          Linking.openURL(`tel:${clean}`).catch(() => Alert.alert('Call', `Call ${t.fullName} at +91 ${clean}`));
-                        }}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={{ fontSize: 15 }}>📞</Text>
-                      </TouchableOpacity>
-
-                      {/* Purple Update button */}
-                      <TouchableOpacity
-                        style={styles.dueUpdateBtn}
-                        onPress={() => handleOpenTenantModal(t)}
-                        activeOpacity={0.8}
-                      >
-                        <Text style={styles.dueUpdateBtnText}>Update</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
+        {/* ─── 4. RENT DUE SECTION (WARM ORANGE GLASSMORPHISM) ─── */}
+        <RentDueSection
+          dueTenants={dueTenants}
+          onViewAll={() => (onNavigateTab ? onNavigateTab('tenants') : null)}
+          onWhatsApp={handleDirectWhatsAppReminder}
+          onUpdate={handleOpenTenantModal}
+        />
 
         {/* ─── 4B. RECENT ACTIVITIES (LAST 5 ACTIVITIES FOR SELECTED PROPERTY) ─── */}
         {(() => {
@@ -4262,7 +4184,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onRequestClose={() => setShowAllKycModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+          <View
+            style={[
+              styles.modalCard,
+              GLASS_TOKENS.webBlur20,
+              {
+                maxHeight: '85%',
+                backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                borderWidth: 1.5,
+                borderColor: 'rgba(249, 115, 22, 0.5)',
+                shadowColor: '#EA580C',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.16,
+                shadowRadius: 22,
+                elevation: 8,
+              },
+            ]}
+          >
             <View style={styles.modalHeaderRow}>
               <View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -4526,7 +4464,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         onRequestClose={() => setShowPgDropdown(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+          <View
+            style={[
+              styles.modalCard,
+              GLASS_TOKENS.webBlur20,
+              {
+                maxHeight: '85%',
+                backgroundColor: 'rgba(255, 255, 255, 0.88)',
+                borderWidth: 1.5,
+                borderColor: 'rgba(249, 115, 22, 0.5)',
+                shadowColor: '#EA580C',
+                shadowOffset: { width: 0, height: 10 },
+                shadowOpacity: 0.16,
+                shadowRadius: 22,
+                elevation: 8,
+              },
+            ]}
+          >
             <View style={styles.modalHeaderRow}>
               <View>
                 <Text style={styles.modalTitle}>🏢 Select PG / Building</Text>
@@ -5911,14 +5865,25 @@ const styles = StyleSheet.create({
   heroPropertyPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: GLASS_TOKENS.vacantBg,
-    borderWidth: 1,
-    borderColor: GLASS_TOKENS.vacantBorder,
+    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(249, 115, 22, 0.55)',
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
     gap: 6,
     maxWidth: 220,
+    shadowColor: '#EA580C',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    elevation: 3,
+    ...(Platform.OS === 'web'
+      ? ({
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+        } as any)
+      : {}),
   },
   heroPropThumb: {
     width: 24,

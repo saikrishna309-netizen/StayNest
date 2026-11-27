@@ -17,6 +17,7 @@ import { apiClient } from '../api/client';
 import { safeStorage } from '../utils/safeStorage';
 import { logActivity } from '../services/activityLogService';
 import { GLASS_TOKENS } from '../components/glass/GlassCard';
+import { showGlassSuccess } from '../components/glass/GlassSuccessModal';
 import { RentInvoice, Expense, Property, Tenant } from '../types';
 import {
   computeCollectionMetrics,
@@ -303,7 +304,11 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
         amountRupees: parsedAmount,
       });
 
-      Alert.alert('✓ Expense Recorded', `₹${parsedAmount.toLocaleString('en-IN')} logged under ${category}.`);
+      showGlassSuccess({
+        title: 'Expense Recorded',
+        message: `₹${parsedAmount.toLocaleString('en-IN')} logged under ${category}.`,
+        buttonText: 'Done',
+      });
       setTitle('');
       setAmountRupees('');
       setShowExpenseForm(false);
@@ -360,7 +365,11 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
         window.localStorage.setItem('staynest_cached_expenses', JSON.stringify(updatedList));
       }
 
-      Alert.alert('✓ Expense Updated', `Record updated to ₹${parsedAmount.toLocaleString('en-IN')}`);
+      showGlassSuccess({
+        title: 'Expense Updated',
+        message: `Record updated to ₹${parsedAmount.toLocaleString('en-IN')}.`,
+        buttonText: 'Done',
+      });
       setEditingExpense(null);
     } finally {
       setSavingEdit(false);
@@ -452,7 +461,11 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
     setPastRevenueInput('');
     setPastExpenseInput('');
     setPastNotesInput('');
-    Alert.alert('✓ Historical P&L Saved', `${fullMonthName} data added: ₹${rev.toLocaleString('en-IN')} revenue, ₹${exp.toLocaleString('en-IN')} expenses.`);
+    showGlassSuccess({
+      title: 'P&L Saved',
+      message: `${fullMonthName} data added: ₹${rev.toLocaleString('en-IN')} revenue, ₹${exp.toLocaleString('en-IN')} expenses.`,
+      buttonText: 'Done',
+    });
   };
 
   const handleDeletePastMonthData = (id: string, monthName: string) => {

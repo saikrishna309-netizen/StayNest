@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Property, MaintenanceIssue } from '../../types';
 import { safeStorage } from '../../utils/safeStorage';
+import { showGlassSuccess } from '../glass/GlassSuccessModal';
 
 interface LogIssueModalProps {
   visible: boolean;
@@ -245,11 +246,11 @@ export const LogIssueModal: React.FC<LogIssueModalProps> = ({
       await safeStorage.setItem('@staynest_maintenance_issues', JSON.stringify(updated));
 
       const alertMsg = `Issue #${newIssue.id} logged for ${propName} (Room ${newIssue.roomNumber}). Assigned to maintenance team!`;
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(`✓ ${alertMsg}`);
-      } else {
-        Alert.alert('✓ Issue Logged Successfully', alertMsg);
-      }
+      showGlassSuccess({
+        title: 'Issue Logged',
+        message: alertMsg,
+        buttonText: 'Done',
+      });
 
       setCustomDescription('');
       setActiveTab('HISTORY');

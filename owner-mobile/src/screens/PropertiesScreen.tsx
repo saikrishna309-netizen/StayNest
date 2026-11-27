@@ -30,7 +30,11 @@ import { emitDataChanged, onDataChanged } from '../utils/appEvents';
 import { logActivity } from '../services/activityLogService';
 import { syncTenantVacateOrDelete } from '../services/tenantSyncHelper';
 import { OnboardResidentModal } from '../components/modals/OnboardResidentModal';
+import { BulkTenantUploadModal } from '../components/modals/BulkTenantUploadModal';
 import { LocationPickerModal } from '../components/modals/LocationPickerModal';
+import { AmbientOrangeBackground } from '../components/AmbientOrangeBackground';
+import { GlassCard } from '../components/GlassCard';
+import { RoomsSkeleton } from '../components/SkeletonLoader';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 const OutlineBellIcon = ({ color = '#475569', size = 18 }: { color?: string; size?: number }) => (
@@ -159,6 +163,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const [propertiesList, setPropertiesList] = useState<Property[]>([]);
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
+  const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
+  const [showPortfolioList, setShowPortfolioList] = useState<boolean>(!initialProperty);
 
   // Expanded Room details in Overview Mode
   const [expandedRoomIds, setExpandedRoomIds] = useState<Record<string, boolean>>({});
@@ -1776,25 +1782,36 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const activeManagingFloor = floors.find((f) => f.floorNumber === managingBedsRoom?.floorNum);
   const activeManagingRoom = activeManagingFloor?.rooms.find((r) => r.id === managingBedsRoom?.roomId);
 
-  // Memoized deduplication of floors and rooms to prevent duplicate floor numbers or rooms showing twice
+  // Memoized deduplication of floors, rooms, and beds to prevent duplicate floor/room/bed counts
   const displayFloors = React.useMemo(() => {
     const floorMap = new Map<number, FloorConfig>();
+    const globalSeenRoomKeys = new Set<string>();
 
     floors.forEach((fl) => {
       const existing = floorMap.get(fl.floorNumber);
       const roomMap = new Map<string, RoomConfig>();
 
       if (existing) {
-        existing.rooms.forEach((r) => roomMap.set(r.roomNumber, r));
+        existing.rooms.forEach((r) => {
+          const rKey = (r.roomNumber || r.id || '').trim().toLowerCase();
+          roomMap.set(rKey, r);
+        });
       }
 
       fl.rooms.forEach((r) => {
-        if (!roomMap.has(r.roomNumber)) {
+        const rKey = (r.roomNumber || r.id || '').trim().toLowerCase();
+        if (!rKey) return;
+        if (!roomMap.has(rKey) && !globalSeenRoomKeys.has(rKey)) {
+          globalSeenRoomKeys.add(rKey);
           const seenBedIds = new Set<string>();
+          const seenBedLabels = new Set<string>();
           const uniqueBeds = (r.beds || [])
             .filter((b) => {
-              if (seenBedIds.has(b.id)) return false;
-              seenBedIds.add(b.id);
+              const lbl = (b.bedLabel || '').trim().toLowerCase();
+              if (b.id && seenBedIds.has(b.id)) return false;
+              if (lbl && seenBedLabels.has(lbl)) return false;
+              if (b.id) seenBedIds.add(b.id);
+              if (lbl) seenBedLabels.add(lbl);
               return true;
             })
             .sort((a, b) => {
@@ -1802,12 +1819,13 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               const numB = parseInt((b.bedLabel || '').replace(/[^0-9]/g, '') || '999', 10);
               return numA - numB;
             });
-          roomMap.set(r.roomNumber, { ...r, beds: uniqueBeds });
+          roomMap.set(rKey, { ...r, beds: uniqueBeds });
         }
       });
 
       floorMap.set(fl.floorNumber, {
         floorNumber: fl.floorNumber,
+        label: existing?.label || fl.label,
         rooms: Array.from(roomMap.values()),
       });
     });
@@ -2558,10 +2576,216 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const isRentalMode = activeProperty?.propertyType === 'RENTAL_BUILDING';
   const totalRoomsCount = displayFloors.reduce((sum, fl) => sum + fl.rooms.length, 0);
 
+  if (false) {
+    return null;
+  }
+
   return (
     <View style={styles.container}>
+      {showPortfolioList ? (
+      <AmbientOrangeBackground>
+        <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+          {/* Portfolio Top Header */}
+          <View style={[styles.header, { backgroundColor: 'transparent', borderBottomColor: 'rgba(255,255,255,0.6)' }]}>
+            <View style={styles.unifiedHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.unifiedPropTitle}>Your Properties</Text>
+                <Text style={styles.unifiedPropSub}>
+                  {propertiesList.length} {propertiesList.length === 1 ? 'Property' : 'Properties'} • Tap any building to manage rooms & beds
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#F97316',
+                  paddingHorizontal: 13,
+                  paddingVertical: 9,
+                  borderRadius: 14,
+                  shadowColor: '#EA580C',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.24,
+                  shadowRadius: 8,
+                  elevation: 4,
+                }}
+                onPress={() => setShowAddPropertyModal(true)}
+                activeOpacity={0.85}
+              >
+                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>+ Add Property</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 110, gap: 14 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} colors={['#ea580c']} tintColor="#ea580c" />
+            }
+          >
+            {loading && propertiesList.length === 0 ? (
+              <RoomsSkeleton />
+            ) : propertiesList.length === 0 ? (
+              <GlassCard borderRadius={26} padding={24} style={{ alignItems: 'center' }}>
+                <Text style={{ fontSize: 36, marginBottom: 10 }}>🏢</Text>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 6 }}>
+                  No Properties Added Yet
+                </Text>
+                <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 18 }}>
+                  Add your first PG / Hostel or Rental Building to configure floors, rooms, and beds.
+                </Text>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#F97316',
+                    paddingHorizontal: 22,
+                    paddingVertical: 12,
+                    borderRadius: 16,
+                  }}
+                  onPress={() => setShowAddPropertyModal(true)}
+                >
+                  <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 14 }}>+ Add Your First Property</Text>
+                </TouchableOpacity>
+              </GlassCard>
+            ) : (
+              propertiesList.map((prop) => {
+                const isPropRental = prop.propertyType === 'RENTAL_BUILDING';
+                const isCurrent = activeProperty?.id === prop.id;
+                const rawRooms = (prop as any).rooms || [];
+                const propTenants = tenants.filter(
+                  (t) => t.active !== false && t.stayStatus !== 'TERMINATED' && (!t.propertyId || t.propertyId === prop.id)
+                );
+                const occBedSet = new Set(propTenants.map((t) => t.bedId).filter(Boolean));
+                const occRoomSet = new Set(
+                  propTenants.map((t) => String(t.roomNumber || '').trim().toLowerCase()).filter(Boolean)
+                );
+
+                let propRooms = isCurrent ? totalRooms : rawRooms.length;
+                let propTotalBeds = isCurrent ? totalBeds : 0;
+                let propOccupied = isCurrent ? occupiedBeds : 0;
+                let propAvailable = isCurrent ? availableBeds : 0;
+
+                if (!isCurrent) {
+                  if (isPropRental) {
+                    propTotalBeds = rawRooms.length;
+                    rawRooms.forEach((r: any) => {
+                      const isOcc =
+                        occRoomSet.has(String(r.roomNumber || '').trim().toLowerCase()) ||
+                        (r.beds || []).some((b: any) => b.status === 'OCCUPIED' || occBedSet.has(b.id));
+                      if (isOcc) propOccupied++;
+                      else propAvailable++;
+                    });
+                  } else {
+                    rawRooms.forEach((r: any) => {
+                      const bedsArr = r.beds || [];
+                      propTotalBeds += bedsArr.length;
+                      bedsArr.forEach((b: any) => {
+                        if (b.status === 'OCCUPIED' || occBedSet.has(b.id)) propOccupied++;
+                        else propAvailable++;
+                      });
+                    });
+                  }
+                }
+
+                return (
+                  <TouchableOpacity
+                    key={`big-prop-${prop.id}`}
+                    activeOpacity={0.88}
+                    onPress={() => {
+                      handleSelectProperty(prop);
+                      setShowPortfolioList(false);
+                    }}
+                  >
+                    <GlassCard borderRadius={26} padding={20}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text style={{ fontSize: 19, fontWeight: '900', color: '#0F172A' }} numberOfLines={1}>
+                            {prop.name}
+                          </Text>
+                          <Text style={{ fontSize: 12.5, color: '#64748B', marginTop: 3 }} numberOfLines={1}>
+                            📍 {prop.cityName || prop.addressLine || 'Property'}
+                          </Text>
+                        </View>
+                        <View
+                          style={{
+                            backgroundColor: isPropRental ? '#FFF7ED' : '#EFF6FF',
+                            borderWidth: 1,
+                            borderColor: isPropRental ? '#FDBA74' : '#BFDBFE',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 10,
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: isPropRental ? '#EA580C' : '#1D4ED8' }}>
+                            {isPropRental ? '🏠 Rental Building' : '🏢 PG / Hostel'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 10, marginBottom: 14 }}>
+                        <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(226,232,240,0.85)' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+                            {isPropRental ? 'Total Flats' : 'Rooms / Beds'}
+                          </Text>
+                          <Text style={{ fontSize: 17, fontWeight: '900', color: '#0F172A', marginTop: 2 }}>
+                            {isPropRental ? propRooms : `${propRooms} / ${propTotalBeds}`}
+                          </Text>
+                        </View>
+
+                        <View style={{ flex: 1, backgroundColor: 'rgba(209,250,229,0.55)', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#047857' }}>Available</Text>
+                          <Text style={{ fontSize: 17, fontWeight: '900', color: '#065F46', marginTop: 2 }}>
+                            {propAvailable}
+                          </Text>
+                        </View>
+
+                        <View style={{ flex: 1, backgroundColor: 'rgba(255,237,213,0.75)', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: 'rgba(249,115,22,0.35)' }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#C2410C' }}>Occupied</Text>
+                          <Text style={{ fontSize: 17, fontWeight: '900', color: '#9A3412', marginTop: 2 }}>
+                            {propOccupied}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#EA580C' }}>
+                          View {isPropRental ? 'Flats & Tenants' : 'Rooms & Beds'} →
+                        </Text>
+                        <TouchableOpacity
+                          onPress={(e: any) => {
+                            e?.stopPropagation?.();
+                            handleSelectProperty(prop);
+                            setShowBulkUploadModal(true);
+                          }}
+                          style={{
+                            backgroundColor: '#EFF6FF',
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: '#BFDBFE',
+                          }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#1D4ED8' }}>📥 Bulk Upload</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </GlassCard>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+
+        </View>
+      </AmbientOrangeBackground>
+      ) : (
+        <>
       {/* ─── TOP HEADER (UNIFIED ALABASTER & BURNT-ORANGE SAAS STYLE) ─── */}
       <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => setShowPortfolioList(true)}
+          style={{ alignSelf: 'flex-start', marginBottom: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: '#FFF7ED', borderWidth: 1, borderColor: '#FDBA74' }}
+          activeOpacity={0.8}
+        >
+          <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#EA580C' }}>← All Properties ({propertiesList.length})</Text>
+        </TouchableOpacity>
         <View style={styles.unifiedHeaderRow}>
           <TouchableOpacity
             style={{ flex: 1, paddingRight: 10 }}
@@ -2581,19 +2805,36 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
               <Text style={{ fontSize: 12, color: '#6b7280' }}>▾</Text>
             </View>
             <Text style={styles.unifiedPropSub} numberOfLines={1}>
-              {isRentalMode ? 'Rental Building' : 'PG / Hostel'} • {displayFloors.length}{' '}
-              {displayFloors.length === 1 ? 'Floor' : 'Floors'} • {totalRoomsCount}{' '}
-              {isRentalMode ? (totalRoomsCount === 1 ? 'Flat' : 'Flats') : (totalRoomsCount === 1 ? 'Room' : 'Rooms')}
+              {isRentalMode
+                ? `Rental Building • ${totalFloors} ${totalFloors === 1 ? 'Floor' : 'Floors'} • ${totalRooms} ${totalRooms === 1 ? 'Flat' : 'Flats'} (${availableBeds} Vacant)`
+                : `PG / Hostel • ${totalFloors} ${totalFloors === 1 ? 'Floor' : 'Floors'} • ${totalRooms} ${totalRooms === 1 ? 'Room' : 'Rooms'} • ${totalBeds} ${totalBeds === 1 ? 'Bed' : 'Beds'} (${availableBeds} Free)`}
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.topAddFloorBtn}
-            onPress={handleIncreaseFloors}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.topAddFloorBtnText}>{t('rooms.addFloor')}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setShowBulkUploadModal(true)}
+              activeOpacity={0.85}
+              style={{
+                backgroundColor: '#EFF6FF',
+                borderWidth: 1,
+                borderColor: '#BFDBFE',
+                paddingHorizontal: 10,
+                paddingVertical: 8,
+                borderRadius: 12,
+              }}
+            >
+              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#1D4ED8' }}>📥 Bulk Upload</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.topAddFloorBtn}
+              onPress={handleIncreaseFloors}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.topAddFloorBtnText}>{t('rooms.addFloor')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Floor Filter Pills */}
@@ -2658,10 +2899,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         }
       >
         {loading ? (
-          <View style={styles.loadingBox}>
-            <ActivityIndicator size="large" color="#ea580c" />
-            <Text style={styles.loadingText}>Loading property structure...</Text>
-          </View>
+          <RoomsSkeleton />
         ) : (
           <>
             {viewMode === 'OVERVIEW' && (
@@ -3382,6 +3620,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           </>
         )}
       </ScrollView>
+        </>
+      )}
 
       {/* ─── MODAL 1: BED STATUS PICKER ─── */}
       <Modal
@@ -3894,6 +4134,16 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         initialBedId={assigningBed?.bedId}
         initialRentRupees={assigningBed?.rentRupees}
         initialDepositRupees={assigningBed?.depositRupees}
+        onSuccess={() => {
+          loadPropertiesAndRooms();
+        }}
+      />
+
+      <BulkTenantUploadModal
+        visible={showBulkUploadModal}
+        onClose={() => setShowBulkUploadModal(false)}
+        properties={propertiesList.length > 0 ? propertiesList : (activeProperty ? [activeProperty] : [])}
+        initialPropertyId={activeProperty?.id}
         onSuccess={() => {
           loadPropertiesAndRooms();
         }}

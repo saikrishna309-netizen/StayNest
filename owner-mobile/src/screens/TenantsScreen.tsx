@@ -15,6 +15,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { apiClient } from '../api/client';
+import { showGlassSuccess } from '../components/glass/GlassSuccessModal';
 import { safeStorage } from '../utils/safeStorage';
 import { Tenant, Property, Room, Bed } from '../types';
 import { getInitialFloorsForProperty, isValidUuid } from '../services/propertyDataService';
@@ -737,11 +738,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         ? `${fullName} onboarded! Rent received ₹${payingNow.toLocaleString('en-IN')}. Remaining ₹${rentDue.toLocaleString('en-IN')} marked as DUE.`
         : `${fullName} successfully onboarded as a resident!`;
 
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(`✓ ${alertMsg}`);
-      } else {
-        Alert.alert('✓ Success', alertMsg);
-      }
+      showGlassSuccess({
+        title: 'Tenant Created',
+        message: alertMsg,
+        buttonText: 'Done',
+      });
 
       setShowForm(false);
       setFullName('');
@@ -804,11 +805,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         ? `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded! Rent for ${selectedTenantForAction.fullName} is fully paid.`
         : `Payment of ₹${payAmount.toLocaleString('en-IN')} recorded! Remaining due for ${selectedTenantForAction.fullName} is ₹${newDue.toLocaleString('en-IN')}.`;
 
-      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.alert === 'function') {
-        window.alert(`✓ ${msg}`);
-      } else {
-        Alert.alert('✓ Payment Recorded!', msg);
-      }
+      showGlassSuccess({
+        title: 'Payment Done',
+        message: msg,
+        buttonText: 'Done',
+      });
 
       setSelectedTenantForAction(null);
     } catch {
@@ -1090,7 +1091,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         }))
       );
 
-      Alert.alert('✓ Checked Out', `${tenant.fullName} has exited successfully and their bed is now free.`);
+      showGlassSuccess({
+        title: 'Checked Out',
+        message: `${tenant.fullName} has exited successfully and their bed is now free.`,
+        buttonText: 'Done',
+      });
       setSelectedTenantForAction(null);
       loadData();
     };
@@ -1183,7 +1188,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         })
       );
 
-      Alert.alert('✓ Saved', 'Resident profile, ID proof and rent updated successfully!');
+      showGlassSuccess({
+        title: 'Saved',
+        message: 'Resident profile, ID proof and rent updated successfully!',
+        buttonText: 'Done',
+      });
       setIsEditingTenant(false);
       setSelectedTenantForAction(null);
       loadData();

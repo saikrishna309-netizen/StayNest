@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar, AppState, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar, AppState } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
+import { BrandLoader } from './src/components/BrandLoader';
 import { GlassBackground } from './src/components/glass/GlassBackground';
 import { GLASS_TOKENS } from './src/components/glass/GlassCard';
+import { GlassSuccessHost } from './src/components/glass/GlassSuccessModal';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -133,11 +135,8 @@ const MainNavigator: React.FC = () => {
   // 0. Show loading splash while hydrating JWT & GET /users/me
   if (hydrating) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: '#FAF7F4', justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#EA580C" />
-        <Text style={{ marginTop: 12, fontSize: 13, fontWeight: '700', color: '#475569' }}>
-          Loading StayNest...
-        </Text>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <BrandLoader variant="fullScreen" message="Setting up your workspace..." />
       </SafeAreaView>
     );
   }
@@ -528,6 +527,7 @@ export default function App() {
       <LanguageProvider>
         <AuthProvider>
           <MainNavigator />
+          <GlassSuccessHost />
         </AuthProvider>
       </LanguageProvider>
     </ErrorBoundary>

@@ -12,6 +12,8 @@ import com.staynest.rent.dto.RecordRentPaymentRequest;
 import com.staynest.rent.dto.RentInvoiceResponse;
 import com.staynest.rent.service.TenantFinanceService;
 import com.staynest.security.UserPrincipal;
+import com.staynest.tenant.dto.BulkTenantImportRequest;
+import com.staynest.tenant.dto.BulkTenantImportResponse;
 import com.staynest.tenant.dto.CreateTenantRequest;
 import com.staynest.tenant.dto.RecordStayRequest;
 import com.staynest.tenant.dto.TenantResponse;
@@ -56,6 +58,14 @@ public class OwnerTenantFinanceController {
             @AuthenticationPrincipal UserPrincipal user,
             @Valid @RequestBody CreateTenantRequest request) {
         return new ResponseEntity<>(tenantFinanceService.createTenant(user.getId(), request), HttpStatus.CREATED);
+    }
+
+    @PostMapping("/tenants/bulk")
+    @Operation(summary = "Bulk import tenants and assign beds/flats from spreadsheet")
+    public ResponseEntity<BulkTenantImportResponse> bulkImportTenants(
+            @AuthenticationPrincipal UserPrincipal user,
+            @Valid @RequestBody BulkTenantImportRequest request) {
+        return new ResponseEntity<>(tenantFinanceService.bulkImportTenants(user.getId(), request), HttpStatus.CREATED);
     }
 
     @GetMapping("/tenants")

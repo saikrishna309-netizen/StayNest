@@ -5,7 +5,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -23,6 +22,7 @@ import {
   getInitialMatrixFloors,
 } from '../components/FloorUnitMatrixBuilder';
 import { LocationPickerModal } from '../components/modals/LocationPickerModal';
+import { BrandLoader } from '../components/BrandLoader';
 
 interface OwnerRegistrationScreenProps {
   onComplete: (createdProperty?: Property | null) => void;
@@ -329,7 +329,7 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
                   activeOpacity={0.85}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#fff" />
+                    <BrandLoader variant="inline" color="#FFFFFF" />
                   ) : (
                     <Text style={styles.buttonText}>Next: Property Details →</Text>
                   )}
@@ -502,6 +502,12 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <BrandLoader
+        variant="overlay"
+        visible={loading && step === 3}
+        message="Saving property details..."
+      />
 
       <LocationPickerModal
         visible={showLocationPicker}

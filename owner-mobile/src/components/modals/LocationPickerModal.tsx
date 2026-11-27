@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
-  ActivityIndicator,
   Image,
   ScrollView,
   SafeAreaView,
@@ -19,6 +18,7 @@ import {
   reverseGeocodeCoords,
   searchAddressPlaces,
 } from '../../utils/locationHelper';
+import { BrandLoader } from '../BrandLoader';
 
 interface LocationPickerModalProps {
   visible: boolean;
@@ -197,7 +197,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
               placeholder="🔍 Search street, area, landmark, city..."
               placeholderTextColor="#94a3b8"
             />
-            {searching && <ActivityIndicator size="small" color="#ea580c" style={{ marginLeft: 8 }} />}
+            {searching && <BrandLoader variant="inline" style={{ marginLeft: 8 }} />}
           </View>
 
           {searchResults.length > 0 && (
@@ -291,7 +291,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
               activeOpacity={0.85}
             >
               {locating ? (
-                <ActivityIndicator size="small" color="#ffffff" />
+                <BrandLoader variant="inline" color="#FFFFFF" />
               ) : (
                 <Text style={styles.gpsFloatingBtnText}>📍 Fetch Current Location</Text>
               )}

@@ -18,6 +18,7 @@ import { fastDataCache } from '../services/dataCache';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { GLASS_TOKENS } from '../components/glass/GlassCard';
+import { showGlassSuccess } from '../components/glass/GlassSuccessModal';
 import { apiClient } from '../api/client';
 import { Property } from '../types';
 import { getInitialFloorsForProperty } from '../services/propertyDataService';
@@ -223,7 +224,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       await updateProfile(editName.trim(), editEmail.trim());
 
       setIsEditModalOpen(false);
-      Alert.alert('Profile Updated! 🎉', 'Your profile details and custom photos have been saved successfully.');
+      showGlassSuccess({
+        title: 'Profile Updated',
+        message: 'Your profile details and custom photos have been saved successfully.',
+        buttonText: 'Done',
+      });
     } catch {
       setIsEditModalOpen(false);
     } finally {
@@ -244,7 +249,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           '@staynest_owner_custom_profile',
           JSON.stringify({ ...parsed, avatarUrl: picked })
         );
-        Alert.alert('Profile Photo Updated! 📸', 'Your avatar has been updated from your local machine.');
+        showGlassSuccess({
+          title: 'Photo Updated',
+          message: 'Your avatar has been updated from your local machine.',
+          buttonText: 'Done',
+        });
       }
     } catch (err) {
       console.log('Error uploading avatar:', err);
@@ -264,7 +273,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           '@staynest_owner_custom_profile',
           JSON.stringify({ ...parsed, bannerUrl: picked })
         );
-        Alert.alert('Banner Updated! 🖼️', 'Your profile banner has been updated from your local machine.');
+        showGlassSuccess({
+          title: 'Banner Updated',
+          message: 'Your profile banner has been updated from your local machine.',
+          buttonText: 'Done',
+        });
       }
     } catch (err) {
       console.log('Error uploading banner:', err);
@@ -491,12 +504,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                 >
                   <Text style={styles.editProfileBtnText}>✏️ Edit Profile</Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* PG Owner Badge */}
-              <View style={styles.ownerTagPill}>
-                <Text style={{ fontSize: 11 }}>👑</Text>
-                <Text style={styles.ownerTagText}>PG Owner</Text>
               </View>
 
               {/* Contact Info */}
@@ -756,7 +763,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
                     setUpiId(trimmedUpi);
                     setUpiVerified(true);
                     setIsEditingUpi(false);
-                    Alert.alert('✓ UPI ID Saved', `${trimmedUpi} will now be included in WhatsApp rent reminders.`);
+                    showGlassSuccess({
+                      title: 'UPI ID Saved',
+                      message: `${trimmedUpi} will now be included in WhatsApp rent reminders.`,
+                      buttonText: 'Done',
+                    });
                   } finally {
                     setSavingPayout(false);
                   }
