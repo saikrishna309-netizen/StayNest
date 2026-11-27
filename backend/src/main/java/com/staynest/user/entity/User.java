@@ -38,6 +38,9 @@ public class User {
     @Column(nullable = false)
     private boolean phoneVerified = false;
 
+    @Column(nullable = false)
+    private boolean isProfileComplete = false;
+
     private String emailVerificationToken;
     private String phoneOtp;
     private String passwordResetToken;
@@ -55,6 +58,14 @@ public class User {
     @PreUpdate
     public void preUpdate() {
         this.updatedAt = Instant.now();
+    }
+
+    public boolean isProfileComplete() {
+        return isProfileComplete;
+    }
+
+    public void setProfileComplete(boolean profileComplete) {
+        isProfileComplete = profileComplete;
     }
 
     public UUID getId() {

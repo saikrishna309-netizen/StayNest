@@ -44,6 +44,10 @@ import {
 } from '../services/subscriptionService';
 import { SubscriptionPaywallModal } from '../components/modals/SubscriptionPaywallModal';
 import { MonthlyInvoiceModal } from '../components/modals/MonthlyInvoiceModal';
+import { OnboardResidentModal } from '../components/modals/OnboardResidentModal';
+import { useLanguage } from '../context/LanguageContext';
+import { GLASS_TOKENS } from '../components/glass/GlassCard';
+import { syncTenantVacateOrDelete } from '../services/tenantSyncHelper';
 import Svg, { Path } from 'react-native-svg';
 
 const WhatsAppLogoIcon = ({ size = 13, color = '#25D366' }: { size?: number; color?: string }) => (
@@ -80,6 +84,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   onActivePropertyChange,
   onNavigateToProfile,
 }) => {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -275,7 +280,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     setLoading(true);
     try {
       const [tRes, pRes, billsList, loadedSub, usedCount] = await Promise.all([
-        apiClient<{ content: Tenant[] }>('/owner/tenants?size=100').catch(() => ({ content: [] })),
+        apiClient<{ content: Tenant[] }>('/owner/tenants?size=500').catch(() => ({ content: [] })),
         apiClient<{ content: Property[] }>('/owner/properties?size=100').catch(() => ({ content: [] })),
         getAllMonthlyBills(),
         getSubscriptionState(),
@@ -313,11 +318,11 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         }
       } catch {}
 
-      // Ensure every resident without explicit termination is marked ACTIVE
+      // Ensure every resident with TERMINATED stay is marked inactive/TERMINATED
       loadedTenants = loadedTenants.map((t) => ({
         ...t,
-        active: t.stayStatus === 'TERMINATED' ? (t.active !== undefined ? t.active : true) : true,
-        stayStatus: t.stayStatus === 'TERMINATED' && t.active === false ? 'TERMINATED' : 'ACTIVE',
+        active: t.stayStatus === 'TERMINATED' ? false : t.active !== false,
+        stayStatus: t.stayStatus === 'TERMINATED' ? 'TERMINATED' : 'ACTIVE',
       }));
 
       setTenants(loadedTenants);
@@ -1059,19 +1064,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         }
       }
 
-      // 2. Seamlessly update local state: mark tenant inactive & vacate bed
-      try {
-        const storedCustomStr = await safeStorage.getItem('@staynest_custom_tenants');
-        if (storedCustomStr) {
-          const customList: Tenant[] = JSON.parse(storedCustomStr);
-          const updatedCustom = customList.map((ct) =>
-            ct.id === tenant.id
-              ? { ...ct, active: false, stayStatus: 'TERMINATED', bedId: undefined, roomNumber: undefined }
-              : ct
-          );
-          await safeStorage.setItem('@staynest_custom_tenants', JSON.stringify(updatedCustom));
-        }
-      } catch {}
+      // 2. Seamlessly update local state, floors, SWR cache & notify all tabs
+      await syncTenantVacateOrDelete('VACATE', {
+        tenantId: tenant.id,
+        bedId: tenant.bedId,
+        propertyId: tenant.propertyId,
+        phone: tenant.phone,
+      });
 
       setTenants((prev) =>
         prev.map((t) =>
@@ -1234,7 +1233,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         }
       }
 
-      // Seamless local delete
+      // Seamless local delete + cross-tab sync
+      await syncTenantVacateOrDelete('DELETE', {
+        tenantId: tenant.id,
+        bedId: tenant.bedId,
+        propertyId: tenant.propertyId,
+        phone: tenant.phone,
+      });
       setTenants((prev) => prev.filter((t) => t.id !== tenant.id));
       setPropRooms((prevRooms) =>
         prevRooms.map((r) => ({
@@ -1425,531 +1430,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
     }
   };
 
-  // ─── SEPARATE PAGE: ONBOARD NEW RESIDENT (WITH BACK BUTTON) ───
-  if (showForm) {
-    return (
-      <View style={styles.separatePageContainer}>
-        {/* Top Header with Back Button */}
-        <View style={styles.separatePageHeader}>
-          <TouchableOpacity
-            style={styles.separatePageBackBtn}
-            onPress={() => {
-              setShowForm(false);
-              setFullName('');
-              setPhone('');
-              setEmail('');
-              setIdProofNumber('');
-            }}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.separatePageBackBtnText}>← Back to Tenants</Text>
-          </TouchableOpacity>
-          <View style={{ flex: 1, alignItems: 'center', marginRight: 30 }}>
-            <Text style={styles.separatePageHeaderTitle}>Onboard Resident</Text>
-            <Text style={styles.separatePageHeaderSub}>
-              {isSelectedAddRentalMode ? 'Assign flat, fixed rent & rent cycle' : 'Assign bed, fixed rent & rent cycle'}
-            </Text>
-          </View>
-        </View>
-
-        <ScrollView
-          ref={formScrollRef}
-          style={styles.separatePageContent}
-          contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
-          showsVerticalScrollIndicator={false}
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-        >
-          {/* 1. Property Selector */}
-          {properties.length > 1 && (
-            <View style={{ marginBottom: 14 }}>
-              <Text style={styles.fieldLabel}>🏢 1. SELECT PG PROPERTY *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                {properties.map((p) => (
-                  <TouchableOpacity
-                    key={p.id}
-                    style={[
-                      styles.propChip,
-                      selectedPropId === p.id && styles.propChipSelected,
-                    ]}
-                    onPress={() => handlePropertySelect(p.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.propChipText,
-                        selectedPropId === p.id && styles.propChipTextSelected,
-                      ]}
-                    >
-                      🏢 {p.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-          )}
-
-          {/* 2. Resident Name & Phone */}
-          <View
-            style={{ marginBottom: 14 }}
-            onLayout={(e) => {
-              fieldPositions.current.fullName = e.nativeEvent.layout.y;
-            }}
-          >
-            <Text style={[styles.fieldLabel, formErrors.fullName && { color: '#dc2626' }]}>
-              👤 RESIDENT FULL NAME *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                formErrors.fullName && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5 },
-              ]}
-              value={fullName}
-              onChangeText={(val) => {
-                setFullName(val);
-                if (formErrors.fullName) setFormErrors((prev) => ({ ...prev, fullName: undefined }));
-              }}
-              placeholder="e.g. Anand Kumar"
-              placeholderTextColor="#94a3b8"
-            />
-            {formErrors.fullName && (
-              <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
-                ⚠️ {formErrors.fullName}
-              </Text>
-            )}
-          </View>
-
-          <View
-            style={{ marginBottom: 14 }}
-            onLayout={(e) => {
-              fieldPositions.current.phone = e.nativeEvent.layout.y;
-            }}
-          >
-            <Text style={[styles.fieldLabel, formErrors.phone && { color: '#dc2626' }]}>
-              📱 PHONE NUMBER (10 DIGITS) *
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                formErrors.phone && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5, marginBottom: 4 },
-              ]}
-              value={phone}
-              onChangeText={(val) => {
-                const digitsOnly = val.replace(/\D/g, '');
-                if (digitsOnly.length > 10) {
-                  setPhone(digitsOnly.slice(0, 10));
-                  setFormErrors((prev) => ({ ...prev, phone: 'Maximum 10 digits allowed' }));
-                  return;
-                }
-                setPhone(digitsOnly);
-                if (digitsOnly.length > 0 && !/^[6-9]/.test(digitsOnly)) {
-                  setFormErrors((prev) => ({ ...prev, phone: 'Mobile number must start with 6, 7, 8, or 9' }));
-                } else if (formErrors.phone) {
-                  setFormErrors((prev) => ({ ...prev, phone: undefined }));
-                }
-              }}
-              keyboardType="phone-pad"
-              placeholder="e.g. 9876543210"
-              placeholderTextColor="#94a3b8"
-              maxLength={10}
-            />
-            {formErrors.phone && (
-              <Text style={{ color: '#dc2626', fontSize: 11.5, fontWeight: '700', marginTop: 2, marginBottom: 4 }}>
-                ⚠️ {formErrors.phone}
-              </Text>
-            )}
-          </View>
-
-          {/* 3. Government ID Proof Type (Dropdown for Aadhaar & PAN) */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>🪪 GOVERNMENT ID PROOF TYPE *</Text>
-            <TouchableOpacity
-              style={styles.idDropdownTrigger}
-              onPress={() => setShowIdDropdown((prev) => !prev)}
-              activeOpacity={0.8}
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={{ fontSize: 16 }}>{idProofType === 'AADHAAR' ? '🪪' : '💳'}</Text>
-                <Text style={styles.idDropdownTriggerText}>
-                  {idProofType === 'AADHAAR' ? 'Aadhaar Card (12-Digit UIDAI)' : 'PAN Card (10-Char Income Tax ID)'}
-                </Text>
-              </View>
-              <Text style={styles.idDropdownArrow}>{showIdDropdown ? '▴' : '▾'}</Text>
-            </TouchableOpacity>
-
-            {showIdDropdown && (
-              <View style={styles.idDropdownMenu}>
-                <TouchableOpacity
-                  style={[styles.idDropdownItem, idProofType === 'AADHAAR' && styles.idDropdownItemActive]}
-                  onPress={() => {
-                    setIdProofType('AADHAAR');
-                    setIdProofNumber('');
-                    setShowIdDropdown(false);
-                  }}
-                >
-                  <Text style={{ fontSize: 16 }}>🪪</Text>
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={[styles.idDropdownItemTitle, idProofType === 'AADHAAR' && styles.idDropdownItemTitleActive]}>
-                      Aadhaar Card (Default)
-                    </Text>
-                    <Text style={styles.idDropdownItemSub}>12-digit UIDAI Government ID</Text>
-                  </View>
-                  {idProofType === 'AADHAAR' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.idDropdownItem, idProofType === 'PAN' && styles.idDropdownItemActive]}
-                  onPress={() => {
-                    setIdProofType('PAN');
-                    setIdProofNumber('');
-                    setShowIdDropdown(false);
-                  }}
-                >
-                  <Text style={{ fontSize: 16 }}>💳</Text>
-                  <View style={{ flex: 1, marginLeft: 8 }}>
-                    <Text style={[styles.idDropdownItemTitle, idProofType === 'PAN' && styles.idDropdownItemTitleActive]}>
-                      PAN Card
-                    </Text>
-                    <Text style={styles.idDropdownItemSub}>10-character Income Tax ID</Text>
-                  </View>
-                  {idProofType === 'PAN' && <Text style={{ color: '#ea580c', fontWeight: '900' }}>✓</Text>}
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          {/* ID Number input with validity feedback */}
-          <View
-            style={{ marginBottom: 14 }}
-            onLayout={(e) => {
-              fieldPositions.current.idProofNumber = e.nativeEvent.layout.y;
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-              <Text style={[styles.fieldLabel, formErrors.idProofNumber && { color: '#dc2626' }]}>
-                {idProofType === 'AADHAAR' ? 'AADHAAR NUMBER (12 DIGITS) *' : 'PAN CARD NUMBER (10 CHARS) *'}
-              </Text>
-              {(() => {
-                const clean = idProofNumber.replace(/\s+/g, '');
-                if (!clean) return null;
-                if (idProofType === 'AADHAAR') {
-                  const v = validateVerhoeffAadhaar(clean);
-                  return (
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: v.isValid ? '#16a34a' : '#ea580c' }}>
-                      {v.isValid ? '✓ Valid Aadhaar' : `⚠️ ${v.message}`}
-                    </Text>
-                  );
-                } else {
-                  const isValid = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(clean);
-                  return (
-                    <Text style={{ fontSize: 11, fontWeight: '800', color: isValid ? '#16a34a' : '#ea580c' }}>
-                      {isValid ? '✓ Valid PAN' : (clean.length < 10 ? `⚠️ ${10 - clean.length} chars needed` : '⚠️ Invalid PAN')}
-                    </Text>
-                  );
-                }
-              })()}
-            </View>
-
-            <TextInput
-              style={[
-                styles.input,
-                formErrors.idProofNumber && { borderColor: '#dc2626', backgroundColor: '#fef2f2', borderWidth: 1.5 },
-              ]}
-              value={idProofNumber}
-              onChangeText={(val) => {
-                if (formErrors.idProofNumber) setFormErrors((prev) => ({ ...prev, idProofNumber: undefined }));
-                if (idProofType === 'AADHAAR') {
-                  const digits = val.replace(/\D/g, '').slice(0, 12);
-                  const formatted = digits.replace(/(\d{4})(?=\d)/g, '$1 ');
-                  setIdProofNumber(formatted);
-                } else {
-                  const pan = val.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-                  setIdProofNumber(pan);
-                }
-              }}
-              placeholder={idProofType === 'AADHAAR' ? 'e.g. 5489 1234 5678' : 'e.g. ABCDE1234F'}
-              placeholderTextColor="#94a3b8"
-              keyboardType={idProofType === 'AADHAAR' ? 'number-pad' : 'default'}
-              maxLength={idProofType === 'AADHAAR' ? 14 : 10}
-              autoCapitalize={idProofType === 'PAN' ? 'characters' : 'none'}
-            />
-            {formErrors.idProofNumber && (
-              <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginTop: 4 }}>
-                ⚠️ {formErrors.idProofNumber}
-              </Text>
-            )}
-          </View>
-
-          {/* 4. Select Available Bed / Flat Unit */}
-          <View
-            onLayout={(e) => {
-              fieldPositions.current.bedSelection = e.nativeEvent.layout.y;
-            }}
-          >
-            <Text style={[styles.fieldLabel, { marginTop: 4 }, formErrors.bedSelection && { color: '#dc2626' }]}>
-              {isSelectedAddRentalMode
-                ? `🏠 SELECT AVAILABLE FLAT / UNIT (${availableBeds.length} Vacant) *`
-                : `🛏️ SELECT AVAILABLE BED (${availableBeds.length} Free) *`}
-            </Text>
-          {availableBeds.length === 0 ? (
-            <Text style={styles.noBedWarn}>
-              {isSelectedAddRentalMode
-                ? 'No vacant flats or units available in this property. Configure floors/units under Rooms.'
-                : 'No free beds available in this property. Configure rooms/beds under Properties.'}
-            </Text>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bedScroll}>
-              {availableBeds.map(({ bed, roomNumber, roomId, unitLabel, rentPaise, depositPaise }) => {
-                const isSelected = selectedBedId === bed.id;
-                return (
-                  <TouchableOpacity
-                    key={bed.id}
-                    style={[styles.bedPickChip, isSelected && styles.bedPickChipSelected]}
-                    onPress={() => handleSelectBed(bed, roomId, rentPaise, depositPaise)}
-                  >
-                    <Text style={[styles.bedPickText, isSelected && styles.bedPickTextSelected]}>
-                      {isSelectedAddRentalMode
-                        ? `🏠 Flat ${roomNumber}${unitLabel ? ` • ${unitLabel}` : ''}`
-                        : `Room ${roomNumber} • ${bed.bedLabel}`}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          )}
-          {formErrors.bedSelection && (
-            <Text style={{ color: '#dc2626', fontSize: 11, fontWeight: '700', marginBottom: 8 }}>
-              ⚠️ {formErrors.bedSelection}
-            </Text>
-          )}
-          </View>
-
-          {/* 5. FIXED DEPOSIT & RENT (READ-ONLY LOCKED BOX - REQUIREMENT 3) */}
-          <View style={styles.lockedRentCard}>
-            <View style={styles.lockedRentRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>🔒</Text>
-                <Text style={styles.lockedRentTitle}>Fixed Monthly Rent:</Text>
-              </View>
-              <Text style={styles.lockedRentVal}>₹{fixedRentAmount.toLocaleString('en-IN')} / mo</Text>
-            </View>
-
-            <View style={[styles.lockedRentRow, { marginTop: 8 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={{ fontSize: 16 }}>🔒</Text>
-                <Text style={styles.lockedRentTitle}>Fixed Security Deposit:</Text>
-              </View>
-              <Text style={styles.lockedRentVal}>₹{fixedDepositAmount.toLocaleString('en-IN')}</Text>
-            </View>
-            <Text style={styles.lockedRentNotice}>
-              {isSelectedAddRentalMode
-                ? '🔒 Fixed amounts are locked based on selected Flat / Unit.'
-                : '🔒 Fixed amounts are locked based on selected Room & Bed.'}
-            </Text>
-          </View>
-
-          {/* 6. EDITABLE PAYMENTS - ONLY WHAT HE IS PAYING (REQUIREMENT 3) */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>💵 RENT AMOUNT PAYING NOW (₹) *</Text>
-            <View style={styles.currencyInputRow}>
-              <Text style={styles.currencyInrLight}>₹</Text>
-              <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 10, marginBottom: 0, backgroundColor: 'transparent', letterSpacing: 0 }]}
-                value={rentPayingNow}
-                onChangeText={(v) => setRentPayingNow(v.replace(/\D/g, ''))}
-                keyboardType="numeric"
-                placeholder={String(fixedRentAmount)}
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-          </View>
-
-          {/* Dynamic Rent Due Indicator */}
-          {(() => {
-            const paying = Number(rentPayingNow || 0);
-            const due = Math.max(0, fixedRentAmount - paying);
-            if (fixedRentAmount > 0 && paying > fixedRentAmount) {
-              return (
-                <View style={[styles.rentDueAlertBox, { backgroundColor: '#fef2f2', borderColor: '#fecaca' }]}>
-                  <Text style={[styles.rentDueAlertTitle, { color: '#dc2626' }]}>
-                    ⚠️ AMOUNT EXCEEDS LOCKED RENT (₹{fixedRentAmount.toLocaleString('en-IN')})
-                  </Text>
-                  <Text style={[styles.rentDueAlertSub, { color: '#b91c1c' }]}>
-                    Entered ₹{paying.toLocaleString('en-IN')} is more than the locked rent. Please enter ₹{fixedRentAmount.toLocaleString('en-IN')} or less.
-                  </Text>
-                </View>
-              );
-            }
-            if (due > 0) {
-              return (
-                <View style={styles.rentDueAlertBox}>
-                  <Text style={styles.rentDueAlertTitle}>
-                    ⚠️ REMAINING RENT DUE: ₹{due.toLocaleString('en-IN')}
-                  </Text>
-                  <Text style={styles.rentDueAlertSub}>
-                    Resident pays ₹{paying.toLocaleString('en-IN')} today. Remaining ₹{due.toLocaleString('en-IN')} will be marked as DUE.
-                  </Text>
-                </View>
-              );
-            } else if (paying === fixedRentAmount && fixedRentAmount > 0) {
-              return (
-                <View style={styles.rentPaidAlertBox}>
-                  <Text style={styles.rentPaidAlertTitle}>
-                    ✓ FULL RENT PAID (₹0 Due)
-                  </Text>
-                  <Text style={styles.rentPaidAlertSub}>
-                    Complete monthly rent of ₹{fixedRentAmount.toLocaleString('en-IN')} received.
-                  </Text>
-                </View>
-              );
-            }
-            return null;
-          })()}
-
-          {/* Security Deposit Paying Now */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>🛡️ SECURITY DEPOSIT PAYING NOW (₹) *</Text>
-            <View style={styles.currencyInputRow}>
-              <Text style={styles.currencyInrLight}>₹</Text>
-              <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0, paddingHorizontal: 0, paddingVertical: 10, marginBottom: 0, backgroundColor: 'transparent', letterSpacing: 0 }]}
-                value={depositPayingNow}
-                onChangeText={(v) => setDepositPayingNow(v.replace(/\D/g, ''))}
-                keyboardType="numeric"
-                placeholder={String(fixedDepositAmount)}
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-          </View>
-
-          {/* Starting Meter Reading (Optional) */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>⚡ STARTING METER READING (kWh - OPTIONAL)</Text>
-            <TextInput
-              style={styles.input}
-              value={startingMeterReading}
-              onChangeText={(v) => setStartingMeterReading(v.replace(/\D/g, ''))}
-              keyboardType="numeric"
-              placeholder="0"
-              placeholderTextColor="#94a3b8"
-            />
-          </View>
-
-          {/* Payment Mode */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>💳 INITIAL PAYMENT MODE</Text>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-              {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
-                <TouchableOpacity
-                  key={mode}
-                  style={[
-                    styles.modePillLarge,
-                    payMode === mode && styles.modePillLargeActive,
-                  ]}
-                  onPress={() => setPayMode(mode)}
-                >
-                  <Text style={[styles.modePillLargeText, payMode === mode && styles.modePillLargeTextActive]}>
-                    {mode === 'BANK_TRANSFER' ? '🏦 Bank Transfer' : mode === 'UPI' ? '📱 UPI' : '💵 Cash'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* 7. DATE OF JOINING & RENT CYCLE (REQUIREMENT 4) */}
-          <View style={{ marginBottom: 14 }}>
-            <Text style={styles.fieldLabel}>📅 DATE OF JOINING (CHECK-IN) *</Text>
-            <TextInput
-              style={styles.input}
-              value={dateOfJoining}
-              onChangeText={setDateOfJoining}
-              placeholder="YYYY-MM-DD"
-              placeholderTextColor="#94a3b8"
-            />
-            {/* Quick date chips */}
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
-              {[
-                { label: 'Today', val: new Date().toISOString().split('T')[0] },
-                { label: 'Tomorrow', val: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
-                { label: '1st of Next Month', val: `${new Date().getFullYear()}-${String(new Date().getMonth() + 2).padStart(2, '0')}-01` },
-              ].map((chip) => (
-                <TouchableOpacity
-                  key={chip.label}
-                  style={[styles.quickDatePill, dateOfJoining === chip.val && styles.quickDatePillActive]}
-                  onPress={() => setDateOfJoining(chip.val)}
-                >
-                  <Text style={[styles.quickDatePillText, dateOfJoining === chip.val && styles.quickDatePillTextActive]}>
-                    {chip.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          <View style={{ marginBottom: 18 }}>
-            <Text style={styles.fieldLabel}>🔄 MONTHLY RENT CYCLE (DUE DATE) *</Text>
-            <Text style={{ fontSize: 11, color: '#64748b', marginBottom: 6 }}>
-              Select which day of the month rent is due for this resident:
-            </Text>
-            <View style={{ gap: 6 }}>
-              {[
-                { label: '1st of every month (Standard)', val: '1st of every month' },
-                { label: '5th of every month', val: '5th of every month' },
-                { label: '10th of every month', val: '10th of every month' },
-                { label: `Same day as joining (${dateOfJoining.split('-')[2] || 'Day'}th of every month)`, val: `Day of joining (${dateOfJoining.split('-')[2] || '1'})` },
-              ].map((cycle) => (
-                <TouchableOpacity
-                  key={cycle.val}
-                  style={[styles.cycleOptionCard, rentCycle === cycle.val && styles.cycleOptionCardActive]}
-                  onPress={() => setRentCycle(cycle.val)}
-                  activeOpacity={0.8}
-                >
-                  <View style={[styles.cycleRadioCircle, rentCycle === cycle.val && styles.cycleRadioCircleActive]}>
-                    {rentCycle === cycle.val && <View style={styles.cycleRadioInner} />}
-                  </View>
-                  <Text style={[styles.cycleOptionText, rentCycle === cycle.val && styles.cycleOptionTextActive]}>
-                    {cycle.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12 }}>
-            <TouchableOpacity
-              style={styles.cancelFormBtn}
-              onPress={() => {
-                setShowForm(false);
-                setFormErrors({});
-                setFullName('');
-                setPhone('');
-                setEmail('');
-                setIdProofNumber('');
-              }}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.cancelFormBtnText} numberOfLines={1}>← Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.submitBtn, { flex: 2 }, submitting && { opacity: 0.6 }]}
-              onPress={handleOnboard}
-              disabled={submitting}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.submitBtnText} numberOfLines={1}>
-                {submitting
-                  ? 'Onboarding...'
-                  : isSelectedAddRentalMode
-                    ? '✓ Onboard & Assign Flat'
-                    : '✓ Onboard & Assign Bed'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
-    );
-  }
-
+  // ─── SEPARATE PAGE: ONBOARD NEW RESIDENT (UNIFIED MODAL) ───
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -1958,13 +1439,13 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           <Text style={styles.backBtnText}>← Home</Text>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { flex: 1, textAlign: 'center', marginHorizontal: 8 }]} numberOfLines={1}>
-          Tenant Management
+          {t('tenants.title')}
         </Text>
         <TouchableOpacity
           style={[styles.addBtn, { flexShrink: 0 }]}
           onPress={() => setShowForm(true)}
         >
-          <Text style={styles.addBtnText}>+ Onboard</Text>
+          <Text style={styles.addBtnText}>{t('tenants.add')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -3171,6 +2652,17 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
           );
         }}
       />
+
+      <OnboardResidentModal
+        visible={showForm}
+        onClose={() => setShowForm(false)}
+        properties={properties}
+        tenants={tenants}
+        initialPropertyId={selectedPropId || selectedPropertyId || properties[0]?.id}
+        onSuccess={(newTenant) => {
+          setTenants((prev) => [newTenant, ...prev.filter((t) => t.id !== newTenant.id)]);
+        }}
+      />
     </View>
   );
 };
@@ -3178,10 +2670,10 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#faf8f6',
+    backgroundColor: 'transparent',
   },
   header: {
-    backgroundColor: '#faf8f6',
+    backgroundColor: 'transparent',
     paddingTop: 50,
     paddingBottom: 14,
     paddingHorizontal: 16,
@@ -3702,16 +3194,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   tenantCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.cardBg,
     padding: 16,
-    borderRadius: 18,
+    borderRadius: 20,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#efece9',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: GLASS_TOKENS.cardBorder,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   tenantHeader: {
     flexDirection: 'row',

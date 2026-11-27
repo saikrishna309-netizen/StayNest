@@ -16,6 +16,7 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { apiClient } from '../api/client';
 import { safeStorage } from '../utils/safeStorage';
 import { logActivity } from '../services/activityLogService';
+import { GLASS_TOKENS } from '../components/glass/GlassCard';
 import { RentInvoice, Expense, Property, Tenant } from '../types';
 import {
   computeCollectionMetrics,
@@ -1377,10 +1378,10 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#faf8f6',
+    backgroundColor: 'transparent',
   },
   header: {
-    backgroundColor: '#faf8f6',
+    backgroundColor: 'transparent',
     paddingTop: 50,
     paddingBottom: 14,
     paddingHorizontal: 16,
@@ -1464,16 +1465,14 @@ const styles = StyleSheet.create({
   },
   // Profit & Loss Chart Card
   chartCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.cardBg,
     borderRadius: 20,
     padding: 18,
     borderWidth: 1,
-    borderColor: '#efece9',
+    borderColor: GLASS_TOKENS.cardBorder,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   chartHeaderRow: {
     flexDirection: 'row',

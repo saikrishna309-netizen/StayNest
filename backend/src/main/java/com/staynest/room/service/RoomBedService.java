@@ -45,9 +45,29 @@ public class RoomBedService {
             throw new ForbiddenException("You do not have access to this property");
         }
 
+        String normalizedRoomNumber = request.getRoomNumber().trim();
+        Room existing = roomRepository.findByPropertyId(propertyId).stream()
+                .filter(r -> r.getRoomNumber() != null && r.getRoomNumber().trim().equalsIgnoreCase(normalizedRoomNumber))
+                .findFirst()
+                .orElse(null);
+
+        if (existing != null) {
+            existing.setSharingType(request.getSharingType());
+            existing.setCapacity(request.getCapacity());
+            if (request.getFloorNumber() != null) existing.setFloorNumber(request.getFloorNumber());
+            existing.setRentMonthlyPaise(request.getRentMonthlyPaise());
+            if (request.getDepositPaise() != null) existing.setDepositPaise(request.getDepositPaise());
+            existing = roomRepository.save(existing);
+
+            List<BedResponse> existingBeds = bedRepository.findByRoomId(existing.getId()).stream()
+                    .map(BedResponse::from)
+                    .collect(Collectors.toList());
+            return RoomResponse.from(existing, existingBeds);
+        }
+
         Room room = new Room();
         room.setPropertyId(propertyId);
-        room.setRoomNumber(request.getRoomNumber().trim());
+        room.setRoomNumber(normalizedRoomNumber);
         room.setSharingType(request.getSharingType());
         room.setCapacity(request.getCapacity());
         if (request.getFloorNumber() != null) room.setFloorNumber(request.getFloorNumber());
@@ -112,7 +132,16 @@ public class RoomBedService {
             throw new ForbiddenException("You do not have access to this room");
         }
 
-        Bed bed = new Bed(roomId, property.getId(), request.getBedLabel().trim());
+        String normalizedLabel = request.getBedLabel().trim();
+        Bed existingBed = bedRepository.findByRoomId(roomId).stream()
+                .filter(b -> b.getBedLabel() != null && b.getBedLabel().trim().equalsIgnoreCase(normalizedLabel))
+                .findFirst()
+                .orElse(null);
+        if (existingBed != null) {
+            return BedResponse.from(existingBed);
+        }
+
+        Bed bed = new Bed(roomId, property.getId(), normalizedLabel);
         bed = bedRepository.save(bed);
         return BedResponse.from(bed);
     }

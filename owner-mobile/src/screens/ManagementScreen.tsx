@@ -29,6 +29,6 @@ export const ManagementScreen: React.FC<ManagementScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f6f4ee',
+    backgroundColor: 'transparent',
   },
 });

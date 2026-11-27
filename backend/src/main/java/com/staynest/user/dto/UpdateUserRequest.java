@@ -11,6 +11,8 @@ public class UpdateUserRequest {
 
     private String phone;
 
+    private Boolean isProfileComplete;
+
     public UpdateUserRequest() {
     }
 
@@ -36,6 +38,14 @@ public class UpdateUserRequest {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public Boolean getIsProfileComplete() {
+        return isProfileComplete;
+    }
+
+    public void setIsProfileComplete(Boolean isProfileComplete) {
+        this.isProfileComplete = isProfileComplete;
     }
 }
 

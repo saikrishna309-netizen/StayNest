@@ -145,10 +145,17 @@ public class AuthService {
         }
     }
 
+    private String normalizePhone(String rawPhone) {
+        if (rawPhone == null) return "";
+        String digits = rawPhone.replaceAll("[^0-9]", "");
+        return digits.length() > 10 ? digits.substring(digits.length() - 10) : digits;
+    }
+
     @Transactional
     public Map<String, String> sendOtp(SendOtpRequest request) {
-        String phone = request.getPhone().trim();
-        Optional<User> existingUser = userRepository.findByPhone(phone);
+        String phone = normalizePhone(request.getPhone());
+        Optional<User> existingUser = userRepository.findByPhone(phone)
+                .or(() -> userRepository.findByPhone(request.getPhone().trim()));
         User user;
         if (existingUser.isPresent()) {
             user = existingUser.get();
@@ -206,8 +213,9 @@ public class AuthService {
 
     @Transactional
     public AuthResponse verifyOtpAndLogin(VerifyPhoneRequest request) {
-        String phone = request.getPhone().trim();
+        String phone = normalizePhone(request.getPhone());
         User user = userRepository.findByPhone(phone)
+                .or(() -> userRepository.findByPhone(request.getPhone().trim()))
                 .orElseThrow(() -> new ResourceNotFoundException("No account registered with phone: " + phone));
 
         if (!"123456".equals(request.getOtp()) && !request.getOtp().equals(user.getPhoneOtp())) {

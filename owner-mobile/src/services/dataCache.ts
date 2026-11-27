@@ -80,7 +80,7 @@ class FastDataCache {
       'properties',
       this.properties,
       (e) => { this.properties = e; },
-      async () => (await apiClient<{ content: Property[] }>('/owner/properties')).content || [],
+      async () => (await apiClient<{ content: Property[] }>('/owner/properties?size=100')).content || [],
       forceRefresh,
       []
     );
@@ -98,7 +98,7 @@ class FastDataCache {
       'tenants',
       this.tenants,
       (e) => { this.tenants = e; },
-      async () => (await apiClient<{ content: Tenant[] }>('/owner/tenants')).content || [],
+      async () => (await apiClient<{ content: Tenant[] }>('/owner/tenants?size=500')).content || [],
       forceRefresh,
       []
     );
@@ -146,12 +146,21 @@ class FastDataCache {
     safeStorage.setItem('@staynest_swr_expenses', JSON.stringify(entry)).catch(() => {});
   }
 
-  // Invalidate all caches after mutations (onboard, checkout, pay, add expense)
+  // Invalidate all caches after mutations (onboard, checkout, pay, add expense, login/logout)
   invalidateAll() {
     this.properties = null;
     this.tenants = null;
     this.invoices = null;
     this.expenses = null;
+    this.inFlight.clear();
+    [
+      '@staynest_swr_properties',
+      '@staynest_swr_tenants',
+      '@staynest_swr_invoices',
+      '@staynest_swr_expenses',
+    ].forEach((k) => {
+      safeStorage.removeItem(k).catch(() => {});
+    });
   }
 }
 

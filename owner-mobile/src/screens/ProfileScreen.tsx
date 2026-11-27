@@ -16,6 +16,8 @@ import {
 import { safeStorage } from '../utils/safeStorage';
 import { fastDataCache } from '../services/dataCache';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { GLASS_TOKENS } from '../components/glass/GlassCard';
 import { apiClient } from '../api/client';
 import { Property } from '../types';
 import { getInitialFloorsForProperty } from '../services/propertyDataService';
@@ -51,6 +53,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onActivePropertyChange,
 }) => {
   const { user, updateProfile, logout } = useAuth();
+  const { language, setLanguage, t, languageOptions } = useLanguage();
+  const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
 
   // Profile data
   const [fullName, setFullName] = useState(user?.fullName || 'Saikrishna Naraharisetti');
@@ -842,6 +846,56 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         {/* ─── 4. SETTINGS & ACCOUNT ACTIONS CARD (MATCHING FIRST PHOTO) ─── */}
+        {/* ─── APP LANGUAGE SECTION ─── */}
+        <Text style={[styles.sectionCardTitle, { marginHorizontal: 16, marginTop: 12, marginBottom: 8 }]}>
+          {t('profile.languageSection')}
+        </Text>
+        <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            onPress={() => setIsLanguageModalOpen(true)}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>{t('profile.language')}</Text>
+              <Text style={{ fontSize: 12, color: '#ea580c', fontWeight: '700', marginTop: 2 }}>
+                {languageOptions.find((l) => l.code === language)?.nativeName || 'English'}
+              </Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── CONTACT US SECTION ─── */}
+        <Text style={[styles.sectionCardTitle, { marginHorizontal: 16, marginTop: 12, marginBottom: 8 }]}>
+          {t('profile.contactUs')}
+        </Text>
+        <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => Linking.openURL('tel:9515614331').catch(() => {})}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>{t('profile.phoneSupport')}</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>+91 9515614331</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            onPress={() => Linking.openURL('mailto:n.saikrishna@gmail.com').catch(() => {})}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>{t('profile.emailSupport')}</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>n.saikrishna@gmail.com</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.settingsCard}>
           <TouchableOpacity
             style={styles.settingsRow}
@@ -864,28 +918,91 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.settingsRowText}>Sync Live Backend Data (Clear Cache)</Text>
-            <Text style={styles.settingsChevron}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.settingsRow}
-            onPress={() => setIsSubscriptionModalOpen(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.settingsRowText}>App Preferences & Subscription</Text>
+            <Text style={styles.settingsRowText}>{t('profile.syncBackend')}</Text>
             <Text style={styles.settingsChevron}>›</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.settingsRow, { borderBottomWidth: 0 }]}
-            onPress={handleLogout}
+            onPress={() => setIsSubscriptionModalOpen(true)}
             activeOpacity={0.7}
           >
-            <Text style={styles.logoutRowText}>Log Out</Text>
+            <Text style={styles.settingsRowText}>{t('profile.preferencesSub')}</Text>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── SEPARATE HIGHLIGHTED LOGOUT BUTTON (CENTERED BELOW) ─── */}
+        <View style={styles.logoutBtnContainer}>
+          <TouchableOpacity
+            style={styles.logoutHighlightBtn}
+            onPress={handleLogout}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.logoutHighlightBtnText}>🚪 {t('profile.logout')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* ─── LANGUAGE SELECTOR MODAL ─── */}
+      <Modal
+        visible={isLanguageModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsLanguageModalOpen(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={styles.modalTitle}>{t('profile.chooseLanguage')}</Text>
+                <Text style={styles.modalSub}>English • తెలుగు • हिन्दी • தமிழ் • ಕನ್ನಡ</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsLanguageModalOpen(false)}
+                style={{ padding: 6 }}
+              >
+                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 8, marginTop: 12 }}>
+              {languageOptions.map((opt) => {
+                const isSelected = language === opt.code;
+                return (
+                  <TouchableOpacity
+                    key={opt.code}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      backgroundColor: isSelected ? '#fff7ed' : '#f8fafc',
+                      borderWidth: isSelected ? 1.5 : 1,
+                      borderColor: isSelected ? '#ea580c' : '#e2e8f0',
+                    }}
+                    onPress={async () => {
+                      await setLanguage(opt.code);
+                      setIsLanguageModalOpen(false);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: isSelected ? '#ea580c' : '#0f172a' }}>
+                        {opt.nativeName}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>{opt.name}</Text>
+                    </View>
+                    {isSelected && <Text style={{ fontSize: 16, fontWeight: '900', color: '#ea580c' }}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* ─── MODAL 1: EDIT PROFILE, PHOTO & BACKGROUND BANNER (REQUIREMENT 9) ─── */}
       <Modal
@@ -1153,7 +1270,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#faf8f6',
+    backgroundColor: 'transparent',
   },
   scrollContent: {
     paddingBottom: 130,
@@ -1167,7 +1284,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: Platform.OS === 'android' ? 42 : 12,
     paddingBottom: 12,
-    backgroundColor: '#faf8f6',
+    backgroundColor: 'transparent',
   },
   logoImage: {
     height: 34,
@@ -1354,17 +1471,15 @@ const styles = StyleSheet.create({
 
   // ─── Settings & Account Actions Card ───
   settingsCard: {
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.cardBg,
     marginHorizontal: 16,
     marginTop: 14,
     borderRadius: 20,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: '#efece9',
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: GLASS_TOKENS.cardBorder,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   settingsRow: {
     flexDirection: 'row',
@@ -1388,6 +1503,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#991b1b',
+  },
+  logoutBtnContainer: {
+    marginTop: 18,
+    marginHorizontal: 16,
+  },
+  logoutHighlightBtn: {
+    width: '100%',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    backgroundColor: 'rgba(254, 226, 226, 0.88)',
+    borderWidth: 1.5,
+    borderColor: '#ef4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#ef4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  logoutHighlightBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#dc2626',
+    textAlign: 'center',
   },
   crownBadge: {
     position: 'absolute',

@@ -16,6 +16,9 @@ import {
   Animated,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import { GLASS_TOKENS } from '../components/glass/GlassCard';
+import { syncTenantVacateOrDelete } from '../services/tenantSyncHelper';
 import { apiClient } from '../api/client';
 import { Property, Tenant, RentInvoice, Expense, Room, Bed, ResidentEnquiry } from '../types';
 import { GooglePayLogo, PhonePeLogo, PaytmLogo, BhimUpiLogo, CardPaymentLogo } from '../components/PaymentLogos';
@@ -24,6 +27,8 @@ import { ElectricityBillModal } from '../components/modals/ElectricityBillModal'
 import { LogIssueModal } from '../components/modals/LogIssueModal';
 import { FoodMenuModal } from '../components/modals/FoodMenuModal';
 import { SubscriptionPaywallModal } from '../components/modals/SubscriptionPaywallModal';
+import { OnboardResidentModal } from '../components/modals/OnboardResidentModal';
+import { LocationPickerModal } from '../components/modals/LocationPickerModal';
 import {
   canAddProperty,
   getSubscriptionState,
@@ -86,6 +91,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   resetTrigger,
 }) => {
   const { user, logout } = useAuth();
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [properties, setProperties] = useState<Property[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -393,10 +399,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [newPgAddress, setNewPgAddress] = useState('');
   const [newPgLocality, setNewPgLocality] = useState('');
   const [newPgCity, setNewPgCity] = useState('');
-  const [newPgState, setNewPgState] = useState('Andhra Pradesh');
-  const [newPgPincode, setNewPgPincode] = useState('520010');
-  const [newPgLat, setNewPgLat] = useState<number | null>(16.5062);
-  const [newPgLng, setNewPgLng] = useState<number | null>(80.6480);
+  const [newPgState, setNewPgState] = useState('');
+  const [newPgPincode, setNewPgPincode] = useState('');
+  const [newPgLat, setNewPgLat] = useState<number | null>(null);
+  const [newPgLng, setNewPgLng] = useState<number | null>(null);
   const [locatingMap, setLocatingMap] = useState(false);
 
   // Building Structure State
@@ -523,21 +529,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return '🌙 Shubh Ratri';
   };
 
-  // Locate on Map & Reverse Geocode coordinates -> Address, City, State, Pincode
-  const handleLocateOnMap = async () => {
-    setLocatingMap(true);
-    try {
-      const loc = await fetchCurrentPropertyLocation();
-      if (!loc) return;
-      setNewPgLat(loc.latitude);
-      setNewPgLng(loc.longitude);
-      if (loc.addressLine) setNewPgAddress(loc.addressLine);
-      if (loc.cityName) setNewPgCity(loc.cityName);
-      if (loc.stateName) setNewPgState(loc.stateName);
-      if (loc.pincode) setNewPgPincode(loc.pincode);
-    } finally {
-      setLocatingMap(false);
-    }
+  // Locate on Map Popup Modal
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
+
+  const handleLocateOnMap = () => {
+    setShowLocationPicker(true);
   };
 
   // Search Place & Auto-Fill coordinates + address fields
@@ -750,8 +746,21 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       }
 
       // 4. Try backend API creation (single transaction with dynamic floor/unit tree)
+      const backendFloorsPayload = generatedFloors.map((fl: any) => ({
+        floorNumber: fl.floorNumber,
+        rooms: fl.rooms.map((rm: any) => ({
+          roomNumber: rm.roomNumber,
+          sharingType: rm.sharingType,
+          capacity: rm.beds.length,
+          rentRupees: rm.rentRupees,
+          depositRupees: rm.depositRupees,
+          beds: rm.beds.map((b: any) => ({ bedLabel: b.bedLabel })),
+        })),
+      }));
+
+      let finalCreated: Property = created;
       try {
-        await apiClient<Property>('/owner/properties', {
+        const backendCreated = await apiClient<Property>('/owner/properties', {
           method: 'POST',
           body: JSON.stringify({
             name: created.name,
@@ -770,24 +779,39 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
             foodIncluded: created.foodIncluded,
             amenities: created.amenities,
             photos: newPgPhotos,
-            floors: matrixFloors,
+            floors: backendFloorsPayload,
           }),
         });
+        if (backendCreated && backendCreated.id) {
+          finalCreated = { ...created, ...backendCreated };
+          const nextCustomProps = [finalCreated, ...cachedProps.filter((p: any) => p.id !== created.id && p.id !== finalCreated.id)];
+          await safeStorage.setItem('@staynest_custom_properties', JSON.stringify(nextCustomProps)).catch(() => {});
+          await safeStorage.setItem('@staynest_active_property_id', finalCreated.id).catch(() => {});
+          await safeStorage.setItem(`@staynest_utility_config_${finalCreated.id}`, JSON.stringify(utilityConfig)).catch(() => {});
+          if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+              window.localStorage.setItem('staynest_custom_properties', JSON.stringify(nextCustomProps));
+              window.localStorage.setItem('staynest_active_property_id', finalCreated.id);
+              window.localStorage.setItem(`staynest_utility_config_${finalCreated.id}`, JSON.stringify(utilityConfig));
+            } catch {}
+          }
+          fastDataCache.invalidateAll();
+        }
       } catch (e) {
         console.log('Backend property sync notice (saved locally in persistent storage):', e);
       }
 
       // 5. Update local state immediately using real backend rooms/beds if returned
-      const persistedRooms = (created.rooms && created.rooms.length > 0) ? created.rooms : generatedRoomsList;
-      setProperties([created, ...properties.filter((p) => p.id !== created.id)]);
-      setSelectedPropId(created.id);
+      const persistedRooms = (finalCreated.rooms && finalCreated.rooms.length > 0) ? finalCreated.rooms : generatedRoomsList;
+      setProperties([finalCreated, ...properties.filter((p) => p.id !== created.id && p.id !== finalCreated.id)]);
+      setSelectedPropId(finalCreated.id);
       setPropertyRoomsMap((prev) => ({
         ...prev,
-        [created.id]: persistedRooms,
+        [finalCreated.id]: persistedRooms,
       }));
-      if (created.rooms && created.rooms.length > 0) {
+      if (finalCreated.rooms && finalCreated.rooms.length > 0) {
         const byFloor = new Map<number, any[]>();
-        created.rooms.forEach((r) => {
+        finalCreated.rooms.forEach((r) => {
           const flNum = r.floorNumber || 1;
           if (!byFloor.has(flNum)) byFloor.set(flNum, []);
           byFloor.get(flNum)!.push({
@@ -809,16 +833,16 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         const realFloors = Array.from(byFloor.entries())
           .sort((a, b) => a[0] - b[0])
           .map(([floorNumber, rooms]) => ({ floorNumber, rooms }));
-        await safeStorage.setItem(`@staynest_floors_${created.id}`, JSON.stringify(realFloors)).catch(() => {});
+        await safeStorage.setItem(`@staynest_floors_${finalCreated.id}`, JSON.stringify(realFloors)).catch(() => {});
         if (typeof window !== 'undefined' && window.localStorage) {
           try {
-            window.localStorage.setItem(`staynest_floors_${created.id}`, JSON.stringify(realFloors));
+            window.localStorage.setItem(`staynest_floors_${finalCreated.id}`, JSON.stringify(realFloors));
           } catch {}
         }
       }
       emitDataChanged();
 
-      onActivePropertyChange?.(created);
+      onActivePropertyChange?.(finalCreated);
 
       setShowAddPgModal(false);
       setAddPropStep(1);
@@ -905,7 +929,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     loadEnquiries();
 
     const unsubNative = onDataChanged(() => {
-      loadData(true);
+      loadData(true, true);
       getLoggedActivities().then(setLoggedActivities).catch(() => {});
     });
 
@@ -930,16 +954,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     return unsubNative;
   }, []);
 
-  const loadData = async (silent = false) => {
+  const loadData = async (silent = false, forceFromEvent = false) => {
     if (!silent && properties.length === 0) setLoading(true);
 
     try {
-      // Parallel batch fetching for maximum speed (Fast Data Cache)
+      // Parallel batch fetching for maximum speed (always force fresh on initial/explicit/event load)
+      const forceFresh = !silent || forceFromEvent || properties.length === 0;
       const [pRes, tRes, invRes, expRes, localActs, apiActs] = await Promise.all([
-        fastDataCache.getProperties(),
-        fastDataCache.getTenants(),
-        fastDataCache.getInvoices(),
-        fastDataCache.getExpenses(),
+        fastDataCache.getProperties(forceFresh),
+        fastDataCache.getTenants(forceFresh),
+        fastDataCache.getInvoices(forceFresh),
+        fastDataCache.getExpenses(forceFresh),
         getLoggedActivities(),
         apiClient<ActivityLogItem[]>('/owner/activities?limit=10').catch(() => []),
       ]);
@@ -1061,8 +1086,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       await Promise.all(
         combinedProps.map(async (p) => {
           try {
-            let rooms: Room[] = p.rooms || [];
-            if (rooms.length === 0 && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id)) {
+            let rooms: Room[] = Array.isArray(p.rooms) ? p.rooms : [];
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.id)) {
               try {
                 const detail = await apiClient<Property>(`/owner/properties/${p.id}`);
                 if (detail?.rooms && detail.rooms.length > 0) {
@@ -1105,7 +1130,27 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 }
               }
             }
-            roomsMap[p.id] = rooms;
+            // Always deduplicate rooms by roomNumber and beds by bedLabel so counts are never inflated
+            const dedupedMap = new Map<string, Room>();
+            rooms.forEach((r) => {
+              const key = (r.roomNumber || r.id || '').trim().toLowerCase();
+              const prev = dedupedMap.get(key);
+              const rOcc = (r.beds || []).some((b) => b.status === 'OCCUPIED');
+              const prevOcc = prev ? (prev.beds || []).some((b) => b.status === 'OCCUPIED') : false;
+              if (!prev || (rOcc && !prevOcc)) {
+                const seenLabels = new Set<string>();
+                dedupedMap.set(key, {
+                  ...r,
+                  beds: (r.beds || []).filter((b) => {
+                    const lbl = (b.bedLabel || '').trim().toLowerCase();
+                    if (!lbl || seenLabels.has(lbl)) return false;
+                    seenLabels.add(lbl);
+                    return true;
+                  }),
+                });
+              }
+            });
+            roomsMap[p.id] = Array.from(dedupedMap.values());
           } catch {}
         })
       );
@@ -1723,10 +1768,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         await apiClient(`/owner/tenants/${tenant.id}/checkout`, {
           method: 'POST',
         });
+        await syncTenantVacateOrDelete('VACATE', {
+          tenantId: tenant.id,
+          bedId: tenant.bedId,
+          propertyId: tenant.propertyId,
+        });
         Alert.alert('✓ Checked Out', `${tenant.fullName} has been checked out successfully.`);
         setSelectedTenantForAction(null);
         loadData();
       } catch (err: any) {
+        await syncTenantVacateOrDelete('VACATE', {
+          tenantId: tenant.id,
+          bedId: tenant.bedId,
+          propertyId: tenant.propertyId,
+        });
         Alert.alert('Notice', err.message || 'Tenant stay updated.');
         setSelectedTenantForAction(null);
         loadData();
@@ -1812,6 +1867,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       try {
         await apiClient(`/owner/tenants/${tenant.id}`, {
           method: 'DELETE',
+        });
+        await syncTenantVacateOrDelete('DELETE', {
+          tenantId: tenant.id,
+          bedId: tenant.bedId,
+          propertyId: tenant.propertyId,
         });
         Alert.alert('✓ Deleted', `${tenant.fullName} has been deleted and bed is now free.`);
         setSelectedTenantForAction(null);
@@ -2083,7 +2143,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
     (t) => t.rentStatus !== 'PAID' || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0)
   );
 
-  const activePropertyName = properties.find((p) => p.id === selectedPropId)?.name || properties[0]?.name || "StayNest Elite Men's PG";
+  const activePropertyName = properties.find((p) => p.id === selectedPropId)?.name || properties[0]?.name || t('home.addProperty');
 
   // Mark all notifications read / cleared (Requirement 1)
   const handleMarkAllNotificationsRead = () => {
@@ -2404,10 +2464,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         <View style={styles.heroTopDividedBox}>
           {/* Top Row: Property Selector Pill & Notifications / Profile */}
           <View style={styles.heroTopBar}>
-            {/* Property Selector Pill (Dropdown Trigger - Requirements 3, 4, 5) */}
+            {/* Property Selector Pill (Dropdown Trigger or Add Property when empty) */}
             <TouchableOpacity
               style={styles.heroPropertyPill}
-              onPress={() => setShowPgDropdown(true)}
+              onPress={() => (properties.length === 0 ? setShowAddPgModal(true) : setShowPgDropdown(true))}
               activeOpacity={0.8}
             >
               <View style={styles.heroPropThumb}>
@@ -2642,7 +2702,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <Text style={styles.occupancyNumber}>
                 {availableBeds < 10 ? `0${availableBeds}` : availableBeds}
               </Text>
-              <Text style={styles.occupancyLabel}>Empty Beds</Text>
+              <Text style={styles.occupancyLabel}>{t('home.emptyBeds')}</Text>
             </View>
             <Text style={styles.occupancyChevron}>›</Text>
           </TouchableOpacity>
@@ -2660,7 +2720,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               <Text style={styles.occupancyNumber}>
                 {totalOccupiedBeds < 10 ? `0${totalOccupiedBeds}` : totalOccupiedBeds}
               </Text>
-              <Text style={styles.occupancyLabel}>Occupied Beds</Text>
+              <Text style={styles.occupancyLabel}>{t('home.occupiedBeds')}</Text>
             </View>
             <Text style={styles.occupancyChevron}>›</Text>
           </TouchableOpacity>
@@ -2824,7 +2884,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                   <Path d="M19 8v6m3-3h-6" stroke="#1d4ed8" strokeWidth="2.5" strokeLinecap="round" />
                 </Svg>
               </View>
-              <Text style={styles.quickCompactLabel} numberOfLines={2}>Add Tenant</Text>
+              <Text style={styles.quickCompactLabel} numberOfLines={2}>{t('home.addTenant')}</Text>
             </TouchableOpacity>
 
             {/* 2. Record Rent */}
@@ -3792,283 +3852,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         </View>
       </Modal>
 
-      {/* ─── MODAL 2: ONBOARD NEW TENANT ─── */}
-      <Modal
+      {/* ─── MODAL 2: ONBOARD NEW TENANT (UNIFIED) ─── */}
+      <OnboardResidentModal
         visible={showOnboardModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowOnboardModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Onboard Resident</Text>
-            <Text style={styles.modalSub}>Assign a vacant bed (1 person = 1 bed only)</Text>
-
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
-              {/* Property Choice */}
-              {properties.length > 1 && (
-                <View style={{ marginBottom: 12 }}>
-                  <Text style={styles.inputLabel}>Select PG Property</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    {properties.map((p) => (
-                      <TouchableOpacity
-                        key={p.id}
-                        style={[
-                          styles.chip,
-                          selectedPropId === p.id && styles.chipActive,
-                        ]}
-                        onPress={() => {
-                          setSelectedPropId(p.id);
-                          setSelectedBedId('');
-                          setSelectedRoomId('');
-                        }}
-                      >
-                        <Text
-                          style={[
-                            styles.chipText,
-                            selectedPropId === p.id && styles.chipTextActive,
-                          ]}
-                        >
-                          {p.name}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Select Available Bed (Occupied beds are excluded) */}
-              <Text style={styles.inputLabel}>
-                Select Vacant Bed ({modalAvailableBeds.length} Available)
-              </Text>
-              {modalAvailableBeds.length === 0 ? (
-                <Text style={styles.noBedText}>
-                  No vacant beds available in this property. All beds are occupied.
-                </Text>
-              ) : (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                  {modalAvailableBeds.map(({ bed, roomNumber, roomId, rentPaise, depositPaise }) => {
-                    const isSelected = selectedBedId === bed.id;
-                    return (
-                      <TouchableOpacity
-                        key={bed.id}
-                        style={[styles.bedChip, isSelected && styles.bedChipActive]}
-                        onPress={() => {
-                          setSelectedBedId(bed.id);
-                          setSelectedRoomId(roomId);
-                          const fixedRent = rentPaise ? rentPaise / 100 : 8500;
-                          const fixedDep = depositPaise ? depositPaise / 100 : 2500;
-                          setFixedRentAmount(fixedRent);
-                          setFixedDepositAmount(fixedDep);
-                          // Requirement 3: Keep inputs empty so watermark placeholder shows
-                        }}
-                      >
-                        <Text style={[styles.bedChipText, isSelected && styles.bedChipTextActive]}>
-                          Room {roomNumber} • {bed.bedLabel}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
-
-              <Text style={styles.inputLabel}>Resident Full Name *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={onboardFullName}
-                onChangeText={setOnboardFullName}
-                placeholder="e.g. Ramesh Kumar"
-                placeholderTextColor="#334155"
-              />
-
-              <Text style={styles.inputLabel}>Mobile Phone *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={onboardPhone}
-                onChangeText={setOnboardPhone}
-                keyboardType="phone-pad"
-                placeholder="e.g. 9876543210"
-                placeholderTextColor="#94a3b8"
-              />
-
-              {/* Aadhaar Number with Instant ₹0 Verhoeff & QR Auto-Fill (Requirement 2) */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 4 }}>
-                <Text style={styles.inputLabel}>12-Digit Aadhaar Card Number *</Text>
-                <TouchableOpacity
-                  style={styles.qrScanMiniBtn}
-                  onPress={() => setShowOnboardQrModal(true)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.qrScanMiniBtnText}>📷 Free QR Scan</Text>
-                </TouchableOpacity>
-              </View>
-              <TextInput
-                style={styles.textInput}
-                value={onboardIdProof}
-                onChangeText={(txt) => {
-                  setOnboardIdProof(txt);
-                  const clean = txt.replace(/\s+/g, '');
-                  if (clean.length === 12) {
-                    const v = validateVerhoeffAadhaar(clean);
-                    if (v.isValid) {
-                      setOnboardAadhaarVerified(true);
-                    }
-                  }
-                }}
-                keyboardType="numeric"
-                maxLength={14}
-                placeholder="e.g. 5489 1234 5678"
-                placeholderTextColor="#94a3b8"
-              />
-
-              {/* Real-Time Free Verhoeff Checksum Indicator */}
-              {(() => {
-                const clean = onboardIdProof.replace(/\s+/g, '');
-                if (!clean) {
-                  return (
-                    <Text style={styles.aadhaarHintText}>
-                      💡 Free In-App Verhoeff Check: validates the 12 digits so dummy numbers cannot be entered.
-                    </Text>
-                  );
-                }
-                const v = validateVerhoeffAadhaar(clean);
-                return (
-                  <View style={[styles.verhoeffBadge, v.isValid ? styles.verhoeffValid : styles.verhoeffInvalid]}>
-                    <Text style={[styles.verhoeffText, v.isValid ? { color: '#16a34a' } : { color: '#dc2626' }]}>
-                      {v.message}
-                    </Text>
-                  </View>
-                );
-              })()}
-
-              {onboardAadhaarVerified && (
-                <View style={styles.aadhaarVerifiedBadge}>
-                  <Text style={styles.aadhaarVerifiedText}>✓ UIDAI Aadhaar Verified & Checksum Validated (₹0 Cost)</Text>
-                </View>
-              )}
-
-              {/* FIXED RENT BANNER & PAYMENT SECTION */}
-              <View style={styles.fixedRentInfoBox}>
-                <View style={styles.fixedRentRow}>
-                  <Text style={styles.fixedRentLabel}>🏢 FIXED MONTHLY RENT:</Text>
-                  <Text style={styles.fixedRentVal}>₹{fixedRentAmount.toLocaleString('en-IN')} / mo</Text>
-                </View>
-                <View style={styles.fixedRentRow}>
-                  <Text style={styles.fixedRentLabel}>🛡️ SECURITY DEPOSIT:</Text>
-                  <Text style={styles.fixedRentVal}>₹{fixedDepositAmount.toLocaleString('en-IN')}</Text>
-                </View>
-              </View>
-
-              <Text style={styles.inputLabel}>Rent Amount Paying Now (₹) *</Text>
-              <View style={styles.currencyInputRow}>
-                <Text style={styles.currencyInrLight}>₹</Text>
-                <TextInput
-                  style={[styles.textInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, marginBottom: 0, backgroundColor: 'transparent' }]}
-                  value={onboardRentPayingNow}
-                  onChangeText={setOnboardRentPayingNow}
-                  keyboardType="numeric"
-                  placeholder={`INR ${fixedRentAmount}`}
-                  placeholderTextColor="#94a3b8"
-                />
-              </View>
-
-              {/* Dynamic Rent Due Indicator */}
-              {(() => {
-                const paying = Number(onboardRentPayingNow || 0);
-                const due = Math.max(0, fixedRentAmount - paying);
-                if (due > 0) {
-                  return (
-                    <View style={styles.rentDueAlertBox}>
-                      <Text style={styles.rentDueAlertTitle}>
-                        ⚠️ RENT DUE: ₹{due.toLocaleString('en-IN')}
-                      </Text>
-                      <Text style={styles.rentDueAlertSub}>
-                        Resident pays ₹{paying.toLocaleString('en-IN')} today. Remaining ₹{due.toLocaleString('en-IN')} will be marked as DUE on dashboard.
-                      </Text>
-                    </View>
-                  );
-                } else if (paying >= fixedRentAmount && fixedRentAmount > 0) {
-                  return (
-                    <View style={styles.rentPaidAlertBox}>
-                      <Text style={styles.rentPaidAlertTitle}>
-                        ✓ FULL RENT PAID (₹0 Due)
-                      </Text>
-                      <Text style={styles.rentPaidAlertSub}>
-                        Complete monthly rent of ₹{fixedRentAmount.toLocaleString('en-IN')} received.
-                      </Text>
-                    </View>
-                  );
-                }
-                return null;
-              })()}
-
-              <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Security Deposit Paid (₹)</Text>
-                  <View style={styles.currencyInputRow}>
-                    <Text style={styles.currencyInrLight}>₹</Text>
-                    <TextInput
-                      style={[styles.textInput, { flex: 1, borderWidth: 0, paddingHorizontal: 0, marginBottom: 0, backgroundColor: 'transparent' }]}
-                      value={onboardDepositPayingNow}
-                      onChangeText={setOnboardDepositPayingNow}
-                      keyboardType="numeric"
-                      placeholder={`INR ${fixedDepositAmount}`}
-                      placeholderTextColor="#94a3b8"
-                    />
-                  </View>
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Payment Mode</Text>
-                  <View style={{ flexDirection: 'row', gap: 4, marginTop: 4 }}>
-                    {(['UPI', 'CASH', 'BANK_TRANSFER'] as const).map((mode) => (
-                      <TouchableOpacity
-                        key={mode}
-                        style={[
-                          styles.modePillSmall,
-                          onboardPayMode === mode && styles.modePillSmallActive,
-                        ]}
-                        onPress={() => setOnboardPayMode(mode)}
-                      >
-                        <Text
-                          style={[
-                            styles.modePillSmallText,
-                            onboardPayMode === mode && styles.modePillSmallTextActive,
-                          ]}
-                        >
-                          {mode === 'BANK_TRANSFER' ? 'BANK' : mode}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowOnboardModal(false)}
-                disabled={submittingOnboard}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleOnboardSubmit}
-                disabled={submittingOnboard || modalAvailableBeds.length === 0}
-              >
-                {submittingOnboard ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.modalSaveText}>Confirm & Allocate Bed</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowOnboardModal(false)}
+        properties={properties}
+        tenants={tenants}
+        initialPropertyId={selectedPropId || properties[0]?.id}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
 
       {/* ─── MODAL 3B: RECORD RENT TENANT SELECTOR ─── */}
       <Modal
@@ -5469,6 +5263,22 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           setSubscriptionActive(isProActive(nextSub));
         }}
       />
+
+      <LocationPickerModal
+        visible={showLocationPicker}
+        initialLat={newPgLat}
+        initialLng={newPgLng}
+        onClose={() => setShowLocationPicker(false)}
+        onConfirm={(loc) => {
+          setNewPgLat(loc.latitude);
+          setNewPgLng(loc.longitude);
+          if (loc.addressLine) setNewPgAddress(loc.addressLine);
+          if (loc.locality) setNewPgLocality(loc.locality);
+          if (loc.cityName) setNewPgCity(loc.cityName);
+          if (loc.stateName) setNewPgState(loc.stateName);
+          if (loc.pincode) setNewPgPincode(loc.pincode);
+        }}
+      />
     </View>
   );
 };
@@ -5476,7 +5286,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'transparent',
   },
   // ─── Subscription & Auto-Pay Styles ───
   subCardContainer: {
@@ -6079,9 +5889,9 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   heroTopDividedBox: {
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.cardBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: GLASS_TOKENS.cardBorder,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -6089,11 +5899,8 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 14,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   heroTopBar: {
     flexDirection: 'row',
@@ -6104,9 +5911,9 @@ const styles = StyleSheet.create({
   heroPropertyPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.vacantBg,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: GLASS_TOKENS.vacantBorder,
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
@@ -6472,18 +6279,15 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: GLASS_TOKENS.cardBg,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#e2e8f0',
+    borderColor: GLASS_TOKENS.cardBorder,
     justifyContent: 'space-between',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 2,
+    ...GLASS_TOKENS.shadow,
+    ...GLASS_TOKENS.webBlur16,
   },
   occupancyIconCircle: {
     width: 38,
@@ -6549,14 +6353,18 @@ const styles = StyleSheet.create({
   },
   quickCompactCard: {
     width: '23.2%',
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
+    backgroundColor: GLASS_TOKENS.apricotBg,
+    borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 2,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#fb923c', // Orange border, pure white inside
+    borderColor: '#EA580C',
+    shadowColor: '#EA580C',
+    shadowOpacity: 0.1,
+    shadowRadius: 6,
+    elevation: 2,
   },
   quickIconCircle: {
     height: 24,

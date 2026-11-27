@@ -16,6 +16,7 @@ public class UserProfileResponse {
     private UserStatus status;
     private boolean emailVerified;
     private boolean phoneVerified;
+    private boolean isProfileComplete;
     private Instant createdAt;
 
     public UserProfileResponse() {
@@ -31,6 +32,7 @@ public class UserProfileResponse {
         response.setStatus(user.getStatus());
         response.setEmailVerified(user.isEmailVerified());
         response.setPhoneVerified(user.isPhoneVerified());
+        response.setProfileComplete(user.isProfileComplete());
         response.setCreatedAt(user.getCreatedAt());
         return response;
     }
@@ -97,6 +99,14 @@ public class UserProfileResponse {
 
     public void setPhoneVerified(boolean phoneVerified) {
         this.phoneVerified = phoneVerified;
+    }
+
+    public boolean isProfileComplete() {
+        return isProfileComplete;
+    }
+
+    public void setProfileComplete(boolean profileComplete) {
+        isProfileComplete = profileComplete;
     }
 
     public Instant getCreatedAt() {

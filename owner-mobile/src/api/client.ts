@@ -7,12 +7,17 @@ export const API_BASE =
   process.env.EXPO_PUBLIC_API_URL || 'https://staynest-6ylx.onrender.com/api/v1';
 
 let authToken: string | null = null;
+let onUnauthorizedCallback: (() => void) | null = null;
 
 export const setAuthToken = (token: string | null) => {
   authToken = token;
 };
 
 export const getAuthToken = () => authToken;
+
+export const setOnUnauthorizedHandler = (cb: (() => void) | null) => {
+  onUnauthorizedCallback = cb;
+};
 
 export async function apiClient<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
@@ -25,9 +30,9 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     defaultHeaders['Authorization'] = `Bearer ${authToken}`;
   }
 
-  // 45-second timeout to accommodate Render free tier server cold starts
+  // 75-second timeout to accommodate Render free tier server cold starts
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000);
+  const timeoutId = setTimeout(() => controller.abort(), 75000);
 
   const method = options.method || 'GET';
   console.log(`🌐 [Backend API Call] ${method} ${url}`);
@@ -48,6 +53,9 @@ export async function apiClient<T>(endpoint: string, options: RequestInit = {}):
     const data = await response.json().catch(() => ({}));
 
     if (!response.ok) {
+      if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+        onUnauthorizedCallback?.();
+      }
       const errorMsg = data?.message || data?.error || `HTTP error ${response.status}`;
       throw new Error(errorMsg);
     }

@@ -91,13 +91,20 @@ export const computeOccupancyMetrics = (
   const occupiedBedIds = new Set(
     activeAssignedTenants.map((t) => t.bedId).filter(Boolean) as string[]
   );
+  const occupiedRoomBedKeys = new Set(
+    activeAssignedTenants
+      .filter((t) => t.roomNumber && t.bedLabel)
+      .map((t) => `${String(t.roomNumber).trim()}-${String(t.bedLabel).trim().toLowerCase()}`)
+  );
 
   const countRoom = (r: any) => {
     if (Array.isArray(r.beds) && r.beds.length > 0) {
       totalBeds += r.beds.length;
-      bedOccupiedCount += r.beds.filter(
-        (b: any) => b.status === 'OCCUPIED' || occupiedBedIds.has(b.id)
-      ).length;
+      bedOccupiedCount += r.beds.filter((b: any) => {
+        if (b.status === 'OCCUPIED' || occupiedBedIds.has(b.id)) return true;
+        const key = `${String(r.roomNumber || '').trim()}-${String(b.bedLabel || '').trim().toLowerCase()}`;
+        return occupiedRoomBedKeys.has(key);
+      }).length;
     } else {
       totalBeds += r.capacity || 0;
     }

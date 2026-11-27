@@ -52,6 +52,12 @@ public class UserService {
             user.setPhoneVerified(false);
         }
 
+        if (request.getIsProfileComplete() != null) {
+            user.setProfileComplete(request.getIsProfileComplete());
+        } else if (user.getFullName() != null && !user.getFullName().isBlank() && !"PG Owner".equals(user.getFullName())) {
+            user.setProfileComplete(true);
+        }
+
         user = userRepository.save(user);
         return UserProfileResponse.from(user);
     }

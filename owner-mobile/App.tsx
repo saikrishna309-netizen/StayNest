@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar, AppState } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar as RNStatusBar, AppState, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
+import { GlassBackground } from './src/components/glass/GlassBackground';
+import { GLASS_TOKENS } from './src/components/glass/GlassCard';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OwnerRegistrationScreen } from './src/screens/OwnerRegistrationScreen';
 import { DashboardScreen } from './src/screens/DashboardScreen';
@@ -85,7 +88,8 @@ const NavUserIcon = ({ color }: { color: string }) => (
 );
 
 const MainNavigator: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, hydrating, user } = useAuth();
+  const { t } = useLanguage();
   const [currentTab, setCurrentTab] = useState<'dashboard' | 'properties' | 'tenants' | 'management' | 'profile'>('dashboard');
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [registrationSkipped, setRegistrationSkipped] = useState(false);
@@ -118,7 +122,25 @@ const MainNavigator: React.FC = () => {
     };
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setRegistrationSkipped(false);
+    }
+  }, [isAuthenticated]);
+
   const isTrialExpired = Boolean(subState && subState.trialExpired === true && !isProActive(subState));
+
+  // 0. Show loading splash while hydrating JWT & GET /users/me
+  if (hydrating) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#FAF7F4', justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#EA580C" />
+        <Text style={{ marginTop: 12, fontSize: 13, fontWeight: '700', color: '#475569' }}>
+          Loading StayNest...
+        </Text>
+      </SafeAreaView>
+    );
+  }
 
   // 1. If not authenticated -> Login Screen (Mobile + OTP)
   if (!isAuthenticated) {
@@ -160,13 +182,15 @@ const MainNavigator: React.FC = () => {
     );
   }
 
-  // 2. If new owner (profile incomplete) -> Show 1-time Owner & First Property Setup
+  // 2. If new owner (isProfileComplete is false) -> Show 1-time Owner & First Property Setup
   const needsOwnerOnboarding =
     !registrationSkipped &&
-    (!user?.fullName ||
-      user.fullName === 'PG Owner' ||
-      !user?.email ||
-      user.email.startsWith('owner_'));
+    (user?.isProfileComplete === false ||
+      (user?.isProfileComplete === undefined &&
+        (!user?.fullName ||
+          user.fullName === 'PG Owner' ||
+          !user?.email ||
+          user.email.startsWith('owner_'))));
 
   if (needsOwnerOnboarding) {
     return (
@@ -238,6 +262,7 @@ const MainNavigator: React.FC = () => {
             Platform.OS === 'web' && webDeviceMode === 'DESKTOP' && styles.desktopFrameWeb,
           ]}
         >
+          <GlassBackground>
           {/* Trial Countdown / Expired Banner on Home */}
           {currentTab === 'dashboard' && (isTrialExpired || (typeof subState?.trialDaysLeft === 'number' && subState.trialDaysLeft <= 5 && subState.autopayStatus !== 'ACTIVE')) && (
             <TouchableOpacity
@@ -364,8 +389,8 @@ const MainNavigator: React.FC = () => {
             />
           </View>
 
-          {/* ─── MODERN BOTTOM NAVIGATION BAR (MATCHING SCREENSHOT) ─── */}
-          <View style={styles.bottomNavWrapper}>
+          {/* ─── FLOATING GLASS BOTTOM NAVIGATION DOCK ─── */}
+          <View style={[styles.bottomNavWrapper, GLASS_TOKENS.webBlur20]}>
             <View style={styles.bottomNavInner}>
               {/* Tab 1: Dashboard / Home */}
               <TouchableOpacity
@@ -382,7 +407,7 @@ const MainNavigator: React.FC = () => {
                   filled={currentTab === 'dashboard'}
                 />
                 <Text style={[styles.bottomNavLabel, currentTab === 'dashboard' && styles.bottomNavLabelActive]}>
-                  Home
+                  {t('nav.home')}
                 </Text>
               </TouchableOpacity>
 
@@ -395,7 +420,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'properties' && <View style={styles.navActiveTopLine} />}
                 <NavGridIcon color={currentTab === 'properties' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'properties' && styles.bottomNavLabelActive]}>
-                  {isTrialExpired ? '🔒 Rooms' : 'Rooms'}
+                  {isTrialExpired ? `🔒 ${t('nav.rooms')}` : t('nav.rooms')}
                 </Text>
               </TouchableOpacity>
 
@@ -408,7 +433,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'tenants' && <View style={styles.navActiveTopLine} />}
                 <NavTenantsIcon color={currentTab === 'tenants' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'tenants' && styles.bottomNavLabelActive]}>
-                  {isTrialExpired ? '🔒 Tenants' : 'Tenants'}
+                  {isTrialExpired ? `🔒 ${t('nav.tenants')}` : t('nav.tenants')}
                 </Text>
               </TouchableOpacity>
 
@@ -421,7 +446,7 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'management' && <View style={styles.navActiveTopLine} />}
                 <NavWalletIcon color={currentTab === 'management' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'management' && styles.bottomNavLabelActive]}>
-                  {isTrialExpired ? '🔒 Wallet' : 'Wallet'}
+                  {isTrialExpired ? `🔒 ${t('nav.wallet')}` : t('nav.wallet')}
                 </Text>
               </TouchableOpacity>
 
@@ -434,11 +459,12 @@ const MainNavigator: React.FC = () => {
                 {currentTab === 'profile' && <View style={styles.navActiveTopLine} />}
                 <NavUserIcon color={currentTab === 'profile' ? '#ea580c' : '#4b5563'} />
                 <Text style={[styles.bottomNavLabel, currentTab === 'profile' && styles.bottomNavLabelActive]}>
-                  Profile
+                  {t('nav.profile')}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
+          </GlassBackground>
         </View>
       </View>
       <SubscriptionPaywallModal
@@ -499,9 +525,11 @@ class ErrorBoundary extends React.Component<
 export default function App() {
   return (
     <ErrorBoundary>
-      <AuthProvider>
-        <MainNavigator />
-      </AuthProvider>
+      <LanguageProvider>
+        <AuthProvider>
+          <MainNavigator />
+        </AuthProvider>
+      </LanguageProvider>
     </ErrorBoundary>
   );
 }
@@ -561,7 +589,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     width: '100%',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#FAF7F4',
   },
   tabPane: {
     flex: 1,
@@ -591,18 +619,22 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 15,
   },
-  // ─── Modern Bottom Navigation Bar (Matching Screenshot) ───
+  // ─── Floating Frosted Glass Bottom Navigation Dock ───
   bottomNavWrapper: {
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
-    paddingBottom: Platform.OS === 'android' ? 48 : 24,
-    paddingTop: 10,
-    width: '100%',
-    shadowColor: '#000000',
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 4,
+    marginHorizontal: 14,
+    marginTop: 4,
+    marginBottom: Platform.OS === 'android' ? 14 : 6,
+    backgroundColor: GLASS_TOKENS.dockBg,
+    borderWidth: 1,
+    borderColor: GLASS_TOKENS.dockBorder,
+    borderRadius: 26,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    shadowColor: '#1E293B',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 8,
   },
   bottomNavInner: {
     flexDirection: 'row',
