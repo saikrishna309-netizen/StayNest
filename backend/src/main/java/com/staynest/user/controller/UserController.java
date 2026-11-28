@@ -37,5 +37,13 @@ public class UserController {
             @Valid @RequestBody UpdateUserRequest request) {
         return ResponseEntity.ok(userService.updateProfile(currentUser.getId(), request));
     }
+
+    @DeleteMapping("/me")
+    @Operation(summary = "Permanently delete/anonymize current user account and personal data")
+    public ResponseEntity<java.util.Map<String, String>> deleteCurrentAccount(
+            @AuthenticationPrincipal UserPrincipal currentUser) {
+        userService.deleteAccount(currentUser.getId());
+        return ResponseEntity.ok(java.util.Map.of("status", "deleted", "message", "Your StayNest account and personal data have been deleted."));
+    }
 }
 

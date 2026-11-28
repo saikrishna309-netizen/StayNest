@@ -25,8 +25,8 @@ public class JwtTokenProvider {
 
     public JwtTokenProvider(
             @Value("${staynest.jwt.secret:staynestSecureJwtSecretKeyMustBeAtLeast256BitsLongForHS256AlgorithmCompliance!}") String secret,
-            @Value("${staynest.jwt.expiration-ms:86400000}") long expirationMs,
-            @Value("${staynest.jwt.refresh-expiration-ms:604800000}") long refreshExpirationMs) {
+            @Value("${staynest.jwt.expiration-ms:2592000000}") long expirationMs,
+            @Value("${staynest.jwt.refresh-expiration-ms:5184000000}") long refreshExpirationMs) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.expirationMs = expirationMs;
         this.refreshExpirationMs = refreshExpirationMs;

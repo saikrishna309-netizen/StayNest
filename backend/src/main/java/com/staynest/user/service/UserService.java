@@ -5,6 +5,7 @@ import com.staynest.common.exception.ResourceNotFoundException;
 import com.staynest.user.dto.UpdateUserRequest;
 import com.staynest.user.dto.UserProfileResponse;
 import com.staynest.user.entity.User;
+import com.staynest.user.entity.UserStatus;
 import com.staynest.user.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -60,6 +61,24 @@ public class UserService {
 
         user = userRepository.save(user);
         return UserProfileResponse.from(user);
+    }
+
+    @Transactional
+    public void deleteAccount(UUID userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+        String shortId = userId.toString().replace("-", "").substring(0, 12);
+        user.setFullName("Deleted User");
+        user.setEmail("deleted_" + shortId + "@deleted.staynest.in");
+        user.setPhone("del_" + shortId);
+        user.setPhoneOtp(null);
+        user.setEmailVerificationToken(null);
+        user.setPasswordResetToken(null);
+        user.setPhoneVerified(false);
+        user.setEmailVerified(false);
+        user.setProfileComplete(false);
+        user.setStatus(UserStatus.SUSPENDED);
+        userRepository.save(user);
     }
 }
 
