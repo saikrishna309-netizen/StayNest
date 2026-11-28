@@ -14,7 +14,11 @@ import {
   Alert,
   Linking,
   Animated,
+  SafeAreaView,
+  StatusBar,
+  KeyboardAvoidingView,
 } from 'react-native';
+import { AmbientOrangeBackground } from '../components/AmbientOrangeBackground';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { GLASS_TOKENS } from '../components/glass/GlassCard';
@@ -35,6 +39,7 @@ import { RentDueSection } from '../components/RentDueSection';
 import {
   canAddProperty,
   getSubscriptionState,
+  syncSubscriptionFromServer,
   isProActive,
   SubscriptionState,
 } from '../services/subscriptionService';
@@ -174,16 +179,20 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [autoPayMethod, setAutoPayMethod] = useState<'GPAY' | 'PHONEPE' | 'PAYTM' | 'CARD'>('GPAY');
   const [subscribing, setSubscribing] = useState(false);
 
-  // Load subscription state from subscriptionService + onDataChanged
+  // Load subscription state from server + local cache + onDataChanged
   useEffect(() => {
-    const syncSub = () => {
+    const syncLocalSub = () => {
       getSubscriptionState().then((s) => {
         setSubState(s);
         setSubscriptionActive(isProActive(s));
       }).catch(() => {});
     };
-    syncSub();
-    return onDataChanged(syncSub);
+    syncLocalSub();
+    syncSubscriptionFromServer().then((s) => {
+      setSubState(s);
+      setSubscriptionActive(isProActive(s));
+    }).catch(() => {});
+    return onDataChanged(syncLocalSub);
   }, []);
 
   const handleConfirmAutoPay = async () => {
@@ -387,7 +396,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [addPropStep, setAddPropStep] = useState<1 | 2>(1);
   const [propertyMode, setPropertyMode] = useState<'PG' | 'RENTAL'>('PG');
   const [matrixFloors, setMatrixFloors] = useState<MatrixFloor[]>(() =>
-    getInitialMatrixFloors('PG', 8500, 1200)
+    getInitialMatrixFloors('PG', 0, 0)
   );
   const [newPgName, setNewPgName] = useState('');
   const [newPgPhone, setNewPgPhone] = useState(user?.phone || '');
@@ -414,10 +423,10 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [newPgSharingType, setNewPgSharingType] = useState<'SINGLE' | 'DOUBLE' | 'TRIPLE' | 'FOUR'>('DOUBLE');
 
   // Rent, Deposit, Food & Utilities State
-  const [newPgRent, setNewPgRent] = useState('8500');
-  const [newPgDeposit, setNewPgDeposit] = useState('2500');
+  const [newPgRent, setNewPgRent] = useState('0');
+  const [newPgDeposit, setNewPgDeposit] = useState('0');
   const [newPgNoticeDays, setNewPgNoticeDays] = useState('30');
-  const [newPgFoodPolicy, setNewPgFoodPolicy] = useState<'3_MEALS' | '2_MEALS' | 'NO_FOOD'>('3_MEALS');
+  const [newPgFoodPolicy, setNewPgFoodPolicy] = useState<'3_MEALS' | '2_MEALS' | 'BREAKFAST_ONLY' | 'NO_FOOD'>('3_MEALS');
   const [newPgFoodIncluded, setNewPgFoodIncluded] = useState(true);
   const [newPgElectricityMode, setNewPgElectricityMode] = useState<'METERED' | 'FIXED' | 'INCLUDED'>('METERED');
   const [newPgElecRate, setNewPgElecRate] = useState('10');
@@ -449,10 +458,15 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const [enquiries, setEnquiries] = useState<ResidentEnquiry[]>([]);
   const [showNotificationsPage, setShowNotificationsPage] = useState(false);
 
-  // Listen for Dashboard bottom icon press to dismiss notifications & return to dashboard
+  // Listen for Dashboard bottom icon press to dismiss notifications & modals and return cleanly to Home
   useEffect(() => {
     if (resetTrigger) {
       setShowNotificationsPage(false);
+      setShowPgDropdown(false);
+      setShowAddPgModal(false);
+      setShowOnboardModal(false);
+      setShowRecordRentPickerModal(false);
+      setShowNeedToCollectModal(false);
     }
   }, [resetTrigger]);
 
@@ -534,6 +548,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   // Locate on Map Popup Modal
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [focusedAddPropField, setFocusedAddPropField] = useState<string | null>(null);
+  const [showAddPgFoodDropdown, setShowAddPgFoodDropdown] = useState(false);
 
   const handleLocateOnMap = () => {
     setShowLocationPicker(true);
@@ -593,8 +609,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       return;
     }
     const rentNum = parseInt(newPgRent.replace(/\D/g, '') || '0', 10);
-    if (rentNum <= 0) {
-      Alert.alert('Required: Monthly Rent', 'Please enter a valid monthly rent amount (greater than ₹0).');
+    const hasMatrixUnitRent = matrixFloors.some((fl) => fl.units.some((u) => (u.monthly_rent || 0) > 0));
+    if (rentNum <= 0 && !hasMatrixUnitRent) {
+      Alert.alert('Required: Basic Monthly Rent', 'Please enter a valid Basic Monthly Rent or unit rent greater than ₹0.');
       return;
     }
     const depositNum = parseInt(newPgDeposit.replace(/\D/g, '') || '0', 10);
@@ -1307,10 +1324,18 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const pendingRent = collectionMetrics.pendingDue;
   const collectionRate = collectionMetrics.collectionRate;
 
+  const isPrimaryProp = !selectedPropId || selectedPropId === properties[0]?.id;
+  const propExpenses = expenses.filter((e: any) =>
+    !selectedPropId ? true : e.propertyId ? e.propertyId === selectedPropId : isPrimaryProp
+  );
+  const propFixedBills = fixedBills.filter((b: any) =>
+    !selectedPropId ? true : b.propertyId ? b.propertyId === selectedPropId : isPrimaryProp
+  );
+
   const expenseProfitMetrics = computeExpenseAndProfitMetrics({
     collectedRent: totalRentCollected,
-    fixedBills,
-    loggedExpenses: expenses,
+    fixedBills: propFixedBills,
+    loggedExpenses: propExpenses,
     selectedMonth,
   });
   const totalExpense = expenseProfitMetrics.totalExpenses;
@@ -2149,10 +2174,23 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   const totalRoomsCount = currentPropRooms.length;
   const occupancyRate = occupancyMetrics.occupancyRate;
 
-  // Filter strictly due tenants (Requirement 3: In the UI show only DUE tenants list in the main page)
-  const dueTenants = activeTenants.filter(
-    (t) => t.rentStatus !== 'PAID' || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0)
-  );
+  // Filter strictly due tenants for selectedMonth (if nothing in selectedMonth, show 0)
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const dueTenants =
+    selectedMonth === currentMonthKey
+      ? activeTenants.filter(
+          (t) => t.rentStatus !== 'PAID' || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0)
+        )
+      : activeTenants.filter((t) => {
+          const startedMonth = (t.checkIn || t.createdAt || '').slice(0, 7);
+          const hasMonthInvoice = invoices.some(
+            (i) =>
+              (i as any).tenantId === t.id &&
+              (i.billingMonth === selectedMonth || (i.dueDate && i.dueDate.startsWith(selectedMonth)))
+          );
+          if (!hasMonthInvoice && startedMonth !== selectedMonth) return false;
+          return t.rentStatus !== 'PAID' || (typeof t.outstandingPaise === 'number' && t.outstandingPaise > 0);
+        });
 
   const activePropertyName = properties.find((p) => p.id === selectedPropId)?.name || properties[0]?.name || t('home.addProperty');
 
@@ -4568,7 +4606,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
               style={styles.addNewPgBtn}
               onPress={async () => {
                 setShowPgDropdown(false);
-                const latestSub = subState || (await getSubscriptionState());
+                const latestSub =
+                  subState && isProActive(subState)
+                    ? subState
+                    : await syncSubscriptionFromServer();
+                setSubState(latestSub);
+                setSubscriptionActive(isProActive(latestSub));
                 if (!canAddProperty(latestSub, properties.length)) {
                   setShowPropertyPaywallModal(true);
                   return;
@@ -4586,141 +4629,185 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
       {/* ─── MODAL 12: DUAL-MODE ADD NEW PROPERTY (PG BED-WISE & RENTAL FLATS ROOM-WISE) ─── */}
       <Modal
         visible={showAddPgModal}
-        transparent
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
         animationType="slide"
         onRequestClose={() => setShowAddPgModal(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.addPropModalShell}>
-            {addPropStep === 2 ? (
-              <FloorUnitMatrixBuilder
-                propertyMode={propertyMode}
-                floors={matrixFloors}
-                defaultMaintenance={parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)}
-                onChangeFloors={setMatrixFloors}
-                onBackStep={() => setAddPropStep(1)}
-                onSubmit={handleCreateNewPg}
-                submitting={creatingPgLoading}
-              />
-            ) : (
-              <>
-                {/* Top Dual-Mode Segmented Control */}
-                <View style={styles.dualModePillRow}>
-                  <TouchableOpacity
-                    style={[styles.dualModePill, propertyMode === 'PG' && styles.dualModePillActive]}
-                    onPress={() => {
-                      setPropertyMode('PG');
-                      setMatrixFloors(
-                        getInitialMatrixFloors(
-                          'PG',
-                          parseInt(newPgRent.replace(/\D/g, '') || '8500', 10),
-                          parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)
-                        )
-                      );
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.dualModePillText, propertyMode === 'PG' && styles.dualModePillTextActive]}>
-                      PG / Hostel (Bed-wise)
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.dualModePill, propertyMode === 'RENTAL' && styles.dualModePillActive]}
-                    onPress={() => {
-                      setPropertyMode('RENTAL');
-                      setMatrixFloors(
-                        getInitialMatrixFloors(
-                          'RENTAL',
-                          parseInt(newPgRent.replace(/\D/g, '') || '12000', 10),
-                          parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)
-                        )
-                      );
-                    }}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={[styles.dualModePillText, propertyMode === 'RENTAL' && styles.dualModePillTextActive]}>
-                      Rental Building / Flats (Room-wise)
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Modal Header */}
-                <View style={styles.addPropHeaderRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropTitle}>Add New Property</Text>
-                    <Text style={styles.addPropSub}>Step 1 of 2 • Details, Location, Photos & Utilities</Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      setShowAddPgModal(false);
-                      setAddPropStep(1);
-                    }}
-                    style={styles.modalCloseIcon}
-                  >
-                    <Text style={{ fontSize: 17, color: '#374151', fontWeight: '700' }}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 540 }}>
-              {/* PART 0: INITIAL DETAILS (BUILDING NAME & PHONE NUMBER FIRST) */}
-              <View style={styles.addPropCard}>
-                <Text style={styles.addPropCardTitle}>Initial Details</Text>
-
-                <Text style={styles.addPropLabel}>
-                  {propertyMode === 'PG' ? 'PG / Building Name *' : 'Building / Apartment Name *'}
-                </Text>
-                <TextInput
-                  style={styles.addPropInput}
-                  placeholder={propertyMode === 'PG' ? 'e.g. StayNest Elite Men\'s PG' : 'e.g. Sri Lakshmi Residency'}
-                  placeholderTextColor="#9ca3af"
-                  value={newPgName}
-                  onChangeText={setNewPgName}
+        <SafeAreaView style={styles.addPropScreenSafe}>
+          <AmbientOrangeBackground>
+            <View style={styles.addPropGlassSheet}>
+              {addPropStep === 2 ? (
+                <FloorUnitMatrixBuilder
+                  propertyMode={propertyMode}
+                  floors={matrixFloors}
+                  defaultMaintenance={parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)}
+                  onChangeFloors={setMatrixFloors}
+                  onBackStep={() => setAddPropStep(1)}
+                  onSubmit={handleCreateNewPg}
+                  submitting={creatingPgLoading}
                 />
-
-                <Text style={styles.addPropLabel}>Contact Phone Number *</Text>
-                <TextInput
-                  style={styles.addPropInput}
-                  placeholder="e.g. 9876543210"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  value={newPgPhone}
-                  onChangeText={setNewPgPhone}
-                />
-
-                <Text style={styles.addPropLabel}>
-                  {propertyMode === 'PG' ? 'Category / Gender Policy *' : 'Tenant Preference'}
-                </Text>
-                {propertyMode === 'PG' ? (
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
-                      <TouchableOpacity
-                        key={g}
-                        style={[styles.addPropChipBtn, newPgGender === g && styles.addPropChipBtnActive]}
-                        onPress={() => setNewPgGender(g)}
-                      >
-                        <Text style={[styles.addPropChipText, newPgGender === g && styles.addPropChipTextActive]}>
-                          {g === 'BOYS' ? '👨 Boys PG' : g === 'GIRLS' ? '👩 Girls PG' : '👫 Coliving'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+              ) : (
+                <>
+                  {/* Top Dual-Mode Segmented Control */}
+                  <View style={styles.dualModePillRow}>
+                    <TouchableOpacity
+                      style={[styles.dualModePill, propertyMode === 'PG' && styles.dualModePillActive]}
+                      onPress={() => {
+                        setPropertyMode('PG');
+                        setMatrixFloors(
+                          getInitialMatrixFloors(
+                            'PG',
+                            parseInt(newPgRent.replace(/\D/g, '') || '8500', 10),
+                            parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)
+                          )
+                        );
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.dualModePillText, propertyMode === 'PG' && styles.dualModePillTextActive]}>
+                        🏢 PG / Hostel (Bed-wise)
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.dualModePill, propertyMode === 'RENTAL' && styles.dualModePillActive]}
+                      onPress={() => {
+                        setPropertyMode('RENTAL');
+                        setMatrixFloors(
+                          getInitialMatrixFloors(
+                            'RENTAL',
+                            parseInt(newPgRent.replace(/\D/g, '') || '12000', 10),
+                            parseInt(newPgMaintFee.replace(/\D/g, '') || '0', 10)
+                          )
+                        );
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.dualModePillText, propertyMode === 'RENTAL' && styles.dualModePillTextActive]}>
+                        🏠 Rental Building (Room-wise)
+                      </Text>
+                    </TouchableOpacity>
                   </View>
-                ) : (
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {(['FAMILY', 'BACHELORS', 'ANY'] as const).map((p) => (
-                      <TouchableOpacity
-                        key={p}
-                        style={[styles.addPropChipBtn, newPgRentalPolicy === p && styles.addPropChipBtnActive]}
-                        onPress={() => setNewPgRentalPolicy(p)}
-                      >
-                        <Text style={[styles.addPropChipText, newPgRentalPolicy === p && styles.addPropChipTextActive]}>
-                          {p === 'FAMILY' ? '👨‍👩‍👧 Family' : p === 'BACHELORS' ? '🧑 Bachelors' : '🏠 Any'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+
+                  {/* Modal Header */}
+                  <View style={styles.addPropHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addPropTitle}>Add New Property</Text>
+                      <Text style={styles.addPropSub}>Step 1 of 2 • Details, Location, Photos & Utilities</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowAddPgModal(false);
+                        setAddPropStep(1);
+                      }}
+                      style={styles.modalCloseIcon}
+                    >
+                      <Text style={{ fontSize: 17, color: '#374151', fontWeight: '700' }}>✕</Text>
+                    </TouchableOpacity>
                   </View>
-                )}
-              </View>
+
+              <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+              >
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={{ flex: 1 }}
+                contentContainerStyle={{ paddingBottom: 240 }}
+                keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets={true}
+              >
+                {/* PART 0: INITIAL DETAILS (BUILDING NAME & PHONE NUMBER FIRST) */}
+                <View style={styles.addPropCard}>
+                  <Text style={styles.addPropCardTitle}>Initial Details</Text>
+
+                  <Text style={styles.addPropLabel}>
+                    {propertyMode === 'PG' ? 'PG / Building Name *' : 'Building / Apartment Name *'}
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.addPropInput,
+                      focusedAddPropField === 'pgName' && styles.addPropInputFocused,
+                    ]}
+                    onFocus={() => setFocusedAddPropField('pgName')}
+                    onBlur={() => setFocusedAddPropField(null)}
+                    placeholder={propertyMode === 'PG' ? 'e.g. StayNest Elite Men\'s PG' : 'e.g. Sri Lakshmi Residency'}
+                    placeholderTextColor="#9ca3af"
+                    value={newPgName}
+                    onChangeText={setNewPgName}
+                  />
+
+                  {/* Default Name Suggestions */}
+                  <View style={styles.quickNameWrap}>
+                    <Text style={styles.quickNameLabel}>Quick Suggestions:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickNameScroll}>
+                      {(propertyMode === 'PG'
+                        ? ['Sri Venkateswara PG', 'Sri Balaji PG', 'Sri Sai Luxury PG', 'StayNest Elite PG', 'Co-Living Hub']
+                        : ['Sri Lakshmi Residency', 'Balaji Towers', 'Sai Nilayam', 'Green View Enclave', 'Surya Apartments']
+                      ).map((sug) => (
+                        <TouchableOpacity
+                          key={sug}
+                          style={[styles.quickNameChip, newPgName === sug && styles.quickNameChipActive]}
+                          onPress={() => setNewPgName(sug)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.quickNameChipText, newPgName === sug && styles.quickNameChipTextActive]}>
+                            {sug}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  <Text style={styles.addPropLabel}>Contact Phone Number *</Text>
+                  <TextInput
+                    style={[
+                      styles.addPropInput,
+                      focusedAddPropField === 'phone' && styles.addPropInputFocused,
+                    ]}
+                    onFocus={() => setFocusedAddPropField('phone')}
+                    onBlur={() => setFocusedAddPropField(null)}
+                    placeholder="e.g. 9876543210"
+                    placeholderTextColor="#9ca3af"
+                    keyboardType="phone-pad"
+                    maxLength={10}
+                    value={newPgPhone}
+                    onChangeText={setNewPgPhone}
+                  />
+
+                  <Text style={styles.addPropLabel}>
+                    {propertyMode === 'PG' ? 'Category / Gender Policy *' : 'Tenant Preference'}
+                  </Text>
+                  {propertyMode === 'PG' ? (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
+                        <TouchableOpacity
+                          key={g}
+                          style={[styles.addPropChipBtn, newPgGender === g && styles.addPropChipBtnActive]}
+                          onPress={() => setNewPgGender(g)}
+                        >
+                          <Text style={[styles.addPropChipText, newPgGender === g && styles.addPropChipTextActive]}>
+                            {g === 'BOYS' ? '👨 Boys PG' : g === 'GIRLS' ? '👩 Girls PG' : '👫 Coliving'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : (
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {(['FAMILY', 'BACHELORS', 'ANY'] as const).map((p) => (
+                        <TouchableOpacity
+                          key={p}
+                          style={[styles.addPropChipBtn, newPgRentalPolicy === p && styles.addPropChipBtnActive]}
+                          onPress={() => setNewPgRentalPolicy(p)}
+                        >
+                          <Text style={[styles.addPropChipText, newPgRentalPolicy === p && styles.addPropChipTextActive]}>
+                            {p === 'FAMILY' ? '👨‍👩‍👧 Family' : p === 'BACHELORS' ? '🧑 Bachelors' : '🏠 Any'}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
 
               {/* PART 1: PROPERTY LOCATION & AUTO-FILL */}
               <View style={styles.addPropCard}>
@@ -4751,31 +4838,51 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
                 {/* Address Search Autocomplete */}
                 <TextInput
-                  style={[styles.addPropInput, { marginTop: 10 }]}
+                  style={[
+                    styles.addPropInput,
+                    { marginTop: 10 },
+                    focusedAddPropField === 'searchLoc' && styles.addPropInputFocused,
+                  ]}
                   placeholder="🔍 Search place, street or landmark to auto-fill..."
                   placeholderTextColor="#9ca3af"
                   value={newPgLocationSearch}
+                  onFocus={() => setFocusedAddPropField('searchLoc')}
+                  onBlur={() => setFocusedAddPropField(null)}
                   onChangeText={handleSearchLocation}
                 />
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>Full Address *</Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>Full Address *</Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'address' && styles.addPropInputFocused,
+                      ]}
                       placeholder="Full Address"
                       placeholderTextColor="#9ca3af"
                       value={newPgAddress}
+                      onFocus={() => setFocusedAddPropField('address')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgAddress}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>City *</Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>City *</Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'city' && styles.addPropInputFocused,
+                      ]}
                       placeholder="City"
                       placeholderTextColor="#9ca3af"
                       value={newPgCity}
+                      onFocus={() => setFocusedAddPropField('city')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgCity}
                     />
                   </View>
@@ -4783,24 +4890,38 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>State</Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>State</Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'state' && styles.addPropInputFocused,
+                      ]}
                       placeholder="(Andhra Pradesh)"
                       placeholderTextColor="#9ca3af"
                       value={newPgState}
+                      onFocus={() => setFocusedAddPropField('state')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgState}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>Pincode *</Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>Pincode *</Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'pincode' && styles.addPropInputFocused,
+                      ]}
                       placeholder="520010"
                       placeholderTextColor="#9ca3af"
                       keyboardType="numeric"
                       maxLength={6}
                       value={newPgPincode}
+                      onFocus={() => setFocusedAddPropField('pincode')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgPincode}
                     />
                   </View>
@@ -4906,32 +5027,46 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </View>
               </TouchableOpacity>
 
-              {/* PART 3: RENT, DEPOSIT & UTILITIES */}
+              {/* PART 3: RENT, DEPOSIT & UTILITIES - EQUAL SYMMETRICAL BOXES (Requirement 4) */}
               <View style={styles.addPropCard}>
                 <Text style={styles.addPropCardTitle}>3. Rent, Deposit & Utilities</Text>
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>
-                      {propertyMode === 'PG' ? 'Monthly Rent / Bed (₹) *' : 'Monthly Rent / Room (₹) *'}
-                    </Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>
+                        {propertyMode === 'PG' ? 'Basic Monthly Rent / Bed (₹) *' : 'Basic Monthly Rent (₹) *'}
+                      </Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
-                      placeholder="8500"
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'rent' && styles.addPropInputFocused,
+                      ]}
+                      placeholder="0"
                       placeholderTextColor="#9ca3af"
                       keyboardType="numeric"
                       value={newPgRent}
+                      onFocus={() => setFocusedAddPropField('rent')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgRent}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>Security Deposit (₹) *</Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>Security Deposit (₹) *</Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
-                      placeholder="2500"
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'deposit' && styles.addPropInputFocused,
+                      ]}
+                      placeholder="0"
                       placeholderTextColor="#9ca3af"
                       keyboardType="numeric"
                       value={newPgDeposit}
+                      onFocus={() => setFocusedAddPropField('deposit')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgDeposit}
                     />
                   </View>
@@ -4939,72 +5074,111 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addPropLabel}>Notice Period (Days)</Text>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>Notice Period (Days)</Text>
+                    </View>
                     <TextInput
-                      style={styles.addPropInput}
+                      style={[
+                        styles.addPropInput,
+                        focusedAddPropField === 'notice' && styles.addPropInputFocused,
+                      ]}
                       placeholder="30"
                       placeholderTextColor="#9ca3af"
                       keyboardType="numeric"
                       value={newPgNoticeDays}
+                      onFocus={() => setFocusedAddPropField('notice')}
+                      onBlur={() => setFocusedAddPropField(null)}
                       onChangeText={setNewPgNoticeDays}
                     />
                   </View>
                   <View style={{ flex: 1 }}>
+                    <View style={styles.addPropLabelWrapper}>
+                      <Text style={styles.addPropLabel}>
+                        {propertyMode === 'PG' ? 'Food / Meals Policy' : 'Furnishing Status'}
+                      </Text>
+                    </View>
                     {propertyMode === 'PG' ? (
                       <>
-                        <Text style={styles.addPropLabel}>Food / Meals Policy</Text>
                         <TouchableOpacity
                           style={[
-                            styles.foodPolicyPillCard,
-                            newPgFoodPolicy !== 'NO_FOOD' && styles.foodPolicyPillCardActive,
+                            styles.foodPolicyDropdownHeader,
+                            showAddPgFoodDropdown && styles.foodPolicyDropdownHeaderActive,
                           ]}
-                          onPress={() => {
-                            const next =
-                              newPgFoodPolicy === '3_MEALS'
-                                ? '2_MEALS'
-                                : newPgFoodPolicy === '2_MEALS'
-                                  ? 'NO_FOOD'
-                                  : '3_MEALS';
-                            setNewPgFoodPolicy(next);
-                            setNewPgFoodIncluded(next !== 'NO_FOOD');
-                          }}
+                          onPress={() => setShowAddPgFoodDropdown(!showAddPgFoodDropdown)}
+                          activeOpacity={0.85}
                         >
-                          <Text style={[styles.foodPolicyPillText, newPgFoodPolicy !== 'NO_FOOD' && { color: '#166534' }]}>
+                          <Text style={styles.foodPolicyDropdownHeaderText} numberOfLines={1}>
                             {newPgFoodPolicy === '3_MEALS'
-                              ? '• 3 Meals Included'
+                              ? '🍲 3 Meals Daily'
                               : newPgFoodPolicy === '2_MEALS'
-                                ? '• 2 Meals Included'
-                                : '• No Food Provided'}
+                                ? '🍳 2 Meals Daily'
+                                : newPgFoodPolicy === 'BREAKFAST_ONLY'
+                                  ? '☕ Breakfast Only'
+                                  : '🚫 No Food'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                            {showAddPgFoodDropdown ? '▲' : '▼'}
                           </Text>
                         </TouchableOpacity>
                       </>
                     ) : (
-                      <>
-                        <Text style={styles.addPropLabel}>Furnishing Status</Text>
-                        <TouchableOpacity
-                          style={styles.foodPolicyPillCard}
-                          onPress={() => {
-                            const next =
-                              newPgFurnishing === 'SEMI_FURNISHED'
-                                ? 'FULLY_FURNISHED'
-                                : newPgFurnishing === 'FULLY_FURNISHED'
-                                  ? 'UNFURNISHED'
-                                  : 'SEMI_FURNISHED';
-                            setNewPgFurnishing(next);
-                          }}
-                        >
-                          <Text style={styles.foodPolicyPillText}>
-                            {newPgFurnishing === 'FULLY_FURNISHED'
-                              ? '• Fully Furnished'
-                              : newPgFurnishing === 'SEMI_FURNISHED'
-                                ? '• Semi-Furnished'
-                                : '• Unfurnished'}
-                          </Text>
-                        </TouchableOpacity>
-                      </>
+                      <TouchableOpacity
+                        style={styles.foodPolicyDropdownHeader}
+                        onPress={() => {
+                          const next =
+                            newPgFurnishing === 'SEMI_FURNISHED'
+                              ? 'FULLY_FURNISHED'
+                              : newPgFurnishing === 'FULLY_FURNISHED'
+                                ? 'UNFURNISHED'
+                                : 'SEMI_FURNISHED';
+                          setNewPgFurnishing(next);
+                        }}
+                      >
+                        <Text style={styles.foodPolicyDropdownHeaderText} numberOfLines={1}>
+                          {newPgFurnishing === 'FULLY_FURNISHED'
+                            ? '🛋️ Fully Furnished'
+                            : newPgFurnishing === 'SEMI_FURNISHED'
+                              ? '🪑 Semi-Furnished'
+                              : '📦 Unfurnished'}
+                        </Text>
+                      </TouchableOpacity>
                     )}
                   </View>
                 </View>
+
+                {/* Food / Meals Dropdown Menu (Requirement 3) */}
+                {showAddPgFoodDropdown && propertyMode === 'PG' && (
+                  <View style={styles.foodDropdownMenu}>
+                    {[
+                      { key: '3_MEALS', label: '🍲 3 Meals Daily (All Meals Included)', inc: true },
+                      { key: '2_MEALS', label: '🍳 2 Meals Daily (Breakfast & Dinner)', inc: true },
+                      { key: 'BREAKFAST_ONLY', label: '☕ Breakfast Only', inc: true },
+                      { key: 'NO_FOOD', label: '🚫 No Food / Self-Cooking', inc: false },
+                    ].map((opt) => (
+                      <TouchableOpacity
+                        key={opt.key}
+                        style={[
+                          styles.foodDropdownMenuItem,
+                          newPgFoodPolicy === opt.key && styles.foodDropdownMenuItemActive,
+                        ]}
+                        onPress={() => {
+                          setNewPgFoodPolicy(opt.key as any);
+                          setNewPgFoodIncluded(opt.inc);
+                          setShowAddPgFoodDropdown(false);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.foodDropdownMenuItemText,
+                            newPgFoodPolicy === opt.key && styles.foodDropdownMenuItemTextActive,
+                          ]}
+                        >
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
 
                 {/* Electricity Billing Toggle */}
                 <Text style={[styles.addPropLabel, { marginTop: 6 }]}>Electricity Billing</Text>
@@ -5201,10 +5375,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
                 </Text>
               </TouchableOpacity>
             </ScrollView>
-              </>
-            )}
-          </View>
-        </View>
+            </KeyboardAvoidingView>
+                </>
+              )}
+            </View>
+          </AmbientOrangeBackground>
+        </SafeAreaView>
       </Modal>
 
       {/* Upgrade to Pro Paywall Modal (1-Property Limit) */}
@@ -5222,6 +5398,8 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         visible={showLocationPicker}
         initialLat={newPgLat}
         initialLng={newPgLng}
+        initialAddress={newPgAddress}
+        initialCity={newPgCity}
         onClose={() => setShowLocationPicker(false)}
         onConfirm={(loc) => {
           setNewPgLat(loc.latitude);
@@ -8541,31 +8719,39 @@ const styles = StyleSheet.create({
     color: '#4f46e5',
     fontWeight: '800',
   },
-  // ─── Dual-Mode Add New Property Modal Styles ───
+  // ─── Dual-Mode Add New Property Full-Screen Glassy Sheet Styles ───
+  addPropScreenSafe: {
+    flex: 1,
+    backgroundColor: '#FAF8F5',
+    paddingBottom: Platform.OS === 'android' ? 24 : 10,
+  },
+  addPropGlassSheet: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 10) : 10,
+  },
   addPropModalShell: {
+    flex: 1,
     width: '100%',
-    maxWidth: 460,
-    maxHeight: '92%',
-    backgroundColor: '#faf8f6',
-    borderRadius: 24,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 8,
+    backgroundColor: 'transparent',
+    padding: 0,
   },
   dualModePillRow: {
     flexDirection: 'row',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
     borderRadius: 20,
     padding: 4,
-    borderWidth: 1,
-    borderColor: '#efece9',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
     marginBottom: 12,
+    shadowColor: '#ea580c',
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
   },
   dualModePill: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 10,
     paddingHorizontal: 8,
     borderRadius: 16,
     alignItems: 'center',
@@ -8575,7 +8761,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ea580c',
   },
   dualModePillText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#374151',
     textAlign: 'center',
@@ -8586,55 +8772,165 @@ const styles = StyleSheet.create({
   },
   addPropHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
-    paddingHorizontal: 2,
+    marginBottom: 14,
+    paddingHorizontal: 4,
   },
   addPropTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
-    color: '#111827',
+    color: '#0f172a',
+    letterSpacing: -0.3,
   },
   addPropSub: {
-    fontSize: 12,
-    color: '#6b7280',
+    fontSize: 12.5,
+    color: '#64748b',
     marginTop: 2,
   },
   addPropCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#efece9',
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 6,
-    elevation: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
+    marginBottom: 14,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   addPropCardTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#111827',
-    marginBottom: 10,
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  addPropLabelWrapper: {
+    minHeight: 26,
+    justifyContent: 'flex-end',
+    marginBottom: 4,
   },
   addPropLabel: {
     fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.3,
+  },
+  quickNameWrap: {
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  quickNameLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginBottom: 5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  quickNameScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingBottom: 2,
+  },
+  quickNameChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickNameChipActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fb923c',
+  },
+  quickNameChipText: {
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#374151',
-    marginBottom: 4,
+    color: '#475569',
+  },
+  quickNameChipTextActive: {
+    color: '#ea580c',
   },
   addPropInput: {
     backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 10,
-    paddingHorizontal: 11,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#111827',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+    fontSize: 13.5,
+    fontWeight: '600',
+    color: '#0f172a',
     marginBottom: 10,
+    justifyContent: 'center',
+  },
+  addPropInputFocused: {
+    borderColor: '#fb923c',
+    backgroundColor: '#fffdfb',
+    borderWidth: 1.5,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  foodPolicyDropdownHeader: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  foodPolicyDropdownHeaderActive: {
+    borderColor: '#fb923c',
+    backgroundColor: '#fffdfb',
+  },
+  foodPolicyDropdownHeaderText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 4,
+  },
+  foodDropdownMenu: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    paddingVertical: 4,
+    marginBottom: 12,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  foodDropdownMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f1f5f9',
+  },
+  foodDropdownMenuItemActive: {
+    backgroundColor: '#fff7ed',
+  },
+  foodDropdownMenuItemText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  foodDropdownMenuItemTextActive: {
+    color: '#ea580c',
+    fontWeight: '800',
   },
   addPropChipBtn: {
     flex: 1,

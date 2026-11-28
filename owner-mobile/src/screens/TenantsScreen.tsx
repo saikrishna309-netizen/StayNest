@@ -39,6 +39,7 @@ import {
   canSendWhatsAppReminder,
   getMonthlyReminderCount,
   getSubscriptionState,
+  syncSubscriptionFromServer,
   incrementMonthlyReminderCount,
   isProActive,
   SubscriptionState,
@@ -284,7 +285,7 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
         apiClient<{ content: Tenant[] }>('/owner/tenants?size=500').catch(() => ({ content: [] })),
         apiClient<{ content: Property[] }>('/owner/properties?size=100').catch(() => ({ content: [] })),
         getAllMonthlyBills(),
-        getSubscriptionState(),
+        syncSubscriptionFromServer(),
         getMonthlyReminderCount(selectedMonth),
       ]);
       setMonthlyBills(billsList);
@@ -348,53 +349,59 @@ export const TenantsScreen: React.FC<TenantsScreenProps> = ({
   const loadRoomsForProperty = async (propId: string) => {
     try {
       let rooms: Room[] = [];
-      // 1. Check locally saved floors first (matches Room Management 1:1)
-      let cached: string | null = await safeStorage.getItem(`@staynest_floors_${propId}`).catch(() => null);
-      if (!cached && typeof window !== 'undefined' && window.localStorage) {
-        cached = window.localStorage.getItem(`staynest_floors_${propId}`);
-      }
-      if (cached) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propId);
+
+      // 1. For backend UUID properties, fetch live rooms & beds first so newly created/edited rooms stay in sync
+      if (isUuid) {
         try {
-          const floors = JSON.parse(cached);
-          if (Array.isArray(floors)) {
-            floors.forEach((f: any) => {
-              (f.rooms || []).forEach((r: any) => {
-                const rawBeds = Array.isArray(r.beds) && r.beds.length > 0
-                  ? r.beds
-                  : [{ id: `unit-${r.id}`, bedLabel: 'Unit', status: 'AVAILABLE' }];
-                rooms.push({
-                  id: r.id,
-                  propertyId: propId,
-                  roomNumber: r.roomNumber,
-                  sharingType: r.sharingType || 'DOUBLE',
-                  capacity: rawBeds.length,
-                  floorNumber: f.floorNumber,
-                  rentMonthlyPaise: (r.rentRupees || 8500) * 100,
-                  depositPaise: (r.depositRupees || r.rentRupees || 8500) * 100,
-                  status: 'AVAILABLE',
-                  beds: rawBeds.map((b: any) => ({
-                    id: b.id,
-                    roomId: r.id,
-                    propertyId: propId,
-                    bedLabel: b.bedLabel,
-                    status: b.status || 'AVAILABLE',
-                  })),
-                });
-              });
-            });
+          const data = await apiClient<Property>(`/owner/properties/${propId}`);
+          if (Array.isArray(data?.rooms) && data.rooms.length > 0) {
+            rooms = data.rooms;
           }
         } catch {
-          // ignore
+          // fall through to cached floors if offline
         }
       }
 
-      // 2. Fallback to backend property rooms if nothing cached locally
+      // 2. Fallback to locally saved floors (matches Room Management 1:1)
       if (rooms.length === 0) {
-        try {
-          const data = await apiClient<Property>(`/owner/properties/${propId}`);
-          rooms = data.rooms || [];
-        } catch {
-          rooms = [];
+        let cached: string | null = await safeStorage.getItem(`@staynest_floors_${propId}`).catch(() => null);
+        if (!cached && typeof window !== 'undefined' && window.localStorage) {
+          cached = window.localStorage.getItem(`staynest_floors_${propId}`);
+        }
+        if (cached) {
+          try {
+            const floors = JSON.parse(cached);
+            if (Array.isArray(floors)) {
+              floors.forEach((f: any) => {
+                (f.rooms || []).forEach((r: any) => {
+                  const rawBeds = Array.isArray(r.beds) && r.beds.length > 0
+                    ? r.beds
+                    : [{ id: `unit-${r.id}`, bedLabel: 'Unit', status: 'AVAILABLE' }];
+                  rooms.push({
+                    id: r.id,
+                    propertyId: propId,
+                    roomNumber: r.roomNumber,
+                    sharingType: r.sharingType || 'DOUBLE',
+                    capacity: rawBeds.length,
+                    floorNumber: f.floorNumber,
+                    rentMonthlyPaise: (r.rentRupees || 8500) * 100,
+                    depositPaise: (r.depositRupees || r.rentRupees || 8500) * 100,
+                    status: 'AVAILABLE',
+                    beds: rawBeds.map((b: any) => ({
+                      id: b.id,
+                      roomId: r.id,
+                      propertyId: propId,
+                      bedLabel: b.bedLabel,
+                      status: b.status || 'AVAILABLE',
+                    })),
+                  });
+                });
+              });
+            }
+          } catch {
+            // ignore
+          }
         }
       }
 

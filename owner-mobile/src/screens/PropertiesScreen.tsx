@@ -15,7 +15,15 @@ import {
   Platform,
   RefreshControl,
   useWindowDimensions,
+  SafeAreaView,
+  StatusBar,
+  KeyboardAvoidingView,
 } from 'react-native';
+import {
+  FloorUnitMatrixBuilder,
+  MatrixFloor,
+  getInitialMatrixFloors,
+} from '../components/FloorUnitMatrixBuilder';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { GLASS_TOKENS } from '../components/glass/GlassCard';
@@ -27,6 +35,8 @@ import { getInitialFloorsForProperty as getModularFloors } from '../services/pro
 import { validateVerhoeffAadhaar } from '../utils/aadhaar';
 import { fetchCurrentPropertyLocation } from '../utils/locationHelper';
 import { emitDataChanged, onDataChanged } from '../utils/appEvents';
+import { fastDataCache } from '../services/dataCache';
+import { computeOccupancyMetrics } from '../services/financeSummaryService';
 import { logActivity } from '../services/activityLogService';
 import { syncTenantVacateOrDelete } from '../services/tenantSyncHelper';
 import { OnboardResidentModal } from '../components/modals/OnboardResidentModal';
@@ -161,6 +171,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   // Property Selection State
   const [activeProperty, setActiveProperty] = useState<Property | null>(initialProperty || null);
   const [propertiesList, setPropertiesList] = useState<Property[]>([]);
+  const [propertyStatsMap, setPropertyStatsMap] = useState<
+    Record<string, { rooms: number; totalBeds: number; available: number; occupied: number }>
+  >({});
   const [showPropertyPicker, setShowPropertyPicker] = useState(false);
   const [showAddPropertyModal, setShowAddPropertyModal] = useState(false);
   const [showBulkUploadModal, setShowBulkUploadModal] = useState(false);
@@ -1090,6 +1103,15 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
   const [capturingLocation, setCapturingLocation] = useState(false);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [creatingProperty, setCreatingProperty] = useState(false);
+  const [addPropStep, setAddPropStep] = useState<1 | 2>(1);
+  const [matrixFloors, setMatrixFloors] = useState<MatrixFloor[]>(() =>
+    getInitialMatrixFloors('PG', 0, 0)
+  );
+  const [newPropFoodPolicy, setNewPropFoodPolicy] = useState<'3_MEALS' | '2_MEALS' | 'BREAKFAST_ONLY' | 'NO_FOOD'>('3_MEALS');
+  const [showNewPropFoodDropdown, setShowNewPropFoodDropdown] = useState(false);
+  const [newPropRent, setNewPropRent] = useState('0');
+  const [newPropDeposit, setNewPropDeposit] = useState('0');
+  const [focusedNewPropField, setFocusedNewPropField] = useState<string | null>(null);
 
   // Open Interactive Map Popup to Pick / Fetch GPS Location
   const handleCaptureCurrentLocation = () => {
@@ -1504,8 +1526,55 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
       }
 
       if (!targetFloors || targetFloors.length === 0) {
-        const isBackendUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetProp.id);
-        targetFloors = isBackendUuid ? [] : getInitialFloorsForProperty(targetProp.id);
+        if (propTenants.length > 0) {
+          // Reconstruct rooms & beds from assigned tenants so assigned PG beds never disappear
+          const roomMap = new Map<string, BedConfig[]>();
+          propTenants.forEach((t) => {
+            const rmNum = t.roomNumber || '101';
+            if (!roomMap.has(rmNum)) roomMap.set(rmNum, []);
+            const beds = roomMap.get(rmNum)!;
+            const bLabel = t.bedLabel || `Bed ${beds.length + 1}`;
+            beds.push({
+              id: t.bedId || `bed-${rmNum}-${beds.length + 1}`,
+              bedLabel: bLabel,
+              status: 'OCCUPIED',
+            });
+          });
+
+          // Ensure standard capacity (at least 2 beds per room for PG)
+          const reconstructedRooms: RoomConfig[] = Array.from(roomMap.entries()).map(([rmNum, beds]) => {
+            const flNum = parseInt(rmNum.charAt(0), 10) || 1;
+            while (beds.length < 2) {
+              beds.push({
+                id: `bed-${rmNum}-${beds.length + 1}`,
+                bedLabel: `Bed ${beds.length + 1}`,
+                status: 'AVAILABLE',
+              });
+            }
+            return {
+              id: `room-${rmNum}`,
+              roomNumber: rmNum,
+              floorNumber: flNum,
+              sharingType: beds.length === 1 ? 'SINGLE' : (beds.length === 2 ? 'DOUBLE' : 'TRIPLE'),
+              rentRupees: 8500,
+              depositRupees: 8500,
+              ac: true,
+              attachedBathroom: true,
+              beds,
+            };
+          });
+
+          const byFl = new Map<number, RoomConfig[]>();
+          reconstructedRooms.forEach((r) => {
+            if (!byFl.has(r.floorNumber)) byFl.set(r.floorNumber, []);
+            byFl.get(r.floorNumber)!.push(r);
+          });
+          targetFloors = Array.from(byFl.entries())
+            .sort((a, b) => a[0] - b[0])
+            .map(([floorNumber, rms]) => ({ floorNumber, rooms: rms }));
+        } else {
+          targetFloors = getInitialFloorsForProperty(targetProp.id);
+        }
       }
 
       const syncedInitialFloors = targetFloors.map((fl) => ({
@@ -1529,6 +1598,78 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
       setFloors(syncedInitialFloors);
       setOriginalFloors(JSON.parse(JSON.stringify(syncedInitialFloors)));
+
+      // Compute accurate Rooms/Beds, Available & Occupied stats for ALL properties using the exact same computeOccupancyMetrics as Home page
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const statsEntries = await Promise.all(
+        combinedProps.map(async (p) => {
+          const pTenants = loadedTenants.filter(
+            (t) =>
+              t.active !== false &&
+              t.stayStatus !== 'TERMINATED' &&
+              (t.propertyId === p.id || (!t.propertyId && combinedProps.length <= 1))
+          );
+
+          let roomsData: any[] = [];
+          if (uuidRegex.test(p.id)) {
+            try {
+              const pDetail = await apiClient<Property>(`/owner/properties/${p.id}`);
+              if (Array.isArray(pDetail?.rooms) && pDetail.rooms.length > 0) {
+                roomsData = pDetail.rooms;
+              }
+            } catch {}
+          }
+          if (roomsData.length === 0 && Array.isArray((p as any).rooms) && (p as any).rooms.length > 0) {
+            roomsData = (p as any).rooms;
+          }
+          if (roomsData.length === 0) {
+            try {
+              const cachedFlRaw = await safeStorage.getItem(`@staynest_floors_${p.id}`);
+              if (cachedFlRaw) {
+                const parsedFl = JSON.parse(cachedFlRaw);
+                if (Array.isArray(parsedFl)) {
+                  roomsData = parsedFl.flatMap((fl: any) => fl.rooms || []);
+                }
+              }
+            } catch {}
+          }
+
+          // Deduplicate rooms by roomNumber and beds by bedLabel
+          const dedupedRoomsMap = new Map<string, any>();
+          roomsData.forEach((r: any) => {
+            const key = String(r.roomNumber || r.id || '').trim().toLowerCase();
+            if (!key) return;
+            const prev = dedupedRoomsMap.get(key);
+            const rHasOcc = (r.beds || []).some((b: any) => b.status === 'OCCUPIED');
+            const prevHasOcc = prev ? (prev.beds || []).some((b: any) => b.status === 'OCCUPIED') : false;
+            if (!prev || (rHasOcc && !prevHasOcc)) {
+              dedupedRoomsMap.set(key, r);
+            }
+          });
+          const uniqueRooms = Array.from(dedupedRoomsMap.values()).map((r: any) => {
+            const seenLbls = new Set<string>();
+            const uniqueBeds = (Array.isArray(r.beds) ? r.beds : []).filter((b: any) => {
+              const lbl = String(b.bedLabel || '').trim().toLowerCase();
+              if (!lbl || seenLbls.has(lbl)) return false;
+              seenLbls.add(lbl);
+              return true;
+            });
+            return { ...r, beds: uniqueBeds };
+          });
+
+          const metrics = computeOccupancyMetrics(uniqueRooms as any, pTenants);
+          return [
+            p.id,
+            {
+              rooms: uniqueRooms.length,
+              totalBeds: metrics.totalBeds,
+              available: metrics.emptyBeds,
+              occupied: metrics.occupiedBeds,
+            },
+          ] as const;
+        })
+      );
+      setPropertyStatsMap(Object.fromEntries(statsEntries));
     } catch (err: any) {
       console.warn('loadPropertiesAndRooms error:', err.message);
       setOriginalFloors(JSON.parse(JSON.stringify(floors)));
@@ -1563,6 +1704,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     setViewMode('OVERVIEW');
     setLoading(true);
     onActivePropertyChange?.(p);
+    safeStorage.setItem('@staynest_active_property_id', p.id).catch(() => {});
 
     if (typeof window !== 'undefined' && window.localStorage) {
       window.localStorage.setItem('staynest_active_property_id', p.id);
@@ -1674,7 +1816,22 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
     }
   };
 
-  // Create New PG (Requirement 5: Location detection & website sync)
+  const handleNextToAddPropMatrix = () => {
+    if (!newPropName.trim() || newPropName.trim().length < 3) {
+      Alert.alert('Required', 'Please enter a valid Property Name (at least 3 characters).');
+      return;
+    }
+    if (!newPropCity.trim()) {
+      Alert.alert('Required', 'Please enter the City.');
+      return;
+    }
+    const parsedRent = parseInt(newPropRent.replace(/\D/g, '') || '0', 10);
+    const isRental = newPropType === 'RENTAL_BUILDING';
+    setMatrixFloors(getInitialMatrixFloors(isRental ? 'RENTAL' : 'PG', parsedRent, 0));
+    setAddPropStep(2);
+  };
+
+  // Create New PG / Building with Matrix Configured Floors & Rooms
   const handleCreateNewProperty = async () => {
     if (!newPropName.trim()) {
       Alert.alert('Required', 'Please enter a PG or Hostel Name');
@@ -1688,10 +1845,52 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           ? `https://www.google.com/maps/search/?api=1&query=${newPropLat},${newPropLng}`
           : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(newPropName.trim() + ' ' + (newPropAddress.trim() || 'MG Road') + ' ' + newPropCity)}`);
 
+      const parsedRentNum = parseInt(newPropRent.replace(/\D/g, '') || '0', 10);
+      const parsedDepositNum = parseInt(newPropDeposit.replace(/\D/g, '') || '0', 10);
+      const isRentalMode = newPropType === 'RENTAL_BUILDING';
+
+      const generatedFloors: FloorConfig[] = matrixFloors.map((mFloor) => ({
+        floorNumber: mFloor.floor_number,
+        label: mFloor.label,
+        rooms: mFloor.units.map((mUnit) => {
+          const roomNum = mUnit.unit_number.trim() || `${mFloor.floor_number}01`;
+          const unitCap = isRentalMode ? 1 : Math.max(1, mUnit.sharing_capacity || 2);
+          const unitRent = Math.max(500, mUnit.monthly_rent || parsedRentNum);
+          const beds: BedConfig[] = Array.from({ length: unitCap }, (_, idx) => ({
+            id: `bed-${roomNum}-${idx + 1}-${Date.now()}`,
+            bedLabel: isRentalMode ? 'Unit' : `Bed ${idx + 1}`,
+            status: 'AVAILABLE',
+          }));
+          return {
+            id: `room-${roomNum}-${Date.now()}`,
+            roomNumber: roomNum,
+            floorNumber: mFloor.floor_number,
+            sharingType: mUnit.unit_type || (isRentalMode ? '1BHK' : 'DOUBLE'),
+            rentRupees: unitRent,
+            depositRupees: parsedDepositNum,
+            ac: true,
+            attachedBathroom: true,
+            beds,
+          };
+        }),
+      }));
+
+      const backendFloorsPayload = generatedFloors.map((fl) => ({
+        floorNumber: fl.floorNumber,
+        rooms: fl.rooms.map((rm) => ({
+          roomNumber: rm.roomNumber,
+          sharingType: rm.sharingType,
+          capacity: rm.beds.length,
+          rentRupees: rm.rentRupees,
+          depositRupees: rm.depositRupees,
+          beds: rm.beds.map((b) => ({ bedLabel: b.bedLabel })),
+        })),
+      }));
+
       const payload = {
         name: newPropName.trim(),
         propertyType: newPropType,
-        genderPolicy: newPropGender,
+        genderPolicy: isRentalMode ? 'CO_ED' : newPropGender,
         cityId: '00000000-0000-0000-0000-000000000001',
         addressLine: newPropAddress.trim() || 'MG Road',
         cityName: newPropCity || 'Hyderabad',
@@ -1700,7 +1899,9 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         latitude: newPropLat,
         longitude: newPropLng,
         googleMapsUrl: finalMapsUrl,
-        foodIncluded: true,
+        foodIncluded: isRentalMode ? false : newPropFoodPolicy !== 'NO_FOOD',
+        startingPricePaise: parsedRentNum * 100,
+        floors: backendFloorsPayload,
       };
 
       let created: Property;
@@ -1709,70 +1910,95 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           method: 'POST',
           body: JSON.stringify(payload),
         });
-      } catch {
-        // Local fallback created property
-        created = {
-          id: `prop-${Date.now()}`,
-          ...payload,
-          startingPricePaise: 850000,
-          approvalStatus: 'APPROVED',
-          published: true,
-          amenities: ['HIGH_SPEED_WIFI', 'HOMESTYLE_FOOD', 'POWER_BACKUP', 'DAILY_HOUSEKEEPING', 'AC_ROOMS'],
-        };
+      } catch (firstErr: any) {
+        // Retry once after 1.5s in case Render free-tier server was waking up from cold start
+        await new Promise((r) => setTimeout(r, 1500));
+        created = await apiClient<Property>('/owner/properties', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
       }
 
-      // Sync to localStorage for instant website explore page visibility (Requirement 5)
+      const backendRooms = Array.isArray((created as any)?.rooms) ? (created as any).rooms : [];
+      let persistedFloors: FloorConfig[] = generatedFloors;
+      if (backendRooms.length > 0) {
+        const floorMap = new Map<number, RoomConfig[]>();
+        backendRooms.forEach((br: any) => {
+          const fNum = Number(br.floorNumber || 1);
+          const list = floorMap.get(fNum) || [];
+          const brBeds: BedConfig[] = Array.isArray(br.beds)
+            ? br.beds.map((bb: any) => ({
+                id: bb.id,
+                bedLabel: bb.bedLabel,
+                status: bb.status || 'AVAILABLE',
+              }))
+            : [];
+          list.push({
+            id: br.id,
+            roomNumber: br.roomNumber,
+            floorNumber: fNum,
+            sharingType: br.sharingType || 'DOUBLE',
+            rentRupees: Math.round((br.rentMonthlyPaise || parsedRentNum * 100) / 100),
+            depositRupees: Math.round((br.depositPaise || parsedDepositNum * 100) / 100),
+            ac: true,
+            attachedBathroom: true,
+            beds: brBeds,
+          });
+          floorMap.set(fNum, list);
+        });
+        persistedFloors = Array.from(floorMap.entries())
+          .sort((a, b) => a[0] - b[0])
+          .map(([fNum, rooms]) => ({
+            floorNumber: fNum,
+            label: `Floor ${fNum}`,
+            rooms,
+          }));
+      }
+
+      // Sync to localStorage & safeStorage for cross-tab + native persistence
+      try {
+        const storedCustomStr = await safeStorage.getItem('@staynest_custom_properties');
+        const cachedCustom = storedCustomStr ? JSON.parse(storedCustomStr) : [];
+        const updatedCustom = [created, ...(Array.isArray(cachedCustom) ? cachedCustom.filter((p: any) => p.id !== created.id) : [])];
+        await safeStorage.setItem('@staynest_custom_properties', JSON.stringify(updatedCustom)).catch(() => {});
+        await safeStorage.setItem('@staynest_active_property_id', created.id).catch(() => {});
+      } catch {}
+
       if (typeof window !== 'undefined' && window.localStorage) {
         try {
           const cachedCustom = JSON.parse(window.localStorage.getItem('staynest_custom_properties') || '[]');
           const updatedCustom = [created, ...cachedCustom.filter((p: any) => p.id !== created.id)];
           window.localStorage.setItem('staynest_custom_properties', JSON.stringify(updatedCustom));
+          window.localStorage.setItem('staynest_active_property_id', created.id);
           window.dispatchEvent(new CustomEvent('staynest_property_created', { detail: created }));
         } catch { }
       }
 
-      setPropertiesList([created, ...propertiesList]);
+      setPropertiesList([created, ...propertiesList.filter((p) => p.id !== created.id)]);
       setActiveProperty(created);
+      onActivePropertyChange?.(created);
       setShowAddPropertyModal(false);
+      setAddPropStep(1);
       setNewPropName('');
       setNewPropAddress('');
       setNewPropLat(null);
       setNewPropLng(null);
       setNewPropMapsUrl('');
 
-      // Create standard default floor structure for this new PG
-      const newFloors: FloorConfig[] = [
-        {
-          floorNumber: 1,
-          rooms: [
-            {
-              id: `room-101-${Date.now()}`,
-              roomNumber: '101',
-              floorNumber: 1,
-              sharingType: 'DOUBLE',
-              rentRupees: 8500,
-              depositRupees: 8500,
-              ac: true,
-              attachedBathroom: true,
-              beds: [
-                { id: `bed-101-1-${Date.now()}`, bedLabel: 'Bed 1', status: 'AVAILABLE' },
-                { id: `bed-101-2-${Date.now()}`, bedLabel: 'Bed 2', status: 'AVAILABLE' },
-              ],
-            },
-          ],
-        },
-      ];
-      setFloors(newFloors);
-      setOriginalFloors(JSON.parse(JSON.stringify(newFloors)));
+      setFloors(persistedFloors);
+      setOriginalFloors(JSON.parse(JSON.stringify(persistedFloors)));
 
-      // Save initial floors for website detail view
+      // Save configured floors for storage & invalidate cache for immediate cross-tab sync
+      await safeStorage.setItem(`@staynest_floors_${created.id}`, JSON.stringify(persistedFloors)).catch(() => {});
       if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(`staynest_floors_${created.id}`, JSON.stringify(newFloors));
+        window.localStorage.setItem(`staynest_floors_${created.id}`, JSON.stringify(persistedFloors));
       }
+      fastDataCache.invalidateAll();
+      emitDataChanged();
 
-      notifyUser('✓ PG Created!', `Property "${created.name}" created with location details! It is now live on the website.`);
-    } catch {
-      notifyUser('Error', 'Could not create property on server. Please try again.');
+      notifyUser('✓ Property Created!', `Property "${created.name}" created with ${persistedFloors.reduce((acc, f) => acc + f.rooms.length, 0)} rooms! It is now live.`);
+    } catch (err: any) {
+      notifyUser('Error', err?.message || 'Could not create property on server. Please try again.');
     } finally {
       setCreatingProperty(false);
     }
@@ -2042,6 +2268,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         beds: createdBeds,
       };
 
+      let syncedFloorsSnapshot: FloorConfig[] | null = null;
       setFloors((prev) => {
         const nextFloors = prev.map((f) => {
           if (f.floorNumber !== tempRoom.floorNumber) return f;
@@ -2050,6 +2277,7 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             rooms: f.rooms.map((r) => (r.id === tempRoom.id ? syncedRoom : r)),
           };
         });
+        syncedFloorsSnapshot = nextFloors;
         safeStorage.setItem(`@staynest_floors_${propId}`, JSON.stringify(nextFloors)).catch(() => {});
         if (typeof window !== 'undefined' && window.localStorage) {
           try {
@@ -2058,6 +2286,10 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         }
         return nextFloors;
       });
+      if (syncedFloorsSnapshot) {
+        setOriginalFloors(JSON.parse(JSON.stringify(syncedFloorsSnapshot)));
+      }
+      fastDataCache.invalidateAll();
       emitDataChanged();
       return syncedRoom;
     } catch {
@@ -2367,10 +2599,16 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
           depositPaise: updated.depositRupees * 100,
         }),
       })
-        .then(() => emitDataChanged())
+        .then(() => {
+          fastDataCache.invalidateAll();
+          emitDataChanged();
+        })
         .catch(() => {});
     } else if (activeProperty?.id) {
-      void syncRoomToBackend(activeProperty.id, updated).then(() => emitDataChanged());
+      void syncRoomToBackend(activeProperty.id, updated).then(() => {
+        fastDataCache.invalidateAll();
+        emitDataChanged();
+      });
     }
 
     setEditingRoomDetails(null);
@@ -2512,6 +2750,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
 
       // Update original backup
       setOriginalFloors(JSON.parse(JSON.stringify(floors)));
+      fastDataCache.invalidateAll();
+      emitDataChanged();
 
       // Exit edit mode back to clean normal view!
       setViewMode('OVERVIEW');
@@ -2594,23 +2834,6 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
                   {propertiesList.length} {propertiesList.length === 1 ? 'Property' : 'Properties'} • Tap any building to manage rooms & beds
                 </Text>
               </View>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#F97316',
-                  paddingHorizontal: 13,
-                  paddingVertical: 9,
-                  borderRadius: 14,
-                  shadowColor: '#EA580C',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.24,
-                  shadowRadius: 8,
-                  elevation: 4,
-                }}
-                onPress={() => setShowAddPropertyModal(true)}
-                activeOpacity={0.85}
-              >
-                <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' }}>+ Add Property</Text>
-              </TouchableOpacity>
             </View>
           </View>
 
@@ -2647,42 +2870,11 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             ) : (
               propertiesList.map((prop) => {
                 const isPropRental = prop.propertyType === 'RENTAL_BUILDING';
-                const isCurrent = activeProperty?.id === prop.id;
-                const rawRooms = (prop as any).rooms || [];
-                const propTenants = tenants.filter(
-                  (t) => t.active !== false && t.stayStatus !== 'TERMINATED' && (!t.propertyId || t.propertyId === prop.id)
-                );
-                const occBedSet = new Set(propTenants.map((t) => t.bedId).filter(Boolean));
-                const occRoomSet = new Set(
-                  propTenants.map((t) => String(t.roomNumber || '').trim().toLowerCase()).filter(Boolean)
-                );
-
-                let propRooms = isCurrent ? totalRooms : rawRooms.length;
-                let propTotalBeds = isCurrent ? totalBeds : 0;
-                let propOccupied = isCurrent ? occupiedBeds : 0;
-                let propAvailable = isCurrent ? availableBeds : 0;
-
-                if (!isCurrent) {
-                  if (isPropRental) {
-                    propTotalBeds = rawRooms.length;
-                    rawRooms.forEach((r: any) => {
-                      const isOcc =
-                        occRoomSet.has(String(r.roomNumber || '').trim().toLowerCase()) ||
-                        (r.beds || []).some((b: any) => b.status === 'OCCUPIED' || occBedSet.has(b.id));
-                      if (isOcc) propOccupied++;
-                      else propAvailable++;
-                    });
-                  } else {
-                    rawRooms.forEach((r: any) => {
-                      const bedsArr = r.beds || [];
-                      propTotalBeds += bedsArr.length;
-                      bedsArr.forEach((b: any) => {
-                        if (b.status === 'OCCUPIED' || occBedSet.has(b.id)) propOccupied++;
-                        else propAvailable++;
-                      });
-                    });
-                  }
-                }
+                const cachedStats = propertyStatsMap[prop.id];
+                const propRooms = cachedStats?.rooms ?? 0;
+                const propTotalBeds = cachedStats?.totalBeds ?? 0;
+                const propOccupied = cachedStats?.occupied ?? 0;
+                const propAvailable = cachedStats?.available ?? 0;
 
                 return (
                   <TouchableOpacity
@@ -2773,6 +2965,48 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
             )}
           </ScrollView>
 
+          {/* Bottom Glassy "+ Add Property" Button */}
+          <View
+            pointerEvents="box-none"
+            style={{
+              position: 'absolute',
+              bottom: 22,
+              left: 20,
+              right: 20,
+              alignItems: 'center',
+            }}
+          >
+            <TouchableOpacity
+              onPress={() => setShowAddPropertyModal(true)}
+              activeOpacity={0.85}
+              style={{
+                width: '100%',
+                maxWidth: 360,
+                paddingVertical: 14,
+                borderRadius: 20,
+                backgroundColor: Platform.OS === 'android' ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.78)',
+                borderWidth: 1.5,
+                borderColor: 'rgba(249, 115, 22, 0.55)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: '#EA580C',
+                shadowOffset: { width: 0, height: 8 },
+                shadowOpacity: 0.18,
+                shadowRadius: 18,
+                elevation: 6,
+                ...(Platform.OS === 'web'
+                  ? ({
+                      backdropFilter: 'blur(18px)',
+                      WebkitBackdropFilter: 'blur(18px)',
+                    } as any)
+                  : {}),
+              }}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#EA580C', letterSpacing: 0.2 }}>
+                + Add Property
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </AmbientOrangeBackground>
       ) : (
@@ -3931,196 +4165,409 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         </View>
       </Modal>
 
-      {/* ─── MODAL 4: ADD NEW PG PROPERTY ─── */}
+      {/* ─── MODAL 4: ADD NEW PROPERTY FULL-SCREEN GLASSY SHEET (Requirement 6) ─── */}
       <Modal
         visible={showAddPropertyModal}
-        transparent
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
         animationType="slide"
-        onRequestClose={() => setShowAddPropertyModal(false)}
+        onRequestClose={() => {
+          setShowAddPropertyModal(false);
+          setAddPropStep(1);
+        }}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add New PG Property</Text>
-            <Text style={styles.modalSubtitle}>Create listing and setup floors & rooms</Text>
-
-            <ScrollView style={{ maxHeight: 380 }}>
-              <Text style={styles.inputLabel}>Property Name *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={newPropName}
-                onChangeText={setNewPropName}
-                placeholder="e.g. Ramesh PG II / Sri Balaji PG"
-              />
-
-              <Text style={styles.inputLabel}>Property Type</Text>
-              <View style={[styles.pillRow, { flexWrap: 'wrap', gap: 6 }]}>
-                {([
-                  { id: 'PG', label: 'PG' },
-                  { id: 'HOSTEL', label: 'HOSTEL' },
-                  { id: 'CO_LIVING', label: 'CO-LIVING' },
-                  { id: 'RENTAL_BUILDING', label: 'BUILDING' },
-                ] as const).map((t) => (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={[
-                      styles.choicePill,
-                      newPropType === t.id && styles.choicePillActive,
-                    ]}
-                    onPress={() => setNewPropType(t.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.choicePillText,
-                        newPropType === t.id && styles.choicePillTextActive,
-                      ]}
-                    >
-                      {t.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {newPropType !== 'RENTAL_BUILDING' && (
+        <SafeAreaView style={styles.addPropScreenSafe}>
+          <AmbientOrangeBackground>
+            <View style={styles.addPropGlassSheet}>
+              {addPropStep === 2 ? (
+                <FloorUnitMatrixBuilder
+                  propertyMode={newPropType === 'RENTAL_BUILDING' ? 'RENTAL' : 'PG'}
+                  floors={matrixFloors}
+                  defaultMaintenance={0}
+                  onChangeFloors={setMatrixFloors}
+                  onBackStep={() => setAddPropStep(1)}
+                  onSubmit={handleCreateNewProperty}
+                  submitting={creatingProperty}
+                />
+              ) : (
                 <>
-                  <Text style={styles.inputLabel}>Gender Policy</Text>
-                  <View style={styles.pillRow}>
-                    {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
+                  {/* Header */}
+                  <View style={styles.addPropHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.addPropTitle}>Add New Property</Text>
+                      <Text style={styles.addPropSub}>Step 1 of 2 • Basic Details & Location</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowAddPropertyModal(false);
+                        setAddPropStep(1);
+                      }}
+                      style={styles.modalCloseBtn}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={{ fontSize: 17, color: '#374151', fontWeight: '700' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <KeyboardAvoidingView
+                    style={{ flex: 1 }}
+                    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                    keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+                  >
+                    <ScrollView
+                      style={{ flex: 1 }}
+                      contentContainerStyle={{ paddingBottom: 240 }}
+                      keyboardShouldPersistTaps="handled"
+                      automaticallyAdjustKeyboardInsets={true}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {/* 1. Basic Details Card */}
+                      <View style={styles.addPropCard}>
+                        <Text style={styles.addPropCardTitle}>1. Basic Property Details</Text>
+
+                        <Text style={styles.inputLabel}>Property Name *</Text>
+                        <TextInput
+                          style={[
+                            styles.textInput,
+                            focusedNewPropField === 'name' && styles.textInputFocused,
+                          ]}
+                          value={newPropName}
+                          onChangeText={setNewPropName}
+                          onFocus={() => setFocusedNewPropField('name')}
+                          onBlur={() => setFocusedNewPropField(null)}
+                          placeholder="e.g. Ramesh PG II / Sri Balaji PG"
+                          placeholderTextColor="#9ca3af"
+                        />
+
+                        {/* Default Name Suggestions */}
+                        <View style={styles.quickNameWrap}>
+                          <Text style={styles.quickNameLabel}>Quick Suggestions:</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickNameScroll}>
+                            {(newPropType === 'RENTAL_BUILDING'
+                              ? ['Sri Lakshmi Residency', 'Balaji Towers', 'Sai Nilayam', 'Green View Enclave', 'Surya Apartments']
+                              : ['Sri Venkateswara PG', 'Sri Balaji PG', 'Sri Sai Luxury PG', 'StayNest Elite PG', 'Co-Living Hub']
+                            ).map((sug) => (
+                              <TouchableOpacity
+                                key={sug}
+                                style={[styles.quickNameChip, newPropName === sug && styles.quickNameChipActive]}
+                                onPress={() => setNewPropName(sug)}
+                                activeOpacity={0.75}
+                              >
+                                <Text style={[styles.quickNameChipText, newPropName === sug && styles.quickNameChipTextActive]}>
+                                  {sug}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </View>
+
+                  <Text style={styles.inputLabel}>Property Type</Text>
+                  <View style={[styles.pillRow, { flexWrap: 'wrap', gap: 6 }]}>
+                    {([
+                      { id: 'PG', label: '🏢 PG / Hostel' },
+                      { id: 'HOSTEL', label: '🏨 Hostel' },
+                      { id: 'CO_LIVING', label: '👫 Co-Living' },
+                      { id: 'RENTAL_BUILDING', label: '🏠 Rental Building' },
+                    ] as const).map((t) => (
                       <TouchableOpacity
-                        key={g}
+                        key={t.id}
                         style={[
                           styles.choicePill,
-                          newPropGender === g && styles.choicePillActive,
+                          newPropType === t.id && styles.choicePillActive,
                         ]}
-                        onPress={() => setNewPropGender(g)}
+                        onPress={() => setNewPropType(t.id)}
                       >
                         <Text
                           style={[
                             styles.choicePillText,
-                            newPropGender === g && styles.choicePillTextActive,
+                            newPropType === t.id && styles.choicePillTextActive,
                           ]}
                         >
-                          {g.replace('_', ' ')}
+                          {t.label}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
-                </>
-              )}
 
-              {/* GPS Location Button (Requirement 5: Add location based on current location) */}
-              <View style={{ marginTop: 12, marginBottom: 8, padding: 12, backgroundColor: '#f0fdf4', borderRadius: 12, borderWidth: 1, borderColor: '#bbf7d0' }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <View style={{ flex: 1, marginRight: 8 }}>
-                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#166534' }}>
-                      📍 PG Location & Maps
-                    </Text>
-                    <Text style={{ fontSize: 10, color: '#15803d', marginTop: 2 }}>
-                      {newPropLat && newPropLng
-                        ? `Captured: ${newPropLat}, ${newPropLng}`
-                        : 'Auto-detect coordinates for Google Maps & Website'}
-                    </Text>
+                  {newPropType !== 'RENTAL_BUILDING' && (
+                    <>
+                      <Text style={styles.inputLabel}>Gender Policy</Text>
+                      <View style={styles.pillRow}>
+                        {(['BOYS', 'GIRLS', 'CO_ED'] as const).map((g) => (
+                          <TouchableOpacity
+                            key={g}
+                            style={[
+                              styles.choicePill,
+                              newPropGender === g && styles.choicePillActive,
+                            ]}
+                            onPress={() => setNewPropGender(g)}
+                          >
+                            <Text
+                              style={[
+                                styles.choicePillText,
+                                newPropGender === g && styles.choicePillTextActive,
+                              ]}
+                            >
+                              {g === 'BOYS' ? '👨 Boys' : g === 'GIRLS' ? '👩 Girls' : '👫 Co-Ed'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      {/* Food / Meals Policy Dropdown (Requirement 3) */}
+                      <Text style={styles.inputLabel}>Food / Meals Included Policy</Text>
+                      <TouchableOpacity
+                        style={[
+                          styles.foodDropdownHeader,
+                          showNewPropFoodDropdown && styles.foodDropdownHeaderActive,
+                        ]}
+                        onPress={() => setShowNewPropFoodDropdown(!showNewPropFoodDropdown)}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={styles.foodDropdownHeaderText}>
+                          {newPropFoodPolicy === '3_MEALS'
+                            ? '🍲 3 Meals Daily (All Meals Included)'
+                            : newPropFoodPolicy === '2_MEALS'
+                              ? '🍳 2 Meals Daily (Breakfast & Dinner)'
+                              : newPropFoodPolicy === 'BREAKFAST_ONLY'
+                                ? '☕ Breakfast Only'
+                                : '🚫 No Food / Self Cooking'}
+                        </Text>
+                        <Text style={styles.dropdownArrowText}>
+                          {showNewPropFoodDropdown ? '▲' : '▼'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {showNewPropFoodDropdown && (
+                        <View style={styles.foodDropdownMenu}>
+                          {[
+                            { id: '3_MEALS', label: '🍲 3 Meals Daily (Breakfast, Lunch & Dinner)' },
+                            { id: '2_MEALS', label: '🍳 2 Meals Daily (Breakfast & Dinner)' },
+                            { id: 'BREAKFAST_ONLY', label: '☕ Breakfast Only' },
+                            { id: 'NO_FOOD', label: '🚫 No Food / Self-Cooking' },
+                          ].map((opt) => (
+                            <TouchableOpacity
+                              key={opt.id}
+                              style={[
+                                styles.foodDropdownMenuItem,
+                                newPropFoodPolicy === opt.id && styles.foodDropdownMenuItemActive,
+                              ]}
+                              onPress={() => {
+                                setNewPropFoodPolicy(opt.id as any);
+                                setShowNewPropFoodDropdown(false);
+                              }}
+                              activeOpacity={0.8}
+                            >
+                              <Text
+                                style={[
+                                  styles.foodDropdownMenuItemText,
+                                  newPropFoodPolicy === opt.id && styles.foodDropdownMenuItemTextActive,
+                                ]}
+                              >
+                                {opt.label}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+
+                {/* 2. Symmetrical Rent & Deposit Section (Requirement 4) */}
+                <View style={styles.addPropCard}>
+                  <Text style={styles.addPropCardTitle}>2. Pricing & Security Deposit</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.equalLabelWrap}>
+                        <Text style={styles.inputLabel}>
+                          {newPropType === 'RENTAL_BUILDING' ? 'Basic Monthly Rent (₹) *' : 'Basic Monthly Rent / Bed (₹) *'}
+                        </Text>
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          focusedNewPropField === 'rent' && styles.textInputFocused,
+                        ]}
+                        value={newPropRent}
+                        onChangeText={setNewPropRent}
+                        onFocus={() => setFocusedNewPropField('rent')}
+                        onBlur={() => setFocusedNewPropField(null)}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.equalLabelWrap}>
+                        <Text style={styles.inputLabel}>Security Deposit (₹) *</Text>
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          focusedNewPropField === 'deposit' && styles.textInputFocused,
+                        ]}
+                        value={newPropDeposit}
+                        onChangeText={setNewPropDeposit}
+                        onFocus={() => setFocusedNewPropField('deposit')}
+                        onBlur={() => setFocusedNewPropField(null)}
+                        placeholder="0"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                      />
+                    </View>
                   </View>
-                  <TouchableOpacity
-                    style={{
-                      paddingHorizontal: 12,
-                      paddingVertical: 7,
-                      backgroundColor: '#16a34a',
-                      borderRadius: 8,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: 4,
-                    }}
-                    onPress={handleCaptureCurrentLocation}
-                    disabled={capturingLocation}
-                  >
-                    {capturingLocation ? (
-                      <ActivityIndicator size="small" color="#ffffff" />
-                    ) : (
-                      <>
-                        <Text style={{ color: '#ffffff', fontSize: 11, fontWeight: '800' }}>
+                </View>
+
+                {/* 3. Location & Maps Card */}
+                <View style={styles.addPropCard}>
+                  <Text style={styles.addPropCardTitle}>3. Location & Address</Text>
+
+                  {/* GPS Location Button */}
+                  <View style={styles.mapBannerBox}>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#166534' }}>
+                        📍 Pick Location on Map / GPS
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#15803d', marginTop: 2 }}>
+                        {newPropLat && newPropLng
+                          ? `Pinned: ${newPropLat.toFixed(4)}, ${newPropLng.toFixed(4)}`
+                          : 'Tap to auto-fill address, city and pincode'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.mapBannerBtn}
+                      onPress={handleCaptureCurrentLocation}
+                      disabled={capturingLocation}
+                    >
+                      {capturingLocation ? (
+                        <ActivityIndicator size="small" color="#ffffff" />
+                      ) : (
+                        <Text style={{ color: '#ffffff', fontSize: 11.5, fontWeight: '800' }}>
                           {newPropLat ? '✓ Change Map' : '🗺️ Open Map'}
                         </Text>
-                      </>
-                    )}
+                      )}
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Address Line *</Text>
+                  <TextInput
+                    style={[
+                      styles.textInput,
+                      focusedNewPropField === 'address' && styles.textInputFocused,
+                    ]}
+                    value={newPropAddress}
+                    onChangeText={setNewPropAddress}
+                    onFocus={() => setFocusedNewPropField('address')}
+                    onBlur={() => setFocusedNewPropField(null)}
+                    placeholder="e.g. Door 12-4, Plot 42, Main Road"
+                    placeholderTextColor="#9ca3af"
+                  />
+
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.equalLabelWrap}>
+                        <Text style={styles.inputLabel}>Locality / Landmark</Text>
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          focusedNewPropField === 'locality' && styles.textInputFocused,
+                        ]}
+                        value={newPropLocality}
+                        onChangeText={setNewPropLocality}
+                        onFocus={() => setFocusedNewPropField('locality')}
+                        onBlur={() => setFocusedNewPropField(null)}
+                        placeholder="Hitec City"
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.equalLabelWrap}>
+                        <Text style={styles.inputLabel}>City *</Text>
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          focusedNewPropField === 'city' && styles.textInputFocused,
+                        ]}
+                        value={newPropCity}
+                        onChangeText={setNewPropCity}
+                        onFocus={() => setFocusedNewPropField('city')}
+                        onBlur={() => setFocusedNewPropField(null)}
+                        placeholder="Hyderabad"
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.equalLabelWrap}>
+                        <Text style={styles.inputLabel}>Pincode</Text>
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          focusedNewPropField === 'pincode' && styles.textInputFocused,
+                        ]}
+                        value={newPropPincode}
+                        onChangeText={setNewPropPincode}
+                        onFocus={() => setFocusedNewPropField('pincode')}
+                        onBlur={() => setFocusedNewPropField(null)}
+                        placeholder="500081"
+                        placeholderTextColor="#9ca3af"
+                        keyboardType="numeric"
+                        maxLength={6}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.equalLabelWrap}>
+                        <Text style={styles.inputLabel}>Google Maps Link</Text>
+                      </View>
+                      <TextInput
+                        style={[
+                          styles.textInput,
+                          focusedNewPropField === 'mapsUrl' && styles.textInputFocused,
+                        ]}
+                        value={newPropMapsUrl}
+                        onChangeText={setNewPropMapsUrl}
+                        onFocus={() => setFocusedNewPropField('mapsUrl')}
+                        onBlur={() => setFocusedNewPropField(null)}
+                        placeholder="Auto-generated link"
+                        placeholderTextColor="#9ca3af"
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Bottom CTA Buttons */}
+                <View style={{ flexDirection: 'row', marginTop: 6, gap: 10 }}>
+                  <TouchableOpacity
+                    style={[styles.closeModalBtn, { flex: 1 }]}
+                    onPress={() => {
+                      setShowAddPropertyModal(false);
+                      setAddPropStep(1);
+                    }}
+                    disabled={creatingProperty}
+                  >
+                    <Text style={styles.closeModalBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.saveModalBtn, { flex: 2 }]}
+                    onPress={handleNextToAddPropMatrix}
+                    disabled={creatingProperty}
+                  >
+                    <Text style={styles.saveModalBtnText}>Next: Floors & Rooms Matrix →</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
-
-              <Text style={styles.inputLabel}>Address Line *</Text>
-              <TextInput
-                style={styles.textInput}
-                value={newPropAddress}
-                onChangeText={setNewPropAddress}
-                placeholder="e.g. Door 12-4, Plot 42, Main Road"
-              />
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Locality / Landmark</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={newPropLocality}
-                    onChangeText={setNewPropLocality}
-                    placeholder="Hitec City"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>City</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={newPropCity}
-                    onChangeText={setNewPropCity}
-                    placeholder="Hyderabad"
-                  />
-                </View>
-              </View>
-
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Pincode</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={newPropPincode}
-                    onChangeText={setNewPropPincode}
-                    placeholder="500081"
-                    keyboardType="numeric"
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Google Maps Link</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={newPropMapsUrl}
-                    onChangeText={setNewPropMapsUrl}
-                    placeholder="Auto-generated or custom URL"
-                  />
-                </View>
-              </View>
-            </ScrollView>
-
-            <View style={{ flexDirection: 'row', marginTop: 16 }}>
-              <TouchableOpacity
-                style={[styles.closeModalBtn, { flex: 1, marginRight: 8 }]}
-                onPress={() => setShowAddPropertyModal(false)}
-                disabled={creatingProperty}
-              >
-                <Text style={styles.closeModalBtnText}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.saveModalBtn, { flex: 1, marginLeft: 8 }]}
-                onPress={handleCreateNewProperty}
-                disabled={creatingProperty}
-              >
-                {creatingProperty ? (
-                  <ActivityIndicator color="#ffffff" size="small" />
-                ) : (
-                  <Text style={styles.saveModalBtnText}>Create PG</Text>
-                )}
-              </TouchableOpacity>
+              </ScrollView>
+              </KeyboardAvoidingView>
+                </>
+              )}
             </View>
-          </View>
-        </View>
+          </AmbientOrangeBackground>
+        </SafeAreaView>
       </Modal>
 
       {/* ─── MODAL 4: ASSIGN RESIDENT TO VACANT BED (UNIFIED) ─── */}
@@ -4958,6 +5405,8 @@ export const PropertiesScreen: React.FC<PropertiesScreenProps> = ({
         visible={showLocationPicker}
         initialLat={newPropLat}
         initialLng={newPropLng}
+        initialAddress={newPropAddress}
+        initialCity={newPropCity}
         onClose={() => setShowLocationPicker(false)}
         onConfirm={(loc) => {
           setNewPropLat(Number(loc.latitude.toFixed(6)));
@@ -6017,14 +6466,202 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   textInput: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
-    borderRadius: 8,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    height: 48,
     fontSize: 14,
     color: '#0f172a',
+    justifyContent: 'center',
+  },
+  textInputFocused: {
+    borderColor: '#fb923c',
+    backgroundColor: '#fffdfb',
+    borderWidth: 1.5,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  quickNameWrap: {
+    marginTop: 6,
+    marginBottom: 6,
+  },
+  quickNameLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginBottom: 5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  quickNameScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingBottom: 2,
+  },
+  quickNameChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickNameChipActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fb923c',
+  },
+  quickNameChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickNameChipTextActive: {
+    color: '#ea580c',
+  },
+  addPropScreenSafe: {
+    flex: 1,
+    backgroundColor: '#FAF8F5',
+    paddingBottom: Platform.OS === 'android' ? 24 : 10,
+  },
+  addPropGlassSheet: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 10) : 10,
+  },
+  addPropHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    paddingHorizontal: 4,
+  },
+  addPropTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#0f172a',
+    letterSpacing: -0.3,
+  },
+  addPropSub: {
+    fontSize: 12.5,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addPropCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
+    marginBottom: 14,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  addPropCardTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0f172a',
+    marginBottom: 12,
+  },
+  equalLabelWrap: {
+    minHeight: 26,
+    justifyContent: 'flex-end',
+    marginBottom: 4,
+  },
+  foodDropdownHeader: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  foodDropdownHeaderActive: {
+    borderColor: '#fb923c',
+    backgroundColor: '#fffdfb',
+  },
+  foodDropdownHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+    flex: 1,
+    marginRight: 6,
+  },
+  dropdownArrowText: {
+    fontSize: 11,
+    color: '#64748b',
+  },
+  foodDropdownMenu: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    paddingVertical: 4,
+    marginTop: 6,
+    marginBottom: 10,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  foodDropdownMenuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f1f5f9',
+  },
+  foodDropdownMenuItemActive: {
+    backgroundColor: '#fff7ed',
+  },
+  foodDropdownMenuItemText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  foodDropdownMenuItemTextActive: {
+    color: '#ea580c',
+    fontWeight: '800',
+  },
+  mapBannerBox: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f0fdf4',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    marginBottom: 10,
+  },
+  mapBannerBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#16a34a',
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   switchRow: {
     flexDirection: 'row',

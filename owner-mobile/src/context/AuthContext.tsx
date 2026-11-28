@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
 import { safeStorage } from '../utils/safeStorage';
-import { apiClient, setAuthToken, setOnUnauthorizedHandler } from '../api/client';
+import { API_BASE, apiClient, setAuthToken, setOnUnauthorizedHandler } from '../api/client';
 import { fastDataCache } from '../services/dataCache';
 import { User } from '../types';
 
@@ -11,7 +12,7 @@ interface AuthContextType {
   hydrating: boolean;
   sendOtp: (phone: string) => Promise<{ message: string; demoOtp?: string }>;
   verifyOtp: (phone: string, otp: string) => Promise<void>;
-  updateProfile: (fullName: string, email: string) => Promise<void>;
+  updateProfile: (fullName: string, email: string, markProfileComplete?: boolean) => Promise<void>;
   login: (email: string, pass: string) => Promise<void>;
   logout: () => void;
 }
@@ -28,6 +29,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ─── RESTORE SESSION ON APP LAUNCH & HYDRATE FROM GET /users/me ───
   useEffect(() => {
+    let mounted = true;
+    // Non-blocking ping to wake Render backend from cold sleep immediately on startup
+    fetch(`${API_BASE}/health`).catch(() => {});
+
+    const safetyTimer = setTimeout(() => {
+      if (mounted) setHydrating(false);
+    }, 4000);
+
     const restoreSession = async () => {
       try {
         const storedToken = await safeStorage.getItem('@staynest_owner_token');
@@ -39,17 +48,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ) {
           setAuthToken(storedToken);
           setToken(storedToken);
+
+          let hasCachedUser = false;
           if (storedUser) {
-            setUser(JSON.parse(storedUser));
-          }
-          try {
-            const freshUser = await apiClient<User>('/users/me');
-            if (freshUser) {
-              setUser(freshUser);
-              await safeStorage.setItem('@staynest_owner_user', JSON.stringify(freshUser)).catch(() => {});
+            try {
+              setUser(JSON.parse(storedUser));
+              hasCachedUser = true;
+            } catch {
+              hasCachedUser = false;
             }
-          } catch {
-            // If 401, onUnauthorizedHandler clears session; if offline, keep cached user
+          }
+
+          // If we already have a cached user, enter the app immediately and refresh /users/me in background
+          if (hasCachedUser) {
+            if (mounted) setHydrating(false);
+            apiClient<User>('/users/me')
+              .then((freshUser) => {
+                if (mounted && freshUser) {
+                  setUser(freshUser);
+                  safeStorage.setItem('@staynest_owner_user', JSON.stringify(freshUser)).catch(() => {});
+                }
+              })
+              .catch(() => {});
+          } else {
+            // No cached user yet: race /users/me against a 3.5s cap so cold starts never hang the splash screen
+            try {
+              const freshUser = await Promise.race([
+                apiClient<User>('/users/me'),
+                new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+              ]);
+              if (mounted && freshUser) {
+                setUser(freshUser);
+                await safeStorage.setItem('@staynest_owner_user', JSON.stringify(freshUser)).catch(() => {});
+              }
+            } catch {
+              // If 401, onUnauthorizedHandler clears session; otherwise fall through cleanly
+            }
           }
         } else if (storedToken) {
           await safeStorage.removeItem('@staynest_owner_token').catch(() => {});
@@ -58,10 +92,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (err) {
         console.log('Error restoring session:', err);
       } finally {
-        setHydrating(false);
+        clearTimeout(safetyTimer);
+        if (mounted) setHydrating(false);
       }
     };
     restoreSession();
+
+    return () => {
+      mounted = false;
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
   const sendOtp = async (phone: string): Promise<{ message: string; demoOtp?: string }> => {
@@ -93,12 +133,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.log('WhatsApp send error:', waErr);
     }
 
-    // 3. Notify backend API with the exact same synchronized OTP
+    // 3. Notify backend API with the exact same synchronized OTP (with 8s cap to prevent blocking UI on cold starts)
     try {
-      const res = await apiClient<{ message: string; demoOtp?: string }>('/auth/otp/send', {
-        method: 'POST',
-        body: JSON.stringify({ phone: cleanPhone, role: 'ROLE_OWNER', otp: randomOtp }),
-      });
+      const res = await Promise.race([
+        apiClient<{ message: string; demoOtp?: string }>('/auth/otp/send', {
+          method: 'POST',
+          body: JSON.stringify({ phone: cleanPhone, role: 'ROLE_OWNER', otp: randomOtp }),
+        }),
+        new Promise<{ message: string; demoOtp?: string }>((resolve) =>
+          setTimeout(
+            () => resolve({ message: `Verification code sent to +91 ${cleanPhone}`, demoOtp: randomOtp }),
+            8000
+          )
+        ),
+      ]);
       return { message: res.message || `Verification code sent to +91 ${cleanPhone}`, demoOtp: randomOtp };
     } catch {
       return { message: `Verification code sent to +91 ${cleanPhone}`, demoOtp: randomOtp };
@@ -136,16 +184,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
           authenticatedToken = retryRes.accessToken;
           authenticatedUser = retryRes.user;
-        } catch {
-          authenticatedUser = {
-            id: 'owner-' + cleanPhone,
-            fullName: 'PG Owner',
-            email: `owner_${cleanPhone}@staynest.in`,
-            phone: cleanPhone,
-            role: 'ROLE_OWNER',
-            status: 'ACTIVE',
-          };
-          authenticatedToken = 'live-session-token-' + cleanPhone;
+        } catch (retryErr: any) {
+          throw new Error(
+            retryErr?.message ||
+              'Server is waking up or unreachable. Please tap Verify OTP again in a few seconds.'
+          );
         }
       } else {
         throw new Error(err.message || 'Incorrect OTP code. Please enter the 6-digit code received on your WhatsApp.');
@@ -153,9 +196,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (authenticatedUser && authenticatedToken) {
-      // Clear any previous account's cached properties/tenants before switching user
-      clearAccountScopedCaches();
-      fastDataCache.invalidateAll();
+      // Only clear account-scoped caches when switching to a DIFFERENT owner mobile number
+      const lastLoginPhone = await safeStorage.getItem('@staynest_last_login_phone').catch(() => null);
+      if (lastLoginPhone && lastLoginPhone !== cleanPhone) {
+        clearAccountScopedCaches();
+        fastDataCache.invalidateAll();
+      }
+      await safeStorage.setItem('@staynest_last_login_phone', cleanPhone).catch(() => {});
       // Navigate immediately by updating auth state first, persist in parallel
       setAuthToken(authenticatedToken);
       setToken(authenticatedToken);
@@ -191,16 +238,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateProfile = async (fullName: string, email: string) => {
+  const updateProfile = async (
+    fullName: string,
+    email: string,
+    markProfileComplete: boolean = true
+  ) => {
     const updatedUser = await apiClient<User>('/users/me', {
       method: 'PATCH',
       body: JSON.stringify({
         fullName: fullName.trim(),
         email: email.trim(),
-        isProfileComplete: true,
+        isProfileComplete: markProfileComplete,
       }),
     });
-    const hydratedUser = { ...updatedUser, isProfileComplete: true };
+    const hydratedUser = { ...updatedUser, isProfileComplete: markProfileComplete };
     setUser(hydratedUser);
     await safeStorage.setItem('@staynest_owner_user', JSON.stringify(hydratedUser));
   };
@@ -246,15 +297,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     safeStorage.removeItem('@staynest_owner_token').catch(() => {});
     safeStorage.removeItem('@staynest_owner_user').catch(() => {});
-    clearAccountScopedCaches();
     fastDataCache.invalidateAll();
     setAuthToken(null);
     setToken(null);
     setUser(null);
   };
 
+  const unauthorizedAlertShownRef = useRef(false);
+
   useEffect(() => {
     setOnUnauthorizedHandler(() => {
+      if (!unauthorizedAlertShownRef.current) {
+        unauthorizedAlertShownRef.current = true;
+        Alert.alert(
+          'Session Expired',
+          'Your login session expired or the server restarted. Please sign in again with your mobile number.'
+        );
+        setTimeout(() => {
+          unauthorizedAlertShownRef.current = false;
+        }, 5000);
+      }
       logout();
     });
     return () => setOnUnauthorizedHandler(null);

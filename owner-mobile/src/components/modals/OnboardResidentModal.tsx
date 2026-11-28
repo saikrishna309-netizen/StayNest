@@ -569,6 +569,7 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
       const depositPaying = Number(depositPayingNow || fixedDepositAmount || 2500);
 
       let tenant: any = null;
+      let tenantSyncErrorMsg = '';
       try {
         tenant = await apiClient<Tenant>('/owner/tenants', {
           method: 'POST',
@@ -581,7 +582,28 @@ export const OnboardResidentModal: React.FC<OnboardResidentModalProps> = ({
           }),
         });
       } catch (tenantErr: any) {
-        console.log('Backend tenant sync notice (using local provision):', tenantErr.message);
+        tenantSyncErrorMsg = tenantErr?.message || 'Could not create tenant on server';
+        // If tenant phone already exists on server, resolve existing tenant UUID so stay/bed allocation still saves to DB
+        try {
+          const existingResp = await apiClient<any>('/owner/tenants?size=500');
+          const existingList: Tenant[] = Array.isArray(existingResp) ? existingResp : existingResp?.content || [];
+          const targetDigits = phone.replace(/\D/g, '').slice(-10);
+          const matched = existingList.find(
+            (t) => (t.phone || '').replace(/\D/g, '').slice(-10) === targetDigits
+          );
+          if (matched?.id) {
+            tenant = matched;
+          }
+        } catch {}
+      }
+
+      if (!tenant?.id && isValidUuid(selectedPropId)) {
+        Alert.alert(
+          'Could Not Save Resident',
+          tenantSyncErrorMsg || 'Please check tenant details and internet connection, then try again.'
+        );
+        setSubmitting(false);
+        return;
       }
 
       const tenantId = tenant?.id || `tenant-${Date.now()}`;

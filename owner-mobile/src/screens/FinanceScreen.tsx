@@ -23,6 +23,7 @@ import {
   computeCollectionMetrics,
   computeExpenseAndProfitMetrics,
   computePeriodPnlMetrics,
+  filterExpensesByMonth,
   mergePortfolioTenants,
   FixedMonthlyBill,
   MonthlyPnlRecord,
@@ -594,7 +595,26 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
     ...computedRecords.filter((r) => !customMonthNames.has(r.month)),
   ];
 
-  // Filtered by selected year
+  // Filtered by selected month (strictly show only selected month's data)
+  const selectedMonthExpenses = filterExpensesByMonth(activeExpenses, selectedMonth);
+  const selectedMonthMeta = formatMonthKeyMeta(selectedMonth);
+  const selectedMonthCustom = customPastMonths.find(
+    (c) => c.monthKey === selectedMonth || c.month === selectedMonthMeta.month
+  );
+  const hasMonthActivity =
+    currentMonthCollection.collectedRent > 0 ||
+    currentMonthExpenseProfit.totalExpenses > 0 ||
+    selectedMonthExpenses.length > 0 ||
+    Boolean(selectedMonthCustom);
+
+  const selectedMonthRevenue = selectedMonthCustom
+    ? selectedMonthCustom.revenue
+    : currentMonthCollection.collectedRent;
+  const selectedMonthExpenseTotal = selectedMonthCustom
+    ? selectedMonthCustom.expense
+    : currentMonthExpenseProfit.totalExpenses;
+  const selectedMonthProfit = selectedMonthRevenue - selectedMonthExpenseTotal;
+
   const displayPnlRecords = selectedPnlYear === 'ALL'
     ? allMonthlyRecords
     : allMonthlyRecords.filter((d) => d.year === selectedPnlYear);
@@ -688,30 +708,67 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
           </ScrollView>
         )}
 
-        {/* Executive Quick Stats Banner */}
+        {/* Selected Month Selector Pills */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginBottom: 10 }}
+          contentContainerStyle={{ gap: 8 }}
+        >
+          {[
+            { value: '2026-12', label: 'Dec 2026' },
+            { value: '2026-11', label: 'Nov 2026' },
+            { value: '2026-10', label: 'Oct 2026' },
+            { value: '2026-09', label: 'Sep 2026' },
+            { value: '2026-08', label: 'Aug 2026' },
+            { value: '2026-07', label: 'Jul 2026' },
+          ].map((m) => {
+            const active = selectedMonth === m.value;
+            return (
+              <TouchableOpacity
+                key={m.value}
+                onPress={() => setSelectedMonth(m.value)}
+                style={{
+                  paddingVertical: 5,
+                  paddingHorizontal: 11,
+                  borderRadius: 10,
+                  backgroundColor: active ? '#FFF7ED' : '#FAF8F6',
+                  borderWidth: 1,
+                  borderColor: active ? '#F97316' : '#EFECE9',
+                }}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: active ? '#EA580C' : '#64748B' }}>
+                  {m.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
+        {/* Executive Quick Stats Banner (Strictly for Selected Month) */}
         <View style={styles.kpiRow}>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel} numberOfLines={1} adjustsFontSizeToFit>
-              AVG MONTHLY PROFIT
+              {selectedMonthMeta.short.toUpperCase()} RENT COLLECTED
             </Text>
-            <Text style={[styles.kpiValue, { color: avgMonthlyProfit >= 0 ? '#4d8b6f' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
-              {avgMonthlyProfit >= 0 ? '+' : '-'}₹{Math.abs(avgMonthlyProfit).toLocaleString('en-IN')}
+            <Text style={[styles.kpiValue, { color: '#4d8b6f' }]} numberOfLines={1} adjustsFontSizeToFit>
+              ₹{selectedMonthRevenue.toLocaleString('en-IN')}
             </Text>
           </View>
           <View style={[styles.kpiBox, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: '#efece9' }]}>
             <Text style={styles.kpiLabel} numberOfLines={1} adjustsFontSizeToFit>
-              MANDATORY MONTHLY
+              {selectedMonthMeta.short.toUpperCase()} EXPENSES
             </Text>
             <Text style={[styles.kpiValue, { color: '#ea580c' }]} numberOfLines={1} adjustsFontSizeToFit>
-              ₹{totalMonthlyBills.toLocaleString('en-IN')}
+              ₹{selectedMonthExpenseTotal.toLocaleString('en-IN')}
             </Text>
           </View>
           <View style={styles.kpiBox}>
             <Text style={styles.kpiLabel} numberOfLines={1} adjustsFontSizeToFit>
-              NET PERIOD SURPLUS
+              {selectedMonthMeta.short.toUpperCase()} NET PROFIT
             </Text>
-            <Text style={[styles.kpiValue, { color: totalPeriodProfit >= 0 ? '#3730a3' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
-              {totalPeriodProfit >= 0 ? '+' : '-'}₹{Math.abs(totalPeriodProfit).toLocaleString('en-IN')}
+            <Text style={[styles.kpiValue, { color: selectedMonthProfit >= 0 ? '#3730a3' : '#dc2626' }]} numberOfLines={1} adjustsFontSizeToFit>
+              {selectedMonthProfit >= 0 ? '+' : '-'}₹{Math.abs(selectedMonthProfit).toLocaleString('en-IN')}
             </Text>
           </View>
         </View>
@@ -732,16 +789,16 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
         {/* ─── 2. INTERACTIVE MONTHLY PROFIT & LOSS GRAPH ─── */}
         <View style={styles.chartCard}>
           <View style={styles.chartHeaderRow}>
-            <View style={{ flex: 1, paddingRight: 8 }}>
+            <View style={{ flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ fontSize: 16 }}>📈</Text>
-                <Text style={styles.chartTitle}>Monthly Profit & Loss Track</Text>
+                <Text style={styles.chartTitle} numberOfLines={2}>Monthly Profit & Loss Track</Text>
               </View>
               <Text style={styles.chartSub}>Inflow (Rent) vs Outflow (Bills) vs Net Gain</Text>
             </View>
 
             <TouchableOpacity
-              style={styles.addPastMonthBtn}
+              style={[styles.addPastMonthBtn, { flexShrink: 0 }]}
               onPress={() => setShowAddPastMonthModal(true)}
               activeOpacity={0.8}
             >
@@ -927,16 +984,16 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
         {/* ─── 3. FIXED MONTHLY MANDATORY BILLS ─── */}
         <View style={styles.fixedBillsCard}>
           <View style={styles.fixedBillsHeaderRow}>
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Text style={{ fontSize: 16 }}>📌</Text>
-                <Text style={styles.fixedBillsTitle}>Mandatory Operating Bills</Text>
+                <Text style={styles.fixedBillsTitle} numberOfLines={2}>Mandatory Operating Bills</Text>
               </View>
               <Text style={styles.fixedBillsSub}>Expenses owner must pay every month</Text>
             </View>
 
             {/* Monthly vs Yearly Toggle Pill */}
-            <View style={styles.timeframeToggle}>
+            <View style={[styles.timeframeToggle, { flexShrink: 0 }]}>
               <TouchableOpacity
                 style={[styles.toggleOption, timeframeMode === 'MONTHLY' && styles.toggleOptionActive]}
                 onPress={() => setTimeframeMode('MONTHLY')}
@@ -1122,22 +1179,34 @@ export const FinanceScreen: React.FC<FinanceScreenProps> = ({
           </View>
         )}
 
-        {/* ─── 6. RECENT EXPENSES WITH EDIT & DELETE BUTTONS ─── */}
+        {/* ─── 6. RECENT EXPENSES FOR SELECTED MONTH ─── */}
         <View style={{ marginTop: 24, marginBottom: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View>
-            <Text style={styles.sectionTitle}>RECENT EXPENSES ({activeExpenses.length})</Text>
-            <Text style={styles.sectionSub}>Tap Edit (✏️) to modify title, category or amount</Text>
+            <Text style={styles.sectionTitle}>
+              {selectedMonthMeta.month.toUpperCase()} EXPENSES ({selectedMonthExpenses.length})
+            </Text>
+            <Text style={styles.sectionSub}>Showing entries for {selectedMonthMeta.month} only</Text>
           </View>
         </View>
 
-        {activeExpenses.length === 0 ? (
+        {!hasMonthActivity && selectedMonthExpenses.length === 0 ? (
           <View style={styles.emptyCard}>
             <Text style={{ fontSize: 24, marginBottom: 4 }}>🧾</Text>
-            <Text style={styles.emptyTitle}>No Expenses Logged Yet</Text>
-            <Text style={styles.emptyText}>Tap "+ Log Expense" above to record maintenance, food or bill payments.</Text>
+            <Text style={styles.emptyTitle}>Nothing added this month</Text>
+            <Text style={styles.emptyText}>
+              No rent collections or expenses logged for {selectedMonthMeta.month} yet.
+            </Text>
+          </View>
+        ) : selectedMonthExpenses.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={{ fontSize: 24, marginBottom: 4 }}>🧾</Text>
+            <Text style={styles.emptyTitle}>Nothing added this month</Text>
+            <Text style={styles.emptyText}>
+              No expenses logged for {selectedMonthMeta.month}. Tap "+ Log Expense" to add one.
+            </Text>
           </View>
         ) : (
-          activeExpenses.map((e) => {
+          selectedMonthExpenses.map((e) => {
             const expTitle = e.title || e.notes || e.category;
             const expDate = e.transactionDate || e.date || 'Recent';
 
@@ -1491,7 +1560,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 14,
+    gap: 12,
+    marginBottom: 16,
   },
   chartTitle: {
     fontSize: 15,
@@ -1605,7 +1675,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    gap: 12,
+    marginBottom: 16,
   },
   fixedBillsTitle: {
     fontSize: 15,

@@ -64,9 +64,11 @@ export const syncSubscriptionFromServer = async (): Promise<SubscriptionState> =
     }>('/owner/subscription');
 
     if (serverSub) {
+      const nextPlan: PlanTier = serverSub.planTier || (serverSub.hasFullAccess ? 'PRO_TRIAL' : 'FREE');
+      const nextAutopay = serverSub.autopayStatus || current.autopayStatus || 'NONE';
       const nextState: SubscriptionState = {
-        plan: serverSub.planTier || (serverSub.hasFullAccess ? 'PRO_TRIAL' : 'FREE'),
-        autopayStatus: serverSub.autopayStatus || current.autopayStatus || 'NONE',
+        plan: nextPlan,
+        autopayStatus: nextAutopay,
         nextBillingDate: serverSub.endDate || current.nextBillingDate,
         subscriptionId: serverSub.gatewaySubscriptionId || current.subscriptionId,
         autoPayMethod: current.autoPayMethod,
@@ -75,7 +77,16 @@ export const syncSubscriptionFromServer = async (): Promise<SubscriptionState> =
         hasFullAccess: serverSub.hasFullAccess,
         updatedAt: new Date().toISOString(),
       };
-      await saveSubscriptionState(nextState);
+      const changed =
+        current.plan !== nextState.plan ||
+        current.autopayStatus !== nextState.autopayStatus ||
+        current.hasFullAccess !== nextState.hasFullAccess ||
+        current.trialExpired !== nextState.trialExpired;
+      if (changed) {
+        await saveSubscriptionState(nextState);
+      } else {
+        await safeStorage.setItem(SUB_STORAGE_KEY, JSON.stringify(nextState)).catch(() => {});
+      }
       return nextState;
     }
   } catch {

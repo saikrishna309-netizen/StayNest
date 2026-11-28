@@ -99,6 +99,24 @@ const MainNavigator: React.FC = () => {
   const [dashboardResetTrigger, setDashboardResetTrigger] = useState(0);
   const [subState, setSubState] = useState<SubscriptionState | null>(null);
   const [showTrialPaywall, setShowTrialPaywall] = useState(false);
+  const [onboardingSessionActive, setOnboardingSessionActive] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      if (onboardingSessionActive === null) {
+        const needsIt =
+          user.isProfileComplete === false ||
+          (user.isProfileComplete === undefined &&
+            (!user.fullName ||
+              user.fullName === 'PG Owner' ||
+              !user.email ||
+              user.email.startsWith('owner_')));
+        setOnboardingSessionActive(needsIt && !registrationSkipped);
+      }
+    } else {
+      setOnboardingSessionActive(null);
+    }
+  }, [isAuthenticated, user?.id, registrationSkipped]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -181,23 +199,16 @@ const MainNavigator: React.FC = () => {
     );
   }
 
-  // 2. If new owner (isProfileComplete is false) -> Show 1-time Owner & First Property Setup
-  const needsOwnerOnboarding =
-    !registrationSkipped &&
-    (user?.isProfileComplete === false ||
-      (user?.isProfileComplete === undefined &&
-        (!user?.fullName ||
-          user.fullName === 'PG Owner' ||
-          !user?.email ||
-          user.email.startsWith('owner_'))));
-
-  if (needsOwnerOnboarding) {
+  // 2. If new owner -> Show 1-time Owner & First Property Setup
+  // Stays mounted until onComplete is called by the wizard (finishing or skipping)
+  if (onboardingSessionActive && !registrationSkipped) {
     return (
       <OwnerRegistrationScreen
         onComplete={(createdProp) => {
           if (createdProp) {
             setSelectedProperty(createdProp);
           }
+          setOnboardingSessionActive(false);
           setRegistrationSkipped(true);
         }}
       />
@@ -539,6 +550,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff',
     paddingTop: Platform.OS === 'android' ? (RNStatusBar.currentHeight || 28) : 0,
+    paddingBottom: Platform.OS === 'android' ? 24 : (Platform.OS === 'ios' ? 14 : 0),
   },
   webOuterWrapper: {
     flex: 1,
@@ -623,7 +635,7 @@ const styles = StyleSheet.create({
   bottomNavWrapper: {
     marginHorizontal: 14,
     marginTop: 4,
-    marginBottom: Platform.OS === 'android' ? 14 : 6,
+    marginBottom: Platform.OS === 'android' ? 18 : (Platform.OS === 'ios' ? 12 : 6),
     backgroundColor: GLASS_TOKENS.dockBg,
     borderWidth: 1,
     borderColor: GLASS_TOKENS.dockBorder,

@@ -43,18 +43,24 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
   // Step 2: Property Basic Details
   const [propertyName, setPropertyName] = useState('');
   const [propertyMode, setPropertyMode] = useState<'PG' | 'RENTAL_BUILDING'>('PG');
-  const [genderPolicy, setGenderPolicy] = useState<'BOYS' | 'GIRLS' | 'CO_LIVING'>('CO_LIVING');
+  const [genderPolicy, setGenderPolicy] = useState<'BOYS' | 'GIRLS' | 'CO_ED'>('CO_ED');
+  const [foodPolicy, setFoodPolicy] = useState<'3_MEALS' | '2_MEALS' | 'BREAKFAST_ONLY' | 'NO_FOOD'>('3_MEALS');
+  const [showFoodDropdown, setShowFoodDropdown] = useState(false);
   const [addressLine, setAddressLine] = useState('');
   const [cityName, setCityName] = useState('');
   const [pincode, setPincode] = useState('');
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [startingRent, setStartingRent] = useState('8500');
+  const [startingRent, setStartingRent] = useState('0');
+  const [startingDeposit, setStartingDeposit] = useState('0');
+
+  // Input Focus State for Light Orange Highlighting (Requirement 5)
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
 
   // Step 3: Floors, Rooms & Beds Matrix
   const [matrixFloors, setMatrixFloors] = useState<MatrixFloor[]>(() =>
-    getInitialMatrixFloors('PG', 8500, 0)
+    getInitialMatrixFloors('PG', 0, 0)
   );
   const [loading, setLoading] = useState(false);
 
@@ -71,7 +77,8 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
     }
     setLoading(true);
     try {
-      await updateProfile(fullName.trim(), email.trim());
+      // Keep isProfileComplete as false so user remains inside the wizard on iPhone/Android
+      await updateProfile(fullName.trim(), email.trim(), false);
       await safeStorage
         .setItem(
           '@staynest_owner_custom_profile',
@@ -92,8 +99,8 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
   };
 
   const handleNextFromPropertyBasic = () => {
-    if (!propertyName.trim()) {
-      Alert.alert('Required', 'Please enter your Property Name.');
+    if (!propertyName.trim() || propertyName.trim().length < 3) {
+      Alert.alert('Required', 'Please enter a Property Name (at least 3 characters).');
       return;
     }
     if (!cityName.trim()) {
@@ -162,42 +169,23 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
         )
         .catch(() => {});
 
-      let createdProp: Property | null = null;
-      try {
-        createdProp = await apiClient<Property>('/owner/properties', {
-          method: 'POST',
-          body: JSON.stringify({
-            name: propertyName.trim(),
-            propertyType: isRentalMode ? 'RENTAL_BUILDING' : 'PG',
-            property_mode: propertyMode,
-            genderPolicy: isRentalMode ? 'CO_LIVING' : genderPolicy,
-            contactPhone: cleanPhone,
-            cityId: '00000000-0000-0000-0000-000000000001',
-            addressLine: addressLine.trim() || cityName.trim(),
-            cityName: cityName.trim(),
-            pincode: pincode.replace(/\D/g, '').slice(0, 6) || undefined,
-            latitude: latitude ?? undefined,
-            longitude: longitude ?? undefined,
-            startingPricePaise: parsedRent * 100,
-            foodIncluded: !isRentalMode,
-            amenities: ['HIGH_SPEED_WIFI', 'POWER_BACKUP'],
-            floors: backendFloorsPayload,
-          }),
-        });
-      } catch {
-        createdProp = {
-          id: `prop-${Date.now()}`,
+      const createdProp = await apiClient<Property>('/owner/properties', {
+        method: 'POST',
+        body: JSON.stringify({
           name: propertyName.trim(),
           propertyType: isRentalMode ? 'RENTAL_BUILDING' : 'PG',
-          genderPolicy: isRentalMode ? 'CO_LIVING' : genderPolicy,
+          genderPolicy: isRentalMode ? 'CO_ED' : genderPolicy,
+          cityId: '00000000-0000-0000-0000-000000000001',
           addressLine: addressLine.trim() || cityName.trim(),
-          cityName: cityName.trim(),
+          pincode: pincode.replace(/\D/g, '').slice(0, 6) || undefined,
+          latitude: latitude ?? undefined,
+          longitude: longitude ?? undefined,
           startingPricePaise: parsedRent * 100,
-          foodIncluded: !isRentalMode,
-          approvalStatus: 'APPROVED',
-          published: true,
-        };
-      }
+          foodIncluded: isRentalMode ? false : foodPolicy !== 'NO_FOOD',
+          amenities: ['HIGH_SPEED_WIFI', 'POWER_BACKUP'],
+          floors: backendFloorsPayload,
+        }),
+      });
 
       if (createdProp?.id) {
         await safeStorage
@@ -240,6 +228,7 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
       }
 
       emitDataChanged();
+      await updateProfile(fullName.trim(), email.trim(), true).catch(() => {});
       onComplete(createdProp);
     } catch (err: any) {
       Alert.alert('Save Failed', err?.message || 'Could not save your property. Please try again.');
@@ -248,15 +237,27 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
     }
   };
 
+  const handleSkipOnboarding = async () => {
+    setLoading(true);
+    try {
+      await updateProfile(fullName.trim(), email.trim(), true).catch(() => {});
+    } finally {
+      setLoading(false);
+      onComplete(null);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
         style={styles.container}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets={true}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.card}>
@@ -303,9 +304,11 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
 
                 <Text style={styles.label}>FULL NAME *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, focusedInput === 'fullName' && styles.inputFocused]}
                   value={fullName}
                   onChangeText={setFullName}
+                  onFocus={() => setFocusedInput('fullName')}
+                  onBlur={() => setFocusedInput(null)}
                   placeholder="e.g. Ramesh Kumar"
                   placeholderTextColor="#94a3b8"
                   autoFocus
@@ -313,9 +316,11 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
 
                 <Text style={styles.label}>EMAIL ADDRESS *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, focusedInput === 'email' && styles.inputFocused]}
                   value={email}
                   onChangeText={setEmail}
+                  onFocus={() => setFocusedInput('email')}
+                  onBlur={() => setFocusedInput(null)}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   placeholder="e.g. ramesh@gmail.com"
@@ -364,9 +369,11 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
 
                 <Text style={styles.label}>PROPERTY NAME *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, focusedInput === 'propertyName' && styles.inputFocused]}
                   value={propertyName}
                   onChangeText={setPropertyName}
+                  onFocus={() => setFocusedInput('propertyName')}
+                  onBlur={() => setFocusedInput(null)}
                   placeholder={
                     propertyMode === 'PG'
                       ? 'e.g. Sri Venkateswara Luxury PG'
@@ -375,6 +382,28 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
                   placeholderTextColor="#94a3b8"
                 />
 
+                {/* Default Name Suggestions */}
+                <View style={styles.quickNameWrap}>
+                  <Text style={styles.quickNameLabel}>Quick Suggestions:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickNameScroll}>
+                    {(propertyMode === 'PG'
+                      ? ['Sri Venkateswara PG', 'Sri Balaji PG', 'Sri Sai Luxury PG', 'StayNest Elite PG', 'Co-Living Hub']
+                      : ['Sri Lakshmi Residency', 'Balaji Towers', 'Sai Nilayam', 'Green View Enclave', 'Surya Apartments']
+                    ).map((sug) => (
+                      <TouchableOpacity
+                        key={sug}
+                        style={[styles.quickNameChip, propertyName === sug && styles.quickNameChipActive]}
+                        onPress={() => setPropertyName(sug)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={[styles.quickNameChipText, propertyName === sug && styles.quickNameChipTextActive]}>
+                          {sug}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
                 {propertyMode === 'PG' && (
                   <>
                     <Text style={styles.label}>WHO CAN STAY?</Text>
@@ -382,14 +411,14 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
                       {[
                         { id: 'BOYS', label: 'Boys' },
                         { id: 'GIRLS', label: 'Girls' },
-                        { id: 'CO_LIVING', label: 'Co-Living' },
+                        { id: 'CO_ED', label: 'Co-Living' },
                       ].map((g) => {
                         const active = genderPolicy === g.id;
                         return (
                           <TouchableOpacity
                             key={g.id}
                             style={[styles.chip, active && styles.chipActive]}
-                            onPress={() => setGenderPolicy(g.id as 'BOYS' | 'GIRLS' | 'CO_LIVING')}
+                            onPress={() => setGenderPolicy(g.id as 'BOYS' | 'GIRLS' | 'CO_ED')}
                             activeOpacity={0.8}
                           >
                             <Text style={[styles.chipText, active && styles.chipTextActive]}>{g.label}</Text>
@@ -397,6 +426,58 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
                         );
                       })}
                     </View>
+
+                    {/* Food / Meals Policy Dropdown (Requirement 3) */}
+                    <Text style={styles.label}>FOOD / MEALS INCLUDED POLICY</Text>
+                    <TouchableOpacity
+                      style={[styles.dropdownHeader, showFoodDropdown && styles.dropdownHeaderActive]}
+                      onPress={() => setShowFoodDropdown(!showFoodDropdown)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.dropdownHeaderText}>
+                        {foodPolicy === '3_MEALS'
+                          ? '🍲 3 Meals Daily (All Meals Included)'
+                          : foodPolicy === '2_MEALS'
+                            ? '🍳 2 Meals Daily (Breakfast & Dinner)'
+                            : foodPolicy === 'BREAKFAST_ONLY'
+                              ? '☕ Breakfast Only'
+                              : '🚫 No Food / Self Cooking'}
+                      </Text>
+                      <Text style={styles.dropdownArrow}>{showFoodDropdown ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+
+                    {showFoodDropdown && (
+                      <View style={styles.dropdownMenu}>
+                        {[
+                          { id: '3_MEALS', label: '🍲 3 Meals Daily (Breakfast, Lunch & Dinner)' },
+                          { id: '2_MEALS', label: '🍳 2 Meals Daily (Breakfast & Dinner)' },
+                          { id: 'BREAKFAST_ONLY', label: '☕ Breakfast Only' },
+                          { id: 'NO_FOOD', label: '🚫 No Food / Self-Cooking' },
+                        ].map((opt) => (
+                          <TouchableOpacity
+                            key={opt.id}
+                            style={[
+                              styles.dropdownItem,
+                              foodPolicy === opt.id && styles.dropdownItemActive,
+                            ]}
+                            onPress={() => {
+                              setFoodPolicy(opt.id as any);
+                              setShowFoodDropdown(false);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Text
+                              style={[
+                                styles.dropdownItemText,
+                                foodPolicy === opt.id && styles.dropdownItemTextActive,
+                              ]}
+                            >
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
                   </>
                 )}
 
@@ -431,30 +512,40 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
 
                 <Text style={styles.label}>ADDRESS / AREA</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, focusedInput === 'addressLine' && styles.inputFocused]}
                   value={addressLine}
                   onChangeText={setAddressLine}
+                  onFocus={() => setFocusedInput('addressLine')}
+                  onBlur={() => setFocusedInput(null)}
                   placeholder="e.g. Opp. PVP Square, MG Road"
                   placeholderTextColor="#94a3b8"
                 />
 
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>CITY *</Text>
+                    <View style={styles.equalLabelWrap}>
+                      <Text style={styles.label}>CITY *</Text>
+                    </View>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, focusedInput === 'cityName' && styles.inputFocused]}
                       value={cityName}
                       onChangeText={setCityName}
+                      onFocus={() => setFocusedInput('cityName')}
+                      onBlur={() => setFocusedInput(null)}
                       placeholder="e.g. Hyderabad"
                       placeholderTextColor="#94a3b8"
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>PINCODE</Text>
+                    <View style={styles.equalLabelWrap}>
+                      <Text style={styles.label}>PINCODE</Text>
+                    </View>
                     <TextInput
-                      style={styles.input}
+                      style={[styles.input, focusedInput === 'pincode' && styles.inputFocused]}
                       value={pincode}
                       onChangeText={(v) => setPincode(v.replace(/\D/g, '').slice(0, 6))}
+                      onFocus={() => setFocusedInput('pincode')}
+                      onBlur={() => setFocusedInput(null)}
                       keyboardType="numeric"
                       maxLength={6}
                       placeholder="500081"
@@ -463,15 +554,41 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
                   </View>
                 </View>
 
-                <Text style={styles.label}>STARTING RENT (₹/MO)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={startingRent}
-                  onChangeText={setStartingRent}
-                  keyboardType="numeric"
-                  placeholder="8500"
-                  placeholderTextColor="#94a3b8"
-                />
+                {/* Symmetrical Rent & Deposit Section (Requirement 4) */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.equalLabelWrap}>
+                      <Text style={styles.label}>
+                        {propertyMode === 'PG' ? 'RENT / BED (₹)' : 'UNIT RENT (₹)'} *
+                      </Text>
+                    </View>
+                    <TextInput
+                      style={[styles.input, focusedInput === 'rent' && styles.inputFocused]}
+                      value={startingRent}
+                      onChangeText={setStartingRent}
+                      onFocus={() => setFocusedInput('rent')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="numeric"
+                      placeholder="8500"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.equalLabelWrap}>
+                      <Text style={styles.label}>SECURITY DEPOSIT (₹) *</Text>
+                    </View>
+                    <TextInput
+                      style={[styles.input, focusedInput === 'deposit' && styles.inputFocused]}
+                      value={startingDeposit}
+                      onChangeText={setStartingDeposit}
+                      onFocus={() => setFocusedInput('deposit')}
+                      onBlur={() => setFocusedInput(null)}
+                      keyboardType="numeric"
+                      placeholder="8500"
+                      placeholderTextColor="#94a3b8"
+                    />
+                  </View>
+                </View>
 
                 <TouchableOpacity
                   style={styles.primaryButton}
@@ -481,7 +598,7 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
                   <Text style={styles.buttonText}>Next: Floors & Rooms →</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.skipButton} onPress={() => onComplete(null)}>
+                <TouchableOpacity style={styles.skipButton} onPress={handleSkipOnboarding}>
                   <Text style={styles.skipText}>Skip & Add Property Later</Text>
                 </TouchableOpacity>
               </>
@@ -513,6 +630,8 @@ export const OwnerRegistrationScreen: React.FC<OwnerRegistrationScreenProps> = (
         visible={showLocationPicker}
         initialLat={latitude}
         initialLng={longitude}
+        initialAddress={addressLine}
+        initialCity={cityName}
         onClose={() => setShowLocationPicker(false)}
         onConfirm={(loc) => {
           setLatitude(loc.latitude);
@@ -530,6 +649,7 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: '#FAF7F4',
+    paddingBottom: Platform.OS === 'android' ? 24 : 10,
   },
   container: {
     flex: 1,
@@ -537,8 +657,45 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     padding: 18,
+    paddingBottom: 220,
+  },
+  quickNameWrap: {
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  quickNameLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94a3b8',
+    marginBottom: 5,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  quickNameScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingBottom: 2,
+  },
+  quickNameChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  quickNameChipActive: {
+    backgroundColor: '#fff7ed',
+    borderColor: '#fb923c',
+  },
+  quickNameChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickNameChipTextActive: {
+    color: '#ea580c',
   },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
@@ -640,15 +797,86 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: '#ffffff',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#cbd5e1',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    height: 48,
     fontSize: 14,
     fontWeight: '600',
     color: '#0f172a',
     marginBottom: 12,
+    justifyContent: 'center',
+  },
+  inputFocused: {
+    borderColor: '#fb923c',
+    backgroundColor: '#fffdfb',
+    borderWidth: 1.5,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  equalLabelWrap: {
+    minHeight: 22,
+    justifyContent: 'flex-end',
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ffffff',
+    borderWidth: 1.5,
+    borderColor: '#cbd5e1',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+    marginBottom: 12,
+  },
+  dropdownHeaderActive: {
+    borderColor: '#fb923c',
+    backgroundColor: '#fffdfb',
+  },
+  dropdownHeaderText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0f172a',
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#64748b',
+  },
+  dropdownMenu: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    borderRadius: 12,
+    paddingVertical: 4,
+    marginBottom: 14,
+    shadowColor: '#ea580c',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: '#f1f5f9',
+  },
+  dropdownItemActive: {
+    backgroundColor: '#fff7ed',
+  },
+  dropdownItemText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  dropdownItemTextActive: {
+    color: '#ea580c',
+    fontWeight: '800',
   },
   chipRow: {
     flexDirection: 'row',

@@ -147,32 +147,79 @@ export const computeCollectionMetrics = (
   selectedMonth?: string,
   invoices?: RentInvoice[]
 ): CollectionMetrics => {
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
   const activeTenants = tenants.filter(
     (t) => t.active !== false && t.stayStatus !== 'TERMINATED'
   );
 
-  // If invoices exist for the selected month and no active tenants loaded, derive from invoices
-  if (activeTenants.length === 0 && Array.isArray(invoices) && invoices.length > 0) {
-    const monthInvoices = selectedMonth
+  const monthInvoices =
+    selectedMonth && Array.isArray(invoices)
       ? invoices.filter(
           (i) =>
             i.billingMonth === selectedMonth ||
             (i.dueDate && i.dueDate.startsWith(selectedMonth)) ||
             (i.createdAt && i.createdAt.startsWith(selectedMonth))
         )
-      : invoices;
+      : Array.isArray(invoices)
+        ? invoices
+        : [];
 
-    const targetInvoices = monthInvoices.length > 0 ? monthInvoices : invoices;
+  // For non-current months: strictly use that month's invoices (if nothing was added, return 0)
+  if (selectedMonth && selectedMonth !== currentMonthKey) {
+    if (monthInvoices.length > 0) {
+      const expectedRent = Math.round(
+        monthInvoices.reduce((sum, i) => sum + (i.totalAmountPaise || 0), 0) / 100
+      );
+      const collectedRent = Math.round(
+        monthInvoices.reduce((sum, i) => sum + (i.paidAmountPaise || 0), 0) / 100
+      );
+      const pendingDue = Math.max(0, expectedRent - collectedRent);
+      const collectionRate =
+        expectedRent === 0
+          ? 0
+          : Math.min(100, Math.max(0, Math.round((collectedRent / expectedRent) * 100)));
+      const rentDueCount = monthInvoices.filter(
+        (i) => (i.totalAmountPaise || 0) > (i.paidAmountPaise || 0)
+      ).length;
+
+      return {
+        expectedRent,
+        collectedRent,
+        pendingDue,
+        collectionRate,
+        rentDueCount,
+        activeTenantsCount: activeTenants.length,
+      };
+    }
+
+    // No invoices for this non-current month -> check if any tenant specifically checked in that exact month
+    const checkedInThatMonth = activeTenants.filter(
+      (t) => (t.checkIn || t.createdAt || '').slice(0, 7) === selectedMonth
+    );
+    if (checkedInThatMonth.length === 0) {
+      return {
+        expectedRent: 0,
+        collectedRent: 0,
+        pendingDue: 0,
+        collectionRate: 0,
+        rentDueCount: 0,
+        activeTenantsCount: 0,
+      };
+    }
+  }
+
+  // If invoices exist for the selected month and no active tenants loaded, derive from invoices
+  if (activeTenants.length === 0 && monthInvoices.length > 0) {
     const expectedRent = Math.round(
-      targetInvoices.reduce((sum, i) => sum + (i.totalAmountPaise || 0), 0) / 100
+      monthInvoices.reduce((sum, i) => sum + (i.totalAmountPaise || 0), 0) / 100
     );
     const collectedRent = Math.round(
-      targetInvoices.reduce((sum, i) => sum + (i.paidAmountPaise || 0), 0) / 100
+      monthInvoices.reduce((sum, i) => sum + (i.paidAmountPaise || 0), 0) / 100
     );
     const pendingDue = Math.max(0, expectedRent - collectedRent);
     const collectionRate =
       expectedRent === 0 ? 0 : Math.min(100, Math.max(0, Math.round((collectedRent / expectedRent) * 100)));
-    const rentDueCount = targetInvoices.filter(
+    const rentDueCount = monthInvoices.filter(
       (i) => (i.totalAmountPaise || 0) > (i.paidAmountPaise || 0)
     ).length;
 
@@ -186,12 +233,19 @@ export const computeCollectionMetrics = (
     };
   }
 
+  const scopedTenants = selectedMonth
+    ? activeTenants.filter((t) => {
+        const startMonth = (t.checkIn || t.createdAt || '').slice(0, 7);
+        return !startMonth || startMonth <= selectedMonth;
+      })
+    : activeTenants;
+
   let expectedRent = 0;
   let collectedRent = 0;
   let pendingDue = 0;
   let rentDueCount = 0;
 
-  activeTenants.forEach((t) => {
+  scopedTenants.forEach((t) => {
     const rent = t.monthlyRentPaise ? Math.round(t.monthlyRentPaise / 100) : 0;
     const due =
       typeof t.outstandingPaise === 'number'
@@ -252,10 +306,12 @@ export const computeExpenseAndProfitMetrics = ({
   loggedExpenses: Expense[];
   selectedMonth?: string;
 }): ExpenseAndProfitMetrics => {
-  const totalMandatoryCost = fixedBills.reduce((sum, b) => sum + (b.monthlyAmount || 0), 0);
-  const paidMandatoryBills = fixedBills
-    .filter((b) => b.isPaidThisMonth)
-    .reduce((sum, b) => sum + (b.monthlyAmount || 0), 0);
+  const currentMonthKey = new Date().toISOString().slice(0, 7);
+  const applyMandatory = !selectedMonth || selectedMonth === currentMonthKey;
+  const totalMandatoryCost = applyMandatory ? fixedBills.reduce((sum, b) => sum + (b.monthlyAmount || 0), 0) : 0;
+  const paidMandatoryBills = applyMandatory
+    ? fixedBills.filter((b) => b.isPaidThisMonth).reduce((sum, b) => sum + (b.monthlyAmount || 0), 0)
+    : 0;
   const pendingMandatoryBills = Math.max(0, totalMandatoryCost - paidMandatoryBills);
 
   const monthExpenses = selectedMonth

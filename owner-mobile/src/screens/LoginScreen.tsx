@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -258,8 +259,19 @@ export const LoginScreen: React.FC = () => {
                       <TextInput
                         style={styles.otpInput}
                         value={otp}
-                        onChangeText={(val) => setOtp(val.replace(/[^0-9]/g, ''))}
+                        onChangeText={(val) => {
+                          const cleaned = val.replace(/[^0-9]/g, '').slice(0, 6);
+                          setOtp(cleaned);
+                          if (cleaned.length === 6) {
+                            Keyboard.dismiss();
+                          }
+                        }}
                         keyboardType="number-pad"
+                        returnKeyType="done"
+                        onSubmitEditing={() => {
+                          Keyboard.dismiss();
+                          if (otp.length === 6 && !loading) handleVerifyOtp();
+                        }}
                         maxLength={6}
                         placeholder="••••••"
                         placeholderTextColor="#cbd5e1"
@@ -270,7 +282,7 @@ export const LoginScreen: React.FC = () => {
 
                       <View style={styles.deliveryNoticeBox}>
                         <Text style={styles.deliveryNoticeText}>
-                          ✓ 6-digit verification code sent via WhatsApp & SMS.
+                          ✓ 6-digit verification code sent via WhatsApp.
                         </Text>
                       </View>
 
@@ -285,76 +297,29 @@ export const LoginScreen: React.FC = () => {
                       </View>
 
                       <ScalePressable
-                        style={[styles.primaryButton, loading && styles.buttonMuted]}
-                        onPress={handleVerifyOtp}
-                        disabled={loading}
+                        style={[
+                          styles.primaryButton,
+                          (otp.length < 6 || loading) && styles.buttonMuted,
+                        ]}
+                        onPress={() => {
+                          Keyboard.dismiss();
+                          handleVerifyOtp();
+                        }}
+                        disabled={otp.length < 6 || loading}
                         scaleTo={0.97}
                       >
                         {loading ? (
                           <BrandLoader variant="inline" color="#FFFFFF" />
                         ) : (
-                          <Text style={styles.buttonText}>Verify & Enter Dashboard</Text>
+                          <Text style={styles.buttonText}>
+                            {otp.length === 6 ? 'Enter →' : 'Verify & Enter'}
+                          </Text>
                         )}
                       </ScalePressable>
                     </View>
                   )}
                 </>
               )}
-
-              {/* EMAIL + PASSWORD FALLBACK MODE */}
-              {authMode === 'PASSWORD' && (
-                <View style={styles.form}>
-                  <Text style={styles.label}>OWNER EMAIL</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={email}
-                    onChangeText={setEmail}
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    placeholder="owner@staynest.in"
-                    placeholderTextColor="#94a3b8"
-                  />
-
-                  <Text style={styles.label}>PASSWORD</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                    placeholder="••••••••"
-                    placeholderTextColor="#94a3b8"
-                  />
-
-                  <ScalePressable
-                    style={[styles.primaryButton, loading && styles.buttonMuted]}
-                    onPress={handlePasswordLogin}
-                    disabled={loading}
-                    scaleTo={0.97}
-                  >
-                    {loading ? (
-                      <BrandLoader variant="inline" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.buttonText}>Sign In with Password</Text>
-                    )}
-                  </ScalePressable>
-                </View>
-              )}
-
-              {/* Bottom Switcher */}
-              <View style={styles.bottomSwitcher}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setAuthMode(authMode === 'PHONE_OTP' ? 'PASSWORD' : 'PHONE_OTP');
-                    setStep('PHONE');
-                  }}
-                >
-                  <Text style={styles.switchModeText}>
-                    {authMode === 'PHONE_OTP'
-                      ? 'Or sign in with Email & Password'
-                      : 'Or sign in with Mobile Number (OTP)'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
             </GlassCard>
           </ScrollView>
         </KeyboardAvoidingView>
@@ -544,7 +509,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   termsLink: {
-    color: '#ea580c',
+    color: '#0f172a',
     fontWeight: '700',
     textDecorationLine: 'underline',
   },
@@ -614,16 +579,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   primaryButton: {
-    backgroundColor: '#ea580c',
-    borderRadius: 14,
+    backgroundColor: '#f97316',
+    borderRadius: 16,
     height: 52,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#ea580c',
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.28,
     shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 8,
-    elevation: 3,
+    shadowRadius: 10,
+    elevation: 4,
     marginTop: 8,
   },
   buttonMuted: {
@@ -631,21 +596,21 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: '#ffffff',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     letterSpacing: 0.3,
   },
   bottomSwitcher: {
-    marginTop: 20,
-    paddingTop: 16,
+    marginTop: 22,
+    paddingTop: 18,
     borderTopWidth: 1,
-    borderTopColor: '#f1f5f9',
+    borderTopColor: 'rgba(226, 232, 240, 0.7)',
     alignItems: 'center',
   },
   switchModeText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
-    color: '#64748b',
+    color: '#0f172a',
   },
   logoImage: {
     width: 200,

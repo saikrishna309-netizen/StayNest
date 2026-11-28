@@ -54,23 +54,24 @@ export const getInitialMatrixFloors = (
   defaultRent: number,
   defaultMaintenance: number
 ): MatrixFloor[] => {
+  const initialRent = defaultRent > 0 ? defaultRent : 0;
   if (propertyMode === 'RENTAL') {
     return [
       {
         floor_number: 1,
         label: 'Floor 1',
         units: [
-          { id: 'u-1-1', unit_number: '101', unit_type: '1BHK', monthly_rent: 12000, maintenance: defaultMaintenance, sharing_capacity: 1 },
-          { id: 'u-1-2', unit_number: '102', unit_type: '2BHK', monthly_rent: 18000, maintenance: defaultMaintenance, sharing_capacity: 1 },
-          { id: 'u-1-3', unit_number: '103', unit_type: '2BHK', monthly_rent: 18000, maintenance: defaultMaintenance, sharing_capacity: 1 },
+          { id: 'u-1-1', unit_number: '101', unit_type: '1BHK', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 1 },
+          { id: 'u-1-2', unit_number: '102', unit_type: '2BHK', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 1 },
+          { id: 'u-1-3', unit_number: '103', unit_type: '2BHK', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 1 },
         ],
       },
       {
         floor_number: 2,
         label: 'Floor 2',
         units: [
-          { id: 'u-2-1', unit_number: '201', unit_type: '2BHK', monthly_rent: 18500, maintenance: defaultMaintenance, sharing_capacity: 1 },
-          { id: 'u-2-2', unit_number: '202', unit_type: '3BHK', monthly_rent: 24000, maintenance: defaultMaintenance, sharing_capacity: 1 },
+          { id: 'u-2-1', unit_number: '201', unit_type: '2BHK', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 1 },
+          { id: 'u-2-2', unit_number: '202', unit_type: '3BHK', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 1 },
         ],
       },
     ];
@@ -81,16 +82,16 @@ export const getInitialMatrixFloors = (
       floor_number: 1,
       label: 'Floor 1',
       units: [
-        { id: 'u-1-1', unit_number: '101', unit_type: '2-Share', monthly_rent: defaultRent || 9500, maintenance: defaultMaintenance, sharing_capacity: 2 },
-        { id: 'u-1-2', unit_number: '102', unit_type: '3-Share', monthly_rent: 8000, maintenance: defaultMaintenance, sharing_capacity: 3 },
+        { id: 'u-1-1', unit_number: '101', unit_type: '2-Share', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 2 },
+        { id: 'u-1-2', unit_number: '102', unit_type: '3-Share', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 3 },
       ],
     },
     {
       floor_number: 2,
       label: 'Floor 2',
       units: [
-        { id: 'u-2-1', unit_number: '201', unit_type: '2-Share', monthly_rent: defaultRent || 9500, maintenance: defaultMaintenance, sharing_capacity: 2 },
-        { id: 'u-2-2', unit_number: '202', unit_type: '3-Share', monthly_rent: 8000, maintenance: defaultMaintenance, sharing_capacity: 3 },
+        { id: 'u-2-1', unit_number: '201', unit_type: '2-Share', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 2 },
+        { id: 'u-2-2', unit_number: '202', unit_type: '3-Share', monthly_rent: initialRent, maintenance: defaultMaintenance, sharing_capacity: 3 },
       ],
     },
   ];

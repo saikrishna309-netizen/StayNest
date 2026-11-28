@@ -33,6 +33,7 @@ import {
   cancelProAutoPay,
   formatDisplayDate,
   getSubscriptionState,
+  syncSubscriptionFromServer,
   isProActive,
   SubscriptionState,
 } from '../services/subscriptionService';
@@ -56,6 +57,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { user, updateProfile, logout } = useAuth();
   const { language, setLanguage, t, languageOptions } = useLanguage();
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState(false);
+  const [policyModalType, setPolicyModalType] = useState<'PRIVACY' | 'TERMS' | 'REFUND' | 'PRICING' | 'ABOUT' | null>(null);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   // Profile data
   const [fullName, setFullName] = useState(user?.fullName || 'Saikrishna Naraharisetti');
@@ -99,6 +102,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
       }).catch(() => {});
     };
     syncSub();
+    syncSubscriptionFromServer().then((s) => {
+      setSubState(s);
+      setIsSubscriptionActive(isProActive(s));
+    }).catch(() => {});
     return onDataChanged(syncSub);
   }, []);
 
@@ -533,9 +540,27 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
         {/* ─── 3. MY PROPERTIES CARD (MATCHING FIRST PHOTO) ─── */}
         <View style={styles.sectionCard}>
-          <Text style={styles.sectionCardTitle}>
-            My Properties ({properties.length || 1})
-          </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={[styles.sectionCardTitle, { marginBottom: 0 }]}>
+              My Properties ({properties.length || 1})
+            </Text>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#fff7ed',
+                borderWidth: 1,
+                borderColor: '#fdba74',
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                borderRadius: 99,
+              }}
+              onPress={() => onNavigateTab && onNavigateTab('properties')}
+              activeOpacity={0.8}
+            >
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#ea580c' }}>
+                Properties Page →
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {(properties.length > 0 ? properties : activeProperty ? [activeProperty] : []).map((prop, idx) => {
             const isPropActive = activeProperty ? prop.id === activeProperty.id : idx === 0;
@@ -877,18 +902,84 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* ─── CONTACT US SECTION ─── */}
+        {/* ─── GROUP 2: POLICIES & LEGAL (RAZORPAY & PLAY STORE) ─── */}
         <Text style={[styles.sectionCardTitle, { marginHorizontal: 16, marginTop: 12, marginBottom: 8 }]}>
-          {t('profile.contactUs')}
+          Policies & Legal
         </Text>
         <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setPolicyModalType('PRIVACY')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>🔒 Privacy Policy</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>How your property, tenant & KYC data is protected</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setPolicyModalType('TERMS')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>📜 Terms & Conditions</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Platform usage rules & owner responsibilities</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setPolicyModalType('REFUND')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>💸 Refund & Cancellation Policy</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>AutoPay cancellation & booking refund terms</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            onPress={() => setPolicyModalType('PRICING')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>💳 Pricing & Billing Transparency</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Free plan, ₹0 trial & ₹149/mo Pro breakdown</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── GROUP 3: SUPPORT & BUSINESS DETAILS ─── */}
+        <Text style={[styles.sectionCardTitle, { marginHorizontal: 16, marginTop: 12, marginBottom: 8 }]}>
+          {t('profile.contactUs')} & Business Info
+        </Text>
+        <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={styles.settingsRow}
+            onPress={() => setPolicyModalType('ABOUT')}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsRowText}>🏢 About StayNest</Text>
+              <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>Business details, services & grievance contact</Text>
+            </View>
+            <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={styles.settingsRow}
             onPress={() => Linking.openURL('tel:9515614331').catch(() => {})}
             activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.settingsRowText}>{t('profile.phoneSupport')}</Text>
+              <Text style={styles.settingsRowText}>📞 {t('profile.phoneSupport')}</Text>
               <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>+91 9515614331</Text>
             </View>
             <Text style={styles.settingsChevron}>›</Text>
@@ -900,13 +991,17 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             activeOpacity={0.7}
           >
             <View style={{ flex: 1 }}>
-              <Text style={styles.settingsRowText}>{t('profile.emailSupport')}</Text>
+              <Text style={styles.settingsRowText}>✉️ {t('profile.emailSupport')}</Text>
               <Text style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>n.saikrishna@gmail.com</Text>
             </View>
             <Text style={styles.settingsChevron}>›</Text>
           </TouchableOpacity>
         </View>
 
+        {/* ─── GROUP 4: DATA & PREFERENCES ─── */}
+        <Text style={[styles.sectionCardTitle, { marginHorizontal: 16, marginTop: 12, marginBottom: 8 }]}>
+          Data & Preferences
+        </Text>
         <View style={styles.settingsCard}>
           <TouchableOpacity
             style={styles.settingsRow}
@@ -929,7 +1024,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             }}
             activeOpacity={0.7}
           >
-            <Text style={styles.settingsRowText}>{t('profile.syncBackend')}</Text>
+            <Text style={styles.settingsRowText}>🔄 {t('profile.syncBackend')}</Text>
             <Text style={styles.settingsChevron}>›</Text>
           </TouchableOpacity>
 
@@ -938,8 +1033,64 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             onPress={() => setIsSubscriptionModalOpen(true)}
             activeOpacity={0.7}
           >
-            <Text style={styles.settingsRowText}>{t('profile.preferencesSub')}</Text>
+            <Text style={styles.settingsRowText}>⚙️ {t('profile.preferencesSub')}</Text>
             <Text style={styles.settingsChevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ─── GROUP 5: ACCOUNT & SECURITY (PLAY STORE ACCOUNT DELETION) ─── */}
+        <Text style={[styles.sectionCardTitle, { marginHorizontal: 16, marginTop: 12, marginBottom: 8 }]}>
+          Account & Security
+        </Text>
+        <View style={styles.settingsCard}>
+          <TouchableOpacity
+            style={[styles.settingsRow, { borderBottomWidth: 0 }]}
+            disabled={deletingAccount}
+            onPress={() => {
+              const performDelete = async () => {
+                setDeletingAccount(true);
+                try {
+                  await apiClient('/users/me', { method: 'DELETE' });
+                } catch {}
+                try {
+                  await Promise.all([
+                    safeStorage.removeItem('@staynest_owner_custom_profile'),
+                    safeStorage.removeItem('@staynest_custom_properties'),
+                    safeStorage.removeItem('@staynest_custom_tenants'),
+                    safeStorage.removeItem('@staynest_active_property_id'),
+                  ]);
+                  fastDataCache.invalidateAll();
+                } catch {}
+                setDeletingAccount(false);
+                await logout();
+              };
+
+              if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+                if (window.confirm('Delete your StayNest account and personal data permanently? This cannot be undone.')) {
+                  void performDelete();
+                }
+              } else {
+                Alert.alert(
+                  'Delete Account Permanently?',
+                  'This will deactivate your StayNest Owner account and remove your personal profile details (name, email, phone). This action cannot be undone.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: deletingAccount ? 'Deleting...' : 'Delete Account', style: 'destructive', onPress: () => { void performDelete(); } },
+                  ]
+                );
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.settingsRowText, { color: '#dc2626' }]}>
+                {deletingAccount ? 'Deleting Account...' : '🗑️ Delete Account & Personal Data'}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#94a3b8', marginTop: 2 }}>
+                Permanently remove your profile and deactivate access
+              </Text>
+            </View>
+            <Text style={[styles.settingsChevron, { color: '#dc2626' }]}>›</Text>
           </TouchableOpacity>
         </View>
 
@@ -1274,6 +1425,62 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           setIsSubscriptionActive(isProActive(nextSub));
         }}
       />
+
+      {/* ─── COMPLIANCE & POLICY DETAILS MODAL ─── */}
+      <Modal
+        visible={!!policyModalType}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPolicyModalType(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>
+                  {policyModalType === 'PRIVACY'
+                    ? 'Privacy Policy'
+                    : policyModalType === 'TERMS'
+                    ? 'Terms & Conditions'
+                    : policyModalType === 'REFUND'
+                    ? 'Refund & Cancellation Policy'
+                    : policyModalType === 'PRICING'
+                    ? 'Pricing & Billing Transparency'
+                    : 'About StayNest'}
+                </Text>
+                <Text style={styles.modalSub}>Effective Date: November 2026 • StayNest India</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPolicyModalType(null)}
+                style={styles.modalCloseBtn}
+              >
+                <Text style={{ fontSize: 16, color: '#64748b' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380, marginTop: 10 }} showsVerticalScrollIndicator={false}>
+              <Text style={{ fontSize: 13.5, color: '#334155', lineHeight: 21 }}>
+                {policyModalType === 'PRIVACY'
+                  ? '1. Data Collected: StayNest collects your name, phone number, email address, property address/coordinates, room inventory, and tenant onboarding/KYC records solely to provide PG & rental property management services.\n\n2. Data Security: All API traffic is encrypted via HTTPS/TLS. Payment processing and UPI AutoPay mandates are handled securely through Razorpay.\n\n3. Data Sharing: We never sell your personal or tenant data to third-party advertisers.\n\n4. Data Deletion: You may permanently delete your account and personal profile anytime under Profile → Account & Security → Delete Account & Personal Data, or by emailing n.saikrishna@gmail.com.'
+                  : policyModalType === 'TERMS'
+                  ? '1. Platform Usage: StayNest provides property, room, bed, tenant, and rent-tracking tools for PG, hostel, and rental building owners.\n\n2. Owner Responsibilities: Owners are responsible for maintaining accurate property details, rent receipts, and lawful tenant KYC verification.\n\n3. Subscriptions: Paid Pro plans auto-renew via Razorpay UPI AutoPay after the 30-day free trial unless cancelled prior to the next billing date.\n\n4. Governing Law: These terms are governed by the laws of India.'
+                  : policyModalType === 'REFUND'
+                  ? '1. Free Trial & AutoPay Cancellation: New owners receive a 30-day free trial (₹0 initial charge). You can cancel UPI AutoPay anytime in 1 tap under Profile → StayNest Plan → Cancel AutoPay, with zero cancellation fee.\n\n2. Subscription Refunds: If a renewal charge occurs after a verified cancellation request or due to a duplicate transaction, a full refund is processed within 5–7 business days to the original payment method.\n\n3. Tenant Booking Cancellations: Property booking refunds follow the individual property cancellation policy displayed prior to confirmation.'
+                  : policyModalType === 'PRICING'
+                  ? '• Starter (Free Plan): ₹0/month — Manage 1 property, rooms/beds, tenant directory, and up to 5 WhatsApp rent reminders/month.\n\n• StayNest Pro (Monthly): ₹0 for first 30 days, then ₹149/month via Razorpay UPI AutoPay — Unlimited properties, unlimited WhatsApp reminders, automated rent invoices, and reports.\n\n• StayNest Pro (Yearly): ₹1,099/year — Includes 2 months free compared to monthly billing.\n\nAll prices are inclusive of applicable taxes with no hidden fees.'
+                  : 'StayNest Smart PG & Rental Management\n\nStayNest helps PG, hostel, and rental property owners digitize rooms, tenant onboarding, rent collection, and financial tracking.\n\n• Support Phone: +91 9515614331\n• Support Email: n.saikrishna@gmail.com\n• Grievance Officer: Saikrishna Naraharisetti\n• Support Hours: Mon–Sat, 9:00 AM – 7:00 PM IST'}
+              </Text>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.saveModalBtn, { marginTop: 14 }]}
+              onPress={() => setPolicyModalType(null)}
+            >
+              <Text style={styles.saveModalBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };

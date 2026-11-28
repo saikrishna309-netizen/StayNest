@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   Platform,
   Linking,
+  KeyboardAvoidingView,
 } from 'react-native';
 import {
   fetchCurrentPropertyLocation,
@@ -24,12 +25,14 @@ interface LocationPickerModalProps {
   visible: boolean;
   initialLat?: number | null;
   initialLng?: number | null;
+  initialAddress?: string;
+  initialCity?: string;
   onClose: () => void;
   onConfirm: (location: GeocodedLocation) => void;
 }
 
-const INDIA_CENTER_LAT = 20.5937;
-const INDIA_CENTER_LNG = 78.9629;
+const DEFAULT_SOUTH_ASIA_LAT = 17.385; // Hyderabad / South Central India metropolitan hub
+const DEFAULT_SOUTH_ASIA_LNG = 78.4867;
 const TILE_SIZE = 120;
 
 const latLonToTileFloat = (lat: number, lon: number, zoom: number) => {
@@ -52,20 +55,22 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   visible,
   initialLat,
   initialLng,
+  initialAddress,
+  initialCity,
   onClose,
   onConfirm,
 }) => {
-  const [lat, setLat] = useState<number>(initialLat || INDIA_CENTER_LAT);
-  const [lng, setLng] = useState<number>(initialLng || INDIA_CENTER_LNG);
-  const [zoom, setZoom] = useState<number>(initialLat && initialLng ? 16 : 5);
+  const [lat, setLat] = useState<number>(initialLat || DEFAULT_SOUTH_ASIA_LAT);
+  const [lng, setLng] = useState<number>(initialLng || DEFAULT_SOUTH_ASIA_LNG);
+  const [zoom, setZoom] = useState<number>(initialLat && initialLng ? 16 : 13);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<GeocodedLocation[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
 
-  const [addressLine, setAddressLine] = useState('');
+  const [addressLine, setAddressLine] = useState(initialAddress || '');
   const [locality, setLocality] = useState('');
-  const [cityName, setCityName] = useState('');
+  const [cityName, setCityName] = useState(initialCity || '');
   const [stateName, setStateName] = useState('');
   const [pincode, setPincode] = useState('');
   const [mapBoxWidth, setMapBoxWidth] = useState(320);
@@ -73,35 +78,37 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   const applyGeocoded = (loc: GeocodedLocation) => {
     setLat(Number(loc.latitude.toFixed(6)));
     setLng(Number(loc.longitude.toFixed(6)));
-    if (loc.addressLine) setAddressLine(loc.addressLine);
-    if (loc.locality) setLocality(loc.locality);
-    if (loc.cityName) setCityName(loc.cityName);
-    if (loc.stateName) setStateName(loc.stateName);
-    if (loc.pincode) setPincode(loc.pincode);
+    setAddressLine(loc.addressLine || '');
+    setLocality(loc.locality || '');
+    setCityName(loc.cityName || '');
+    setStateName(loc.stateName || '');
+    setPincode(loc.pincode || '');
   };
 
   useEffect(() => {
     if (!visible) return;
     setSearchResults([]);
     setSearchQuery('');
+    if (initialAddress) setAddressLine(initialAddress);
+    if (initialCity) setCityName(initialCity);
+
     if (initialLat && initialLng) {
       setLat(initialLat);
       setLng(initialLng);
       setZoom(16);
       void reverseGeocodeCoords(initialLat, initialLng).then(applyGeocoded);
     } else {
-      setLat(INDIA_CENTER_LAT);
-      setLng(INDIA_CENTER_LNG);
-      setZoom(5);
-      // Silently try centering on user's live GPS if permission is already granted
-      void fetchCurrentPropertyLocation(true).then((loc) => {
-        if (loc) {
-          applyGeocoded(loc);
-          setZoom(17);
-        }
-      });
+      setLocating(true);
+      void fetchCurrentPropertyLocation(false)
+        .then((loc) => {
+          if (loc) {
+            applyGeocoded(loc);
+            setZoom(16);
+          }
+        })
+        .finally(() => setLocating(false));
     }
-  }, [visible, initialLat, initialLng]);
+  }, [visible, initialLat, initialLng, initialAddress, initialCity]);
 
   const handleUseCurrentGps = async () => {
     setLocating(true);
@@ -137,13 +144,19 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
     if (typeof tapX !== 'number' || typeof tapY !== 'number') return;
 
     const mapHeight = 250;
-    const dxPx = tapX - mapBoxWidth / 2;
+    const effectiveWidth = mapBoxWidth > 0 ? mapBoxWidth : 360;
+    const dxPx = tapX - effectiveWidth / 2;
     const dyPx = tapY - mapHeight / 2;
 
     const centerTile = latLonToTileFloat(lat, lng, zoom);
     const newTileX = centerTile.x + dxPx / TILE_SIZE;
     const newTileY = centerTile.y + dyPx / TILE_SIZE;
     const { lat: nextLat, lon: nextLng } = tileFloatToLatLon(newTileX, newTileY, zoom);
+
+    // If user was zoomed far out (e.g. India overview), zoom in to neighborhood
+    if (zoom < 14) {
+      setZoom(15);
+    }
 
     setLat(Number(nextLat.toFixed(6)));
     setLng(Number(nextLng.toFixed(6)));
@@ -170,125 +183,183 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backBtn} onPress={onClose} activeOpacity={0.75}>
-            <Text style={styles.backBtnText}>←</Text>
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Pick Property Location</Text>
-            <Text style={styles.headerSub}>Tap map, search, or fetch live GPS</Text>
-          </View>
-          <View style={{ width: 34 }} />
-        </View>
-
-        <ScrollView
+        <KeyboardAvoidingView
           style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
         >
-          {/* Search Input */}
-          <View style={styles.searchRow}>
-            <TextInput
-              style={styles.searchInput}
-              value={searchQuery}
-              onChangeText={handleSearch}
-              placeholder="🔍 Search street, area, landmark, city..."
-              placeholderTextColor="#94a3b8"
-            />
-            {searching && <BrandLoader variant="inline" style={{ marginLeft: 8 }} />}
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backBtn} onPress={onClose} activeOpacity={0.75}>
+              <Text style={styles.backBtnText}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>Pick Property Location</Text>
+              <Text style={styles.headerSub}>Tap map, search, or fetch live GPS</Text>
+            </View>
+            <View style={{ width: 34 }} />
           </View>
 
-          {searchResults.length > 0 && (
-            <View style={styles.resultsBox}>
-              {searchResults.map((item, idx) => (
-                <TouchableOpacity
-                  key={`${item.latitude}-${item.longitude}-${idx}`}
-                  style={styles.resultItem}
-                  onPress={() => {
-                    applyGeocoded(item);
-                    setSearchResults([]);
-                    setSearchQuery(item.addressLine || '');
-                    setZoom(16);
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 220 }}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets={true}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Search Input */}
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.searchInput}
+                value={searchQuery}
+                onChangeText={handleSearch}
+                onSubmitEditing={() => handleSearch(searchQuery)}
+                returnKeyType="search"
+                placeholder="🔍 Search street, area, colony, landmark, city..."
+                placeholderTextColor="#94a3b8"
+              />
+              {searching && <BrandLoader variant="inline" style={{ marginLeft: 8 }} />}
+            </View>
+
+            {/* Quick Metro City Jump Chips */}
+            <View style={{ marginBottom: 10 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, paddingVertical: 2 }}>
+                {[
+                  { name: 'Hyderabad', lat: 17.385, lng: 78.4867, state: 'Telangana' },
+                  { name: 'Bengaluru', lat: 12.9716, lng: 77.5946, state: 'Karnataka' },
+                  { name: 'Vijayawada', lat: 16.5062, lng: 80.648, state: 'Andhra Pradesh' },
+                  { name: 'Visakhapatnam', lat: 17.6868, lng: 83.2185, state: 'Andhra Pradesh' },
+                  { name: 'Chennai', lat: 13.0827, lng: 80.2707, state: 'Tamil Nadu' },
+                  { name: 'Pune', lat: 18.5204, lng: 73.8567, state: 'Maharashtra' },
+                  { name: 'Delhi NCR', lat: 28.6139, lng: 77.209, state: 'Delhi' },
+                ].map((c) => (
+                  <TouchableOpacity
+                    key={c.name}
+                    style={{
+                      paddingHorizontal: 9,
+                      paddingVertical: 5,
+                      borderRadius: 8,
+                      backgroundColor: cityName.toLowerCase() === c.name.toLowerCase() ? '#fff7ed' : '#f1f5f9',
+                      borderWidth: 1,
+                      borderColor: cityName.toLowerCase() === c.name.toLowerCase() ? '#fdba74' : '#e2e8f0',
+                    }}
+                    onPress={() => {
+                      setLat(c.lat);
+                      setLng(c.lng);
+                      setCityName(c.name);
+                      setStateName(c.state);
+                      setZoom(15);
+                      void reverseGeocodeCoords(c.lat, c.lng).then(applyGeocoded);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 11,
+                        fontWeight: '700',
+                        color: cityName.toLowerCase() === c.name.toLowerCase() ? '#c2410c' : '#475569',
+                      }}
+                    >
+                      📍 {c.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            {searchResults.length > 0 && (
+              <View style={styles.resultsBox}>
+                {searchResults.map((item, idx) => (
+                  <TouchableOpacity
+                    key={`${item.latitude}-${item.longitude}-${idx}`}
+                    style={styles.resultItem}
+                    onPress={() => {
+                      applyGeocoded(item);
+                      setSearchResults([]);
+                      setSearchQuery(item.addressLine || '');
+                      setZoom(16);
+                    }}
+                  >
+                    <Text style={styles.resultTitle} numberOfLines={1}>
+                      📍 {item.addressLine || item.cityName}
+                    </Text>
+                    <Text style={styles.resultSub} numberOfLines={1}>
+                      {item.displayName || `${item.cityName || ''} ${item.pincode || ''}`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+
+            {/* Interactive OpenStreetMap Tile Canvas */}
+            <View
+              style={styles.mapContainer}
+              onLayout={(e) => setMapBoxWidth(e.nativeEvent.layout.width)}
+            >
+              <View style={{ width: '100%', height: mapHeight, overflow: 'hidden', position: 'relative' }}>
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: 'absolute',
+                    left: gridLeft,
+                    top: gridTop,
+                    width: TILE_SIZE * 3,
+                    height: TILE_SIZE * 3,
+                    flexDirection: 'row',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  <Text style={styles.resultTitle} numberOfLines={1}>
-                    📍 {item.addressLine || item.cityName}
-                  </Text>
-                  <Text style={styles.resultSub} numberOfLines={1}>
-                    {item.displayName || `${item.cityName || ''} ${item.pincode || ''}`}
-                  </Text>
+                  {gridOffsets.map((dy) =>
+                    gridOffsets.map((dx) => {
+                      const tx = centerTileX + dx;
+                      const ty = centerTileY + dy;
+                      // Esri World Street Map: free, no API key required, reliable on Android & iOS
+                      const uri = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${ty}/${tx}`;
+                      return (
+                        <Image
+                          key={`${zoom}-${tx}-${ty}`}
+                          source={{ uri }}
+                          style={{ width: TILE_SIZE, height: TILE_SIZE }}
+                        />
+                      );
+                    })
+                  )}
+                </View>
+
+                {/* Center Pin */}
+                <View pointerEvents="none" style={styles.centerPinWrap}>
+                  <Text style={{ fontSize: 32 }}>📍</Text>
+                </View>
+
+                {/* Pure touch capture layer on top with exact container coordinates */}
+                <TouchableOpacity
+                  activeOpacity={1}
+                  onPress={handleMapTap}
+                  style={[StyleSheet.absoluteFill, { zIndex: 10 }]}
+                />
+              </View>
+
+              {/* Map Overlay Controls */}
+              <View style={styles.zoomCol}>
+                <TouchableOpacity
+                  style={styles.zoomBtn}
+                  onPress={() => setZoom((z) => Math.min(18, z + 1))}
+                >
+                  <Text style={styles.zoomBtnText}>+</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Interactive OpenStreetMap Tile Canvas */}
-          <View
-            style={styles.mapContainer}
-            onLayout={(e) => setMapBoxWidth(e.nativeEvent.layout.width)}
-          >
-            <TouchableOpacity
-              activeOpacity={1}
-              onPress={handleMapTap}
-              style={{ width: '100%', height: mapHeight, overflow: 'hidden', position: 'relative' }}
-            >
-              <View
-                pointerEvents="none"
-                style={{
-                  position: 'absolute',
-                  left: gridLeft,
-                  top: gridTop,
-                  width: TILE_SIZE * 3,
-                  height: TILE_SIZE * 3,
-                  flexDirection: 'row',
-                  flexWrap: 'wrap',
-                }}
-              >
-                {gridOffsets.map((dy) =>
-                  gridOffsets.map((dx) => {
-                    const tx = centerTileX + dx;
-                    const ty = centerTileY + dy;
-                    const uri = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/${zoom}/${ty}/${tx}`;
-                    return (
-                      <Image
-                        key={`${zoom}-${tx}-${ty}`}
-                        source={{ uri }}
-                        style={{ width: TILE_SIZE, height: TILE_SIZE }}
-                      />
-                    );
-                  })
-                )}
+                <TouchableOpacity
+                  style={styles.zoomBtn}
+                  onPress={() => setZoom((z) => Math.max(11, z - 1))}
+                >
+                  <Text style={styles.zoomBtnText}>−</Text>
+                </TouchableOpacity>
               </View>
 
-              {/* Center Pin */}
-              <View pointerEvents="none" style={styles.centerPinWrap}>
-                <Text style={{ fontSize: 32 }}>📍</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Map Overlay Controls */}
-            <View style={styles.zoomCol}>
               <TouchableOpacity
-                style={styles.zoomBtn}
-                onPress={() => setZoom((z) => Math.min(18, z + 1))}
-              >
-                <Text style={styles.zoomBtnText}>+</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.zoomBtn}
-                onPress={() => setZoom((z) => Math.max(11, z - 1))}
-              >
-                <Text style={styles.zoomBtnText}>−</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={styles.gpsFloatingBtn}
-              onPress={handleUseCurrentGps}
-              disabled={locating}
-              activeOpacity={0.85}
+                style={styles.gpsFloatingBtn}
+                onPress={handleUseCurrentGps}
+                disabled={locating}
+                activeOpacity={0.85}
             >
               {locating ? (
                 <BrandLoader variant="inline" color="#FFFFFF" />
@@ -386,6 +457,7 @@ export const LocationPickerModal: React.FC<LocationPickerModalProps> = ({
             <Text style={styles.confirmBtnText}>✓ Confirm & Fill Address Details</Text>
           </TouchableOpacity>
         </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
@@ -395,6 +467,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#FAF7F4',
+    paddingBottom: Platform.OS === 'android' ? 24 : 10,
   },
   header: {
     backgroundColor: '#ffffff',
